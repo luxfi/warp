@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
 )
@@ -36,6 +38,10 @@ type Config struct {
 	MetricsPort        uint16             `mapstructure:"metrics-port" json:"metrics-port"`
 	SignatureCacheSize uint64             `mapstructure:"signature-cache-size" json:"signature-cache-size"`
 	AllowPrivateIPs    bool               `mapstructure:"allow-private-ips" json:"allow-private-ips"`
+	TrackedL1s         []string           `mapstructure:"tracked-l1s" json:"tracked-l1s"`
+
+	// convenience fields
+	trackedL1s set.Set[ids.ID]
 
 	// mapstructure doesn't support time.Time out of the box so handle it manually
 	EtnaTime time.Time `json:"etna-time"`
@@ -55,6 +61,13 @@ func (c *Config) Validate() error {
 	if err := c.InfoAPI.Validate(); err != nil {
 		return err
 	}
+	for _, trackedL1 := range c.TrackedL1s {
+		trackedL1ID, err := ids.FromString(trackedL1)
+		if err != nil {
+			return err
+		}
+		c.trackedL1s.Add(trackedL1ID)
+	}
 
 	return nil
 }
@@ -71,4 +84,8 @@ func (c *Config) GetInfoAPI() *basecfg.APIConfig {
 
 func (c *Config) GetAllowPrivateIPs() bool {
 	return c.AllowPrivateIPs
+}
+
+func (c *Config) GetTrackedL1s() set.Set[ids.ID] {
+	return c.trackedL1s
 }

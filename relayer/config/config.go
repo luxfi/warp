@@ -73,6 +73,7 @@ type Config struct {
 	// convenience field to fetch a blockchain's subnet ID
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
+	trackedL1s             set.Set[ids.ID]
 }
 
 func DisplayUsageText() {
@@ -150,6 +151,10 @@ func (c *Config) Validate() error {
 		if _, err := url.ParseRequestURI(c.DeciderURL); err != nil {
 			return fmt.Errorf("Invalid decider URL: %w", err)
 		}
+	}
+
+	for _, l1ID := range c.blockchainIDToSubnetID {
+		c.trackedL1s.Add(l1ID)
 	}
 
 	return nil
@@ -259,4 +264,8 @@ func (c *Config) GetInfoAPI() *basecfg.APIConfig {
 
 func (c *Config) GetAllowPrivateIPs() bool {
 	return c.AllowPrivateIPs
+}
+
+func (c *Config) GetTrackedL1s() set.Set[ids.ID] {
+	return c.trackedL1s
 }
