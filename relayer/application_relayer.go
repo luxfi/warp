@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	// Number of retries to collect signatures from validators
-	maxRelayerQueryAttempts = 5
+	retryMaxElapsedTime = 10 * time.Second
 )
 
 // Errors
@@ -271,25 +270,24 @@ func (r *ApplicationRelayer) createSignedMessage(
 		signedWarpMessageBytes hexutil.Bytes
 		err                    error
 	)
-	err = utils.WithMaxRetriesLog(
-		func() error {
-			return r.sourceWarpSignatureClient.CallContext(
-				context.Background(),
-				&signedWarpMessageBytes,
-				"warp_getMessageAggregateSignature",
-				unsignedMessage.ID(),
-				r.warpConfig.QuorumNumerator,
-				r.signingSubnetID.String(),
-			)
-		},
-		maxRelayerQueryAttempts,
-		r.logger,
-		"Failed to get aggregate signature from node endpoint.",
-		zap.String("sourceBlockchainID", r.sourceBlockchain.GetBlockchainID().String()),
-		zap.String("destinationBlockchainID", r.relayerID.DestinationBlockchainID.String()),
-		zap.String("signingSubnetID", r.signingSubnetID.String()),
-	)
+	operation := func() error {
+		return r.sourceWarpSignatureClient.CallContext(
+			context.Background(),
+			&signedWarpMessageBytes,
+			"warp_getMessageAggregateSignature",
+			unsignedMessage.ID(),
+			r.warpConfig.QuorumNumerator,
+			r.signingSubnetID.String(),
+		)
+	}
+	err = utils.WithMaxRetries(operation, retryMaxElapsedTime, r.logger)
 	if err != nil {
+		r.logger.Error(
+			"Failed to get aggregate signature from node endpoint.",
+			zap.String("sourceBlockchainID", r.sourceBlockchain.GetBlockchainID().String()),
+			zap.String("destinationBlockchainID", r.relayerID.DestinationBlockchainID.String()),
+			zap.String("signingSubnetID", r.signingSubnetID.String()),
+		)
 		return nil, errFailedToGetAggSig
 	}
 	warpMsg, err := avalancheWarp.ParseMessage(signedWarpMessageBytes)
