@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +17,9 @@ func TestWithMaxRetries(t *testing.T) {
 				_, err = retryable.Run()
 				return err
 			},
-			2,
+			// using default values: we want to run max 2 tries.
+			624*time.Millisecond,
+			logging.NoLog{},
 		)
 		require.Error(t, err)
 	})
@@ -27,7 +31,9 @@ func TestWithMaxRetries(t *testing.T) {
 				res, err = retryable.Run()
 				return err
 			},
-			2,
+			// using default values we want to run 3 tries.
+			2000*time.Millisecond,
+			logging.NoLog{},
 		)
 		require.NoError(t, err)
 		require.True(t, res)
@@ -47,7 +53,7 @@ func newMockRetryableFn(trigger uint64) mockRetryableFn {
 }
 
 func (m *mockRetryableFn) Run() (bool, error) {
-	if m.counter == m.trigger {
+	if m.counter >= m.trigger {
 		return true, nil
 	}
 	m.counter++

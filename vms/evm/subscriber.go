@@ -21,9 +21,8 @@ import (
 const (
 	// Max buffer size for ethereum subscription channels
 	maxClientSubscriptionBuffer = 20000
-	subscribeRetryTimeout       = 1 * time.Second
 	MaxBlocksPerRequest         = 200
-	rpcMaxTries                 = 5
+	retryMaxElapsedTime         = 5 * time.Second
 )
 
 // subscriber implements Subscriber
@@ -129,18 +128,17 @@ func (s *subscriber) processBlockRange(
 func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.Header, error) {
 	var err error
 	var header *types.Header
-	err = utils.WithMaxRetriesLog(
-		func() (err error) {
-			header, err = s.rpcClient.HeaderByNumber(context.Background(), headerNumber)
-			return err
-		},
-		rpcMaxTries,
-		s.logger,
-		"Failed to get header by number",
-		zap.String("blockchainID", s.blockchainID.String()),
-		zap.Error(err),
-	)
+	operation := func() (err error) {
+		header, err = s.rpcClient.HeaderByNumber(context.Background(), headerNumber)
+		return err
+	}
+	err = utils.WithMaxRetries(operation, retryMaxElapsedTime, s.logger)
 	if err != nil {
+		s.logger.Error(
+			"Failed to get header by number",
+			zap.String("blockchainID", s.blockchainID.String()),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	return header, nil
@@ -164,17 +162,16 @@ func (s *subscriber) Subscribe(maxResubscribeAttempts int) error {
 // subscribe until it succeeds or reached maxSubscribeAttempts.
 func (s *subscriber) subscribe(maxSubscribeAttempts uint64) error {
 	var sub interfaces.Subscription
-	err := utils.WithMaxRetriesLog(
-		func() (err error) {
-			sub, err = s.wsClient.SubscribeNewHead(context.Background(), s.headers)
-			return err
-		},
-		maxSubscribeAttempts,
-		s.logger,
-		"Failed to subscribe to node",
-		zap.String("blockchainID", s.blockchainID.String()),
-	)
+	operation := func() (err error) {
+		sub, err = s.wsClient.SubscribeNewHead(context.Background(), s.headers)
+		return err
+	}
+	err := utils.WithMaxRetries(operation, retryMaxElapsedTime, s.logger)
 	if err != nil {
+		s.logger.Error(
+			"Failed to subscribe to node",
+			zap.String("blockchainID", s.blockchainID.String()),
+		)
 		return err
 	}
 	s.sub = sub

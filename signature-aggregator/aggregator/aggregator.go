@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
 	msg "github.com/ava-labs/subnet-evm/plugin/evm/message"
+	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -42,7 +43,7 @@ const (
 	maxRelayerQueryAttempts = 10
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
-	signatureRequestRetryWaitPeriodMs = 20_000
+	signatureRequestMaxElapsedTime = 20 * time.Second
 )
 
 var (
@@ -224,12 +225,12 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
+	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
-	for attempt := 1; attempt <= maxRelayerQueryAttempts; attempt++ {
+	operation := func() error {
 		responsesExpected := len(connectedValidators.ValidatorSet) - len(signatureMap)
 		s.logger.Debug(
 			"Aggregator collecting signatures from peers.",
-			zap.Int("attempt", attempt),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("signingSubnetID", signingSubnet.String()),
 			zap.Int("validatorSetSize", len(connectedValidators.ValidatorSet)),
@@ -296,7 +297,8 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					zap.String("warpMessageID", unsignedMessage.ID().String()),
 					zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 				)
-				signedMsg, relevant, err := s.handleResponse(
+				var relevant bool
+				signedMsg, relevant, err = s.handleResponse(
 					response,
 					sentTo,
 					requestID,
@@ -309,10 +311,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				if err != nil {
 					// don't increase node failures metric here, because we did
 					// it in handleResponse
-					return nil, fmt.Errorf(
+					return backoff.Permanent(fmt.Errorf(
 						"failed to handle response: %w",
 						err,
-					)
+					))
 				}
 				if relevant {
 					responseCount++
@@ -325,7 +327,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
 						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
-					return signedMsg, nil
+					return nil
 				}
 				// Break once we've had successful or unsuccessful responses from each requested node
 				if responseCount == responsesExpected {
@@ -333,20 +335,21 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				}
 			}
 		}
-		if attempt != maxRelayerQueryAttempts {
-			// Sleep such that all retries are uniformly spread across totalRelayerQueryPeriodMs
-			// TODO: We may want to consider an exponential back off rather than a uniform sleep period.
-			time.Sleep(time.Duration(signatureRequestRetryWaitPeriodMs/maxRelayerQueryAttempts) * time.Millisecond)
-		}
+		return errNotEnoughSignatures
 	}
-	s.logger.Warn(
-		"Failed to collect a threshold of signatures",
-		zap.Int("attempts", maxRelayerQueryAttempts),
-		zap.String("warpMessageID", unsignedMessage.ID().String()),
-		zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
-		zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
-	)
-	return nil, errNotEnoughSignatures
+
+	err = utils.WithMaxRetries(operation, signatureRequestMaxElapsedTime, s.logger)
+	if err != nil {
+		s.logger.Warn(
+			"Failed to collect a threshold of signatures",
+			zap.Int("attempts", maxRelayerQueryAttempts),
+			zap.String("warpMessageID", unsignedMessage.ID().String()),
+			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
+			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
+		)
+		return nil, errNotEnoughSignatures
+	}
+	return signedMsg, nil
 }
 
 func (s *SignatureAggregator) getSubnetID(blockchainID ids.ID) (ids.ID, error) {
