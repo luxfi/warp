@@ -39,8 +39,6 @@ import (
 type blsSignatureBuf [bls.SignatureLen]byte
 
 const (
-	// Number of retries to collect signatures from validators
-	maxRelayerQueryAttempts = 10
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
 	signatureRequestMaxElapsedTime = 20 * time.Second
@@ -342,7 +340,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	if err != nil {
 		s.logger.Warn(
 			"Failed to collect a threshold of signatures",
-			zap.Int("attempts", maxRelayerQueryAttempts),
 			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
