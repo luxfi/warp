@@ -327,7 +327,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return errNotEnoughSignatures
 	}
 
-	err = utils.WithMaxRetries(operation, signatureRequestMaxElapsedTime, s.logger)
+	err = utils.WithRetriesTimeout(s.logger, operation, signatureRequestMaxElapsedTime)
 	if err != nil {
 		s.logger.Warn(
 			"Failed to collect a threshold of signatures",

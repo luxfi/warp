@@ -6,7 +6,6 @@ package types
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -47,7 +46,7 @@ func NewWarpBlockInfo(logger logging.Logger, header *types.Header, ethClient eth
 	)
 	// Check if the block contains warp logs, and fetch them from the client if it does
 	if header.Bloom.Test(WarpPrecompileLogFilter[:]) {
-		cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultRPCRetryTimeout)
+		cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer cancel()
 		operation := func() (err error) {
 			logs, err = ethClient.FilterLogs(cctx, interfaces.FilterQuery{
@@ -58,7 +57,7 @@ func NewWarpBlockInfo(logger logging.Logger, header *types.Header, ethClient eth
 			})
 			return err
 		}
-		err = utils.WithMaxRetries(operation, 5*time.Second, logger)
+		err = utils.WithRetriesTimeout(logger, operation, utils.DefaultRPCTimeout)
 		if err != nil {
 			return nil, err
 		}
