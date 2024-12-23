@@ -7,12 +7,12 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-// WithMaxRetries uses an exponential backoff to run the operation until it
+// WithRetriesTimeout uses an exponential backoff to run the operation until it
 // succeeds or max elapsed time has been reached.
-func WithMaxRetries(
+func WithRetriesTimeout(
+	logger logging.Logger,
 	operation backoff.Operation,
 	maxElapsedTime time.Duration,
-	logger logging.Logger,
 ) error {
 	expBackOff := backoff.NewExponentialBackOff(
 		backoff.WithMaxElapsedTime(maxElapsedTime),

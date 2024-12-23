@@ -5,7 +5,7 @@ package evm
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math/big"
 	"time"
 
@@ -22,7 +22,7 @@ const (
 	// Max buffer size for ethereum subscription channels
 	maxClientSubscriptionBuffer = 20000
 	MaxBlocksPerRequest         = 200
-	retryMaxElapsedTime         = 5 * time.Second
+	resubscribeMaxElapsedTime   = 5 * time.Second
 )
 
 // subscriber implements Subscriber
@@ -132,7 +132,7 @@ func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.H
 		header, err = s.rpcClient.HeaderByNumber(context.Background(), headerNumber)
 		return err
 	}
-	err = utils.WithMaxRetries(operation, retryMaxElapsedTime, s.logger)
+	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout)
 	if err != nil {
 		s.logger.Error(
 			"Failed to get header by number",
@@ -145,28 +145,28 @@ func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.H
 }
 
 // Loops forever iff maxResubscribeAttempts == 0
-func (s *subscriber) Subscribe(maxResubscribeAttempts int) error {
+func (s *subscriber) Subscribe(retryMaxElapsedTime time.Duration) error {
 	// Unsubscribe before resubscribing
 	// s.sub should only be nil on the first call to Subscribe
 	if s.sub != nil {
 		s.sub.Unsubscribe()
 	}
 
-	err := s.subscribe(uint64(maxResubscribeAttempts))
+	err := s.subscribe(retryMaxElapsedTime)
 	if err != nil {
-		return fmt.Errorf("failed to subscribe to node with all %d attempts", maxResubscribeAttempts)
+		return errors.New("failed to subscribe to node")
 	}
 	return nil
 }
 
 // subscribe until it succeeds or reached maxSubscribeAttempts.
-func (s *subscriber) subscribe(maxSubscribeAttempts uint64) error {
+func (s *subscriber) subscribe(retryMaxElapsedTime time.Duration) error {
 	var sub interfaces.Subscription
 	operation := func() (err error) {
 		sub, err = s.wsClient.SubscribeNewHead(context.Background(), s.headers)
 		return err
 	}
-	err := utils.WithMaxRetries(operation, retryMaxElapsedTime, s.logger)
+	err := utils.WithRetriesTimeout(s.logger, operation, retryMaxElapsedTime)
 	if err != nil {
 		s.logger.Error(
 			"Failed to subscribe to node",
