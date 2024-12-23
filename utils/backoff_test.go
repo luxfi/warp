@@ -12,28 +12,28 @@ import (
 func TestWithMaxRetries(t *testing.T) {
 	t.Run("NotEnoughRetry", func(t *testing.T) {
 		retryable := newMockRetryableFn(3)
-		err := WithMaxRetries(
+		err := WithRetriesTimeout(
+			logging.NoLog{},
 			func() (err error) {
 				_, err = retryable.Run()
 				return err
 			},
 			// using default values: we want to run max 2 tries.
 			624*time.Millisecond,
-			logging.NoLog{},
 		)
 		require.Error(t, err)
 	})
 	t.Run("EnoughRetry", func(t *testing.T) {
 		retryable := newMockRetryableFn(2)
 		var res bool
-		err := WithMaxRetries(
+		err := WithRetriesTimeout(
+			logging.NoLog{},
 			func() (err error) {
 				res, err = retryable.Run()
 				return err
 			},
 			// using default values we want to run 3 tries.
 			2000*time.Millisecond,
-			logging.NoLog{},
 		)
 		require.NoError(t, err)
 		require.True(t, res)
