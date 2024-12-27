@@ -8,14 +8,14 @@ import (
 )
 
 // WithRetriesTimeout uses an exponential backoff to run the operation until it
-// succeeds or max elapsed time has been reached.
+// succeeds or timeout limit has been reached.
 func WithRetriesTimeout(
 	logger logging.Logger,
 	operation backoff.Operation,
-	maxElapsedTime time.Duration,
+	timeout time.Duration,
 ) error {
 	expBackOff := backoff.NewExponentialBackOff(
-		backoff.WithMaxElapsedTime(maxElapsedTime),
+		backoff.WithMaxElapsedTime(timeout),
 	)
 	notify := func(err error, duration time.Duration) {
 		logger.Warn("operation failed, retrying...")
