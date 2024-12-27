@@ -22,7 +22,7 @@ const (
 	// Max buffer size for ethereum subscription channels
 	maxClientSubscriptionBuffer = 20000
 	MaxBlocksPerRequest         = 200
-	resubscribeMaxElapsedTime   = 5 * time.Second
+	resubscribeTimeout          = 5 * time.Second
 )
 
 // subscriber implements Subscriber
@@ -145,28 +145,28 @@ func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.H
 }
 
 // Loops forever iff maxResubscribeAttempts == 0
-func (s *subscriber) Subscribe(retryMaxElapsedTime time.Duration) error {
+func (s *subscriber) Subscribe(retryTimeout time.Duration) error {
 	// Unsubscribe before resubscribing
 	// s.sub should only be nil on the first call to Subscribe
 	if s.sub != nil {
 		s.sub.Unsubscribe()
 	}
 
-	err := s.subscribe(retryMaxElapsedTime)
+	err := s.subscribe(retryTimeout)
 	if err != nil {
 		return errors.New("failed to subscribe to node")
 	}
 	return nil
 }
 
-// subscribe until it succeeds or reached maxSubscribeAttempts.
-func (s *subscriber) subscribe(retryMaxElapsedTime time.Duration) error {
+// subscribe until it succeeds or reached timeout.
+func (s *subscriber) subscribe(retryTimeout time.Duration) error {
 	var sub interfaces.Subscription
 	operation := func() (err error) {
 		sub, err = s.wsClient.SubscribeNewHead(context.Background(), s.headers)
 		return err
 	}
-	err := utils.WithRetriesTimeout(s.logger, operation, retryMaxElapsedTime)
+	err := utils.WithRetriesTimeout(s.logger, operation, retryTimeout)
 	if err != nil {
 		s.logger.Error(
 			"Failed to subscribe to node",

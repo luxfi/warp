@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	retryMaxElapsedTime = 10 * time.Second
+	retryTimeout = 10 * time.Second
 )
 
 // Errors
@@ -280,7 +280,7 @@ func (r *ApplicationRelayer) createSignedMessage(
 			r.signingSubnetID.String(),
 		)
 	}
-	err = utils.WithRetriesTimeout(r.logger, operation, retryMaxElapsedTime)
+	err = utils.WithRetriesTimeout(r.logger, operation, retryTimeout)
 	if err != nil {
 		r.logger.Error(
 			"Failed to get aggregate signature from node endpoint.",

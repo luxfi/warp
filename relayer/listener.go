@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	retryMaxSubscribeElapsedTime = 10 * time.Second
+	retrySubscribeTimeout = 10 * time.Second
 	// TODO attempt to resubscribe in perpetuity once we are able to process missed blocks and
 	// refresh the chain config on reconnect.
-	retryMaxResubscribeElapsedTime = 10 * time.Second
+	retryResubscribeTimeout = 10 * time.Second
 )
 
 // Listener handles all messages sent from a given source chain
@@ -138,7 +138,7 @@ func newListener(
 
 	// Open the subscription. We must do this before processing any missed messages, otherwise we may
 	// miss an incoming message in between fetching the latest block and subscribing.
-	err = lstnr.Subscriber.Subscribe(retryMaxSubscribeElapsedTime)
+	err = lstnr.Subscriber.Subscribe(retrySubscribeTimeout)
 	if err != nil {
 		logger.Error(
 			"Failed to subscribe to node",
@@ -229,7 +229,7 @@ func (lstnr *Listener) processLogs(ctx context.Context) error {
 // Sets the listener health status to false while attempting to reconnect.
 func (lstnr *Listener) reconnectToSubscriber() error {
 	// Attempt to reconnect the subscription
-	err := lstnr.Subscriber.Subscribe(retryMaxResubscribeElapsedTime)
+	err := lstnr.Subscriber.Subscribe(retryResubscribeTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to resubscribe to node: %w", err)
 	}

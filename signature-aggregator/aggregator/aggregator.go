@@ -38,7 +38,7 @@ type blsSignatureBuf [bls.SignatureLen]byte
 const (
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
-	signatureRequestMaxElapsedTime = 20 * time.Second
+	signatureRequestTimeout = 20 * time.Second
 )
 
 var (
@@ -327,7 +327,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return errNotEnoughSignatures
 	}
 
-	err = utils.WithRetriesTimeout(s.logger, operation, signatureRequestMaxElapsedTime)
+	err = utils.WithRetriesTimeout(s.logger, operation, signatureRequestTimeout)
 	if err != nil {
 		s.logger.Warn(
 			"Failed to collect a threshold of signatures",

@@ -26,7 +26,7 @@ type Subscriber interface {
 	// Subscribe registers a subscription. After Subscribe is called,
 	// log events that match [filter] are written to the channel returned
 	// by Logs
-	Subscribe(retryMaxElapsedTime time.Duration) error
+	Subscribe(retryTimeout time.Duration) error
 
 	// Headers returns the channel that the subscription writes block headers to
 	Headers() <-chan *types.Header
