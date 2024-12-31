@@ -138,6 +138,14 @@ func main() {
 	if logLevel <= logging.Debug {
 		networkLogLevel = logLevel
 	}
+	networkLogger := logging.NewLogger(
+		"p2p-network",
+		logging.NewWrappedCore(
+			networkLogLevel,
+			os.Stdout,
+			logging.JSON.ConsoleEncoder(),
+		),
+	)
 
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
@@ -163,7 +171,7 @@ func main() {
 	}
 
 	network, err := peers.NewNetwork(
-		networkLogLevel,
+		networkLogger,
 		registerer,
 		nil,
 		manuallyTrackedPeers,
