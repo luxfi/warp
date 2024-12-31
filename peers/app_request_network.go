@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -76,21 +75,12 @@ type appRequestNetwork struct {
 
 // NewNetwork creates a P2P network client for interacting with validators
 func NewNetwork(
-	logLevel logging.Level,
+	logger logging.Logger,
 	registerer prometheus.Registerer,
 	trackedSubnets set.Set[ids.ID],
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
 ) (AppRequestNetwork, error) {
-	logger := logging.NewLogger(
-		"p2p-network",
-		logging.NewWrappedCore(
-			logLevel,
-			os.Stdout,
-			logging.JSON.ConsoleEncoder(),
-		),
-	)
-
 	metrics, err := newAppRequestNetworkMetrics(registerer)
 	if err != nil {
 		logger.Error("Failed to create app request network metrics", zap.Error(err))
