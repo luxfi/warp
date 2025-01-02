@@ -22,7 +22,6 @@ const (
 	// Max buffer size for ethereum subscription channels
 	maxClientSubscriptionBuffer = 20000
 	MaxBlocksPerRequest         = 200
-	resubscribeTimeout          = 5 * time.Second
 )
 
 // subscriber implements Subscriber
