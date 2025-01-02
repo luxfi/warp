@@ -5,7 +5,6 @@ package config
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -42,9 +41,6 @@ type Config struct {
 
 	// convenience fields
 	trackedL1s set.Set[ids.ID]
-
-	// mapstructure doesn't support time.Time out of the box so handle it manually
-	EtnaTime time.Time `json:"etna-time"`
 }
 
 func DisplayUsageText() {
