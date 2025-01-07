@@ -173,7 +173,7 @@ func main() {
 	network, err := peers.NewNetwork(
 		networkLogger,
 		registerer,
-		cfg.GetTrackedSubnets(),
+		nil,
 		manuallyTrackedPeers,
 		&cfg,
 	)
