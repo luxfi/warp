@@ -14,5 +14,5 @@ type Config interface {
 	GetInfoAPI() *config.APIConfig
 	GetPChainAPI() *config.APIConfig
 	GetAllowPrivateIPs() bool
-	GetTrackedL1s() set.Set[ids.ID]
+	GetTrackedSubnets() set.Set[ids.ID]
 }
