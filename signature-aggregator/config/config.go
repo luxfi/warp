@@ -57,6 +57,7 @@ func (c *Config) Validate() error {
 	if err := c.InfoAPI.Validate(); err != nil {
 		return err
 	}
+	c.trackedSubnets = set.NewSet[ids.ID](len(c.TrackedSubnetIDs))
 	for _, trackedL1 := range c.TrackedSubnetIDs {
 		trackedL1ID, err := ids.FromString(trackedL1)
 		if err != nil {
