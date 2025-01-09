@@ -6,11 +6,13 @@
 package vms
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/vms/evm"
 	"github.com/ethereum/go-ethereum/common"
@@ -34,12 +36,17 @@ type DestinationClient interface {
 
 	// DestinationBlockchainID returns the ID of the destination chain
 	DestinationBlockchainID() ids.ID
+
+	// MaxGasLimit returns destination blockchain max gas limit
+	TeleporterMaxGasLimit() uint64
 }
 
-func NewDestinationClient(logger logging.Logger, subnetInfo *config.DestinationBlockchain) (DestinationClient, error) {
+func NewDestinationClient(
+	logger logging.Logger, subnetInfo *config.DestinationBlockchain, cChainID ids.ID,
+) (DestinationClient, error) {
 	switch config.ParseVM(subnetInfo.VM) {
 	case config.EVM:
-		return evm.NewDestinationClient(logger, subnetInfo)
+		return evm.NewDestinationClient(logger, subnetInfo, cChainID)
 	default:
 		return nil, fmt.Errorf("invalid vm")
 	}
@@ -51,6 +58,16 @@ func CreateDestinationClients(
 	relayerConfig config.Config,
 ) (map[ids.ID]DestinationClient, error) {
 	destinationClients := make(map[ids.ID]DestinationClient)
+	infoClient, err := peers.NewInfoAPI(relayerConfig.InfoAPI)
+	if err != nil {
+		logger.Error("Failed to create info API", zap.Error(err))
+		return nil, err
+	}
+	cChainID, err := infoClient.GetBlockchainID(context.Background(), "C")
+	if err != nil {
+		logger.Error("Failed to get C-Chain ID", zap.Error(err))
+		return nil, err
+	}
 	for _, subnetInfo := range relayerConfig.DestinationBlockchains {
 		blockchainID, err := ids.FromString(subnetInfo.BlockchainID)
 		if err != nil {
@@ -69,7 +86,7 @@ func CreateDestinationClients(
 			continue
 		}
 
-		destinationClient, err := NewDestinationClient(logger, subnetInfo)
+		destinationClient, err := NewDestinationClient(logger, subnetInfo, cChainID)
 		if err != nil {
 			logger.Error(
 				"Could not create destination client",

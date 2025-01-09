@@ -7,6 +7,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -44,13 +45,45 @@ type destinationClient struct {
 	signer                  signer.Signer
 	evmChainID              *big.Int
 	currentNonce            uint64
+	teleporterMaxGasLimit   uint64
 	logger                  logging.Logger
 }
 
 func NewDestinationClient(
 	logger logging.Logger,
 	destinationBlockchain *config.DestinationBlockchain,
+	cChainID ids.ID,
 ) (*destinationClient, error) {
+	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
+	if err != nil {
+		logger.Error(
+			"Could not decode destination chain ID from string",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	maxGasLimit := destinationBlockchain.TeleporterMaxGasLimit
+	isCChain := destinationID == cChainID
+	if isCChain && maxGasLimit > config.DefaultTeleporterMaxGasLimit {
+		logger.Error("C-Chain max-gas-limit exceeded",
+			zap.Uint64("value", maxGasLimit),
+			zap.Uint64("cChainMaxValue", config.DefaultTeleporterMaxGasLimit),
+		)
+		return nil, fmt.Errorf(
+			"C-Chain max-gas-limit max gas limit %d exceeded", config.DefaultTeleporterMaxGasLimit,
+		)
+	}
+
+	sgnr, err := signer.NewSigner(destinationBlockchain)
+	if err != nil {
+		logger.Error(
+			"Failed to create signer",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
 	// Dial the destination RPC endpoint
 	client, err := utils.NewEthClientWithConfig(
 		context.Background(),
@@ -61,24 +94,6 @@ func NewDestinationClient(
 	if err != nil {
 		logger.Error(
 			"Failed to dial rpc endpoint",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
-	if err != nil {
-		logger.Error(
-			"Could not decode destination chain ID from string",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	sgnr, err := signer.NewSigner(destinationBlockchain)
-	if err != nil {
-		logger.Error(
-			"Failed to create signer",
 			zap.Error(err),
 		)
 		return nil, err
@@ -117,6 +132,7 @@ func NewDestinationClient(
 		evmChainID:              evmChainID,
 		currentNonce:            nonce,
 		logger:                  logger,
+		teleporterMaxGasLimit:   maxGasLimit,
 	}, nil
 }
 
@@ -209,4 +225,8 @@ func (c *destinationClient) SenderAddress() common.Address {
 
 func (c *destinationClient) DestinationBlockchainID() ids.ID {
 	return c.destinationBlockchainID
+}
+
+func (c *destinationClient) TeleporterMaxGasLimit() uint64 {
+	return c.teleporterMaxGasLimit
 }
