@@ -98,3 +98,17 @@ func (mr *MockDestinationClientMockRecorder) SenderAddress() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddress", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddress))
 }
+
+// TeleporterMaxGasLimit mocks base method.
+func (m *MockDestinationClient) TeleporterMaxGasLimit() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TeleporterMaxGasLimit")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// TeleporterMaxGasLimit indicates an expected call of TeleporterMaxGasLimit.
+func (mr *MockDestinationClientMockRecorder) TeleporterMaxGasLimit() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TeleporterMaxGasLimit", reflect.TypeOf((*MockDestinationClient)(nil).TeleporterMaxGasLimit))
+}
