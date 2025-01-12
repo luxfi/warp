@@ -163,15 +163,15 @@ func (m *messageHandler) ShouldSendMessage(destinationClient vms.DestinationClie
 		return false, fmt.Errorf("failed to calculate Teleporter message ID: %w", err)
 	}
 	requiredGasLimit := m.teleporterMessage.RequiredGasLimit.Uint64()
-	maxGasLimit := destinationClient.BlockGasLimit()
+	destBlockGasLimit := destinationClient.BlockGasLimit()
 	// Check if the specified gas limit is below the maximum threshold
-	if requiredGasLimit > maxGasLimit {
+	if requiredGasLimit > destBlockGasLimit {
 		m.logger.Info(
 			"Gas limit exceeds maximum threshold",
 			zap.String("destinationBlockchainID", destinationBlockchainID.String()),
 			zap.String("teleporterMessageID", teleporterMessageID.String()),
 			zap.Uint64("requiredGasLimit", m.teleporterMessage.RequiredGasLimit.Uint64()),
-			zap.Uint64("maxGasLimit", maxGasLimit),
+			zap.Uint64("blockGasLimit", destBlockGasLimit),
 		)
 		return false, nil
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// The maximum gas limit that can be specified for a Teleporter message
+	// The block gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
 	DefaultBlockGasLimit = 12_000_000
 )
@@ -29,7 +29,7 @@ type DestinationBlockchain struct {
 	KMSKeyID          string            `mapstructure:"kms-key-id" json:"kms-key-id"`
 	KMSAWSRegion      string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
 	AccountPrivateKey string            `mapstructure:"account-private-key" json:"account-private-key"`
-	BlockGasLimit     uint64            `mapstructure:"teleporter-max-gas-limit" json:"teleporter-max-gas-limit"`
+	BlockGasLimit     uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
 
 	// Fetched from the chain after startup
 	warpConfig WarpConfig
@@ -80,7 +80,7 @@ func (s *DestinationBlockchain) Validate() error {
 
 	if s.subnetID == constants.PrimaryNetworkID &&
 		s.BlockGasLimit > DefaultBlockGasLimit {
-		return fmt.Errorf("C-Chain max-gas-limit '%d' exceeded", s.BlockGasLimit)
+		return fmt.Errorf("C-Chain block-gas-limit '%d' exceeded", s.BlockGasLimit)
 	}
 
 	return nil
