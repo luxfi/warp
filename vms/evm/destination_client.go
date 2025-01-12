@@ -7,7 +7,6 @@ package evm
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -45,14 +44,13 @@ type destinationClient struct {
 	signer                  signer.Signer
 	evmChainID              *big.Int
 	currentNonce            uint64
-	teleporterMaxGasLimit   uint64
+	blockGasLimit           uint64
 	logger                  logging.Logger
 }
 
 func NewDestinationClient(
 	logger logging.Logger,
 	destinationBlockchain *config.DestinationBlockchain,
-	cChainID ids.ID,
 ) (*destinationClient, error) {
 	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
 	if err != nil {
@@ -61,18 +59,6 @@ func NewDestinationClient(
 			zap.Error(err),
 		)
 		return nil, err
-	}
-
-	maxGasLimit := destinationBlockchain.TeleporterMaxGasLimit
-	isCChain := destinationID == cChainID
-	if isCChain && maxGasLimit > config.DefaultTeleporterMaxGasLimit {
-		logger.Error("C-Chain max-gas-limit exceeded",
-			zap.Uint64("value", maxGasLimit),
-			zap.Uint64("cChainMaxValue", config.DefaultTeleporterMaxGasLimit),
-		)
-		return nil, fmt.Errorf(
-			"C-Chain max-gas-limit max gas limit %d exceeded", config.DefaultTeleporterMaxGasLimit,
-		)
 	}
 
 	sgnr, err := signer.NewSigner(destinationBlockchain)
@@ -132,7 +118,7 @@ func NewDestinationClient(
 		evmChainID:              evmChainID,
 		currentNonce:            nonce,
 		logger:                  logger,
-		teleporterMaxGasLimit:   maxGasLimit,
+		blockGasLimit:           destinationBlockchain.BlockGasLimit,
 	}, nil
 }
 
@@ -227,6 +213,6 @@ func (c *destinationClient) DestinationBlockchainID() ids.ID {
 	return c.destinationBlockchainID
 }
 
-func (c *destinationClient) TeleporterMaxGasLimit() uint64 {
-	return c.teleporterMaxGasLimit
+func (c *destinationClient) BlockGasLimit() uint64 {
+	return c.blockGasLimit
 }

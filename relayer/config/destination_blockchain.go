@@ -16,20 +16,20 @@ import (
 const (
 	// The maximum gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-	DefaultTeleporterMaxGasLimit = 12_000_000
+	DefaultBlockGasLimit = 12_000_000
 )
 
 // Destination blockchain configuration. Specifies how to connect to and issue
 // transactions on the destination blockchain.
 type DestinationBlockchain struct {
-	SubnetID              string            `mapstructure:"subnet-id" json:"subnet-id"`
-	BlockchainID          string            `mapstructure:"blockchain-id" json:"blockchain-id"`
-	VM                    string            `mapstructure:"vm" json:"vm"`
-	RPCEndpoint           basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
-	KMSKeyID              string            `mapstructure:"kms-key-id" json:"kms-key-id"`
-	KMSAWSRegion          string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
-	AccountPrivateKey     string            `mapstructure:"account-private-key" json:"account-private-key"`
-	TeleporterMaxGasLimit uint64            `mapstructure:"teleporter-max-gas-limit" json:"teleporter-max-gas-limit"`
+	SubnetID          string            `mapstructure:"subnet-id" json:"subnet-id"`
+	BlockchainID      string            `mapstructure:"blockchain-id" json:"blockchain-id"`
+	VM                string            `mapstructure:"vm" json:"vm"`
+	RPCEndpoint       basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
+	KMSKeyID          string            `mapstructure:"kms-key-id" json:"kms-key-id"`
+	KMSAWSRegion      string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
+	AccountPrivateKey string            `mapstructure:"account-private-key" json:"account-private-key"`
+	BlockGasLimit     uint64            `mapstructure:"teleporter-max-gas-limit" json:"teleporter-max-gas-limit"`
 
 	// Fetched from the chain after startup
 	warpConfig WarpConfig
@@ -41,8 +41,8 @@ type DestinationBlockchain struct {
 
 // Validates the destination subnet configuration
 func (s *DestinationBlockchain) Validate() error {
-	if s.TeleporterMaxGasLimit == 0 {
-		s.TeleporterMaxGasLimit = DefaultTeleporterMaxGasLimit
+	if s.BlockGasLimit == 0 {
+		s.BlockGasLimit = DefaultBlockGasLimit
 	}
 	if err := s.RPCEndpoint.Validate(); err != nil {
 		return fmt.Errorf("invalid rpc-endpoint in destination subnet configuration: %w", err)
@@ -77,6 +77,11 @@ func (s *DestinationBlockchain) Validate() error {
 		return fmt.Errorf("invalid subnetID '%s' in configuration. error: %w", s.SubnetID, err)
 	}
 	s.subnetID = subnetID
+
+	if s.subnetID == constants.PrimaryNetworkID &&
+		s.BlockGasLimit > DefaultBlockGasLimit {
+		return fmt.Errorf("C-Chain max-gas-limit '%d' exceeded", s.BlockGasLimit)
+	}
 
 	return nil
 }
