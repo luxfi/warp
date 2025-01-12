@@ -233,6 +233,7 @@ func TestShouldSendMessage(t *testing.T) {
 				SenderAddress().
 				Return(test.senderAddressResult).
 				Times(test.senderAddressTimes)
+			mockClient.EXPECT().BlockGasLimit().Return(uint64(config.DefaultBlockGasLimit)).AnyTimes()
 			mockClient.EXPECT().DestinationBlockchainID().Return(destinationBlockchainID).AnyTimes()
 			if test.messageReceivedCall != nil {
 				messageReceivedInput := interfaces.CallMsg{
