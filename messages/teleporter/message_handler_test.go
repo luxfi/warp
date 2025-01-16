@@ -116,8 +116,9 @@ func TestShouldSendMessage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	const blockGasLimit = 10_000
 	gasLimitExceededTeleporterMessage := validTeleporterMessage
-	gasLimitExceededTeleporterMessage.RequiredGasLimit = big.NewInt(config.DefaultBlockGasLimit + 1)
+	gasLimitExceededTeleporterMessage.RequiredGasLimit = big.NewInt(blockGasLimit + 1)
 	gasLimitExceededTeleporterMessageBytes, err := gasLimitExceededTeleporterMessage.Pack()
 	require.NoError(t, err)
 
@@ -233,7 +234,7 @@ func TestShouldSendMessage(t *testing.T) {
 				SenderAddress().
 				Return(test.senderAddressResult).
 				Times(test.senderAddressTimes)
-			mockClient.EXPECT().BlockGasLimit().Return(uint64(config.DefaultBlockGasLimit)).AnyTimes()
+			mockClient.EXPECT().BlockGasLimit().Return(uint64(blockGasLimit)).AnyTimes()
 			mockClient.EXPECT().DestinationBlockchainID().Return(destinationBlockchainID).AnyTimes()
 			if test.messageReceivedCall != nil {
 				messageReceivedInput := interfaces.CallMsg{

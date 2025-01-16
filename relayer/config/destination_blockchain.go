@@ -16,7 +16,7 @@ import (
 const (
 	// The block gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-	DefaultBlockGasLimit = 12_000_000
+	defaultBlockGasLimit = 12_000_000
 )
 
 // Destination blockchain configuration. Specifies how to connect to and issue
@@ -42,7 +42,7 @@ type DestinationBlockchain struct {
 // Validates the destination subnet configuration
 func (s *DestinationBlockchain) Validate() error {
 	if s.BlockGasLimit == 0 {
-		s.BlockGasLimit = DefaultBlockGasLimit
+		s.BlockGasLimit = defaultBlockGasLimit
 	}
 	if err := s.RPCEndpoint.Validate(); err != nil {
 		return fmt.Errorf("invalid rpc-endpoint in destination subnet configuration: %w", err)
@@ -79,7 +79,7 @@ func (s *DestinationBlockchain) Validate() error {
 	s.subnetID = subnetID
 
 	if s.subnetID == constants.PrimaryNetworkID &&
-		s.BlockGasLimit > DefaultBlockGasLimit {
+		s.BlockGasLimit > defaultBlockGasLimit {
 		return fmt.Errorf("C-Chain block-gas-limit '%d' exceeded", s.BlockGasLimit)
 	}
 
