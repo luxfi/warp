@@ -24,7 +24,7 @@ import (
 
 // MessageCoordinator contains all the logic required to process messages in the relayer.
 // Other components such as the listeners or the API should pass messages to the MessageCoordinator
-// so that it can parse the message(s) and pass them the the proper ApplicationRelayer.
+// so that it can parse the message(s) and pass them the proper ApplicationRelayer.
 type MessageCoordinator struct {
 	logger logging.Logger
 	// Maps Source blockchain ID and protocol address to a Message Handler Factory
