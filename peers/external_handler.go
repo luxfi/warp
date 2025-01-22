@@ -139,7 +139,7 @@ func (h *RelayerExternalHandler) RegisterRequestID(
 	return responseChan
 }
 
-// RegisterRequest registers an AppRequest with the timeout manager.
+// RegisterAppRequest registers an AppRequest with the timeout manager.
 // If RegisterResponse is not called before the timeout, HandleInbound is called with
 // an internally created AppRequestFailed message.
 func (h *RelayerExternalHandler) RegisterAppRequest(reqID ids.RequestID) {
