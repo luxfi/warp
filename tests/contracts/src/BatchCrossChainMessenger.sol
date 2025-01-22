@@ -31,7 +31,7 @@ contract BatchCrossChainMessenger is ReentrancyGuard, TeleporterOwnerUpgradeable
     mapping(bytes32 sourceBlockchainID => string[] messages) private _messages;
 
     /**
-     * @dev Emitted when a message is submited to be sent.
+     * @dev Emitted when a message is submitted to be sent.
      */
     event SendMessages(
         bytes32 indexed destinationBlockchainID,
