@@ -11,7 +11,7 @@ go_version() {
 }
 
 version_lt() {
-    # Return true if $1 is a lower version than than $2,
+    # Return true if $1 is a lower version than $2,
     local ver1=$1
     local ver2=$2
     # Reverse sort the versions, if the 1st item != ver1 then ver1 < ver2
