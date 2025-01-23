@@ -40,7 +40,7 @@ type Listener struct {
 	messageCoordinator *MessageCoordinator
 }
 
-// runListener creates a Listener instance and the ApplicationRelayers for a subnet.
+// RunListener creates a Listener instance and the ApplicationRelayers for a subnet.
 // The Listener listens for warp messages on that subnet, and the ApplicationRelayers handle delivery to the destination
 func RunListener(
 	ctx context.Context,
