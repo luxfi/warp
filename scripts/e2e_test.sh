@@ -39,6 +39,8 @@ cwd=$(pwd)
 rm -rf $BASEDIR/avalanchego
 BASEDIR=$BASEDIR AVALANCHEGO_BUILD_PATH=$BASEDIR/avalanchego ./scripts/install_avalanchego_release.sh
 BASEDIR=$BASEDIR "${TELEPORTER_PATH}/scripts/install_subnetevm_release.sh"
+# Install the signature aggregator binary version that the icm-contracts repo expects for the tests
+BASEDIR=$BASEDIR "${TELEPORTER_PATH}/scripts/install_sig_agg_release.sh"
 
 cp ${BASEDIR}/subnet-evm/subnet-evm ${BASEDIR}/avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
 echo "Copied ${BASEDIR}/subnet-evm/subnet-evm binary to ${BASEDIR}/avalanchego/plugins/"
@@ -54,7 +56,7 @@ go build -v -o tests/cmd/decider/decider ./tests/cmd/decider/
 
 # Run the tests
 echo "Running e2e tests $RUN_E2E"
-RUN_E2E=true LOG_LEVEL=${LOG_LEVEL} ./tests/tests.test \
+RUN_E2E=true LOG_LEVEL=${LOG_LEVEL} SIG_AGG_PATH=${SIG_AGG_PATH:-"$BASEDIR/icm-services/signature-aggregator"} ./tests/tests.test \
   --ginkgo.vv \
   --ginkgo.label-filter=${GINKGO_LABEL_FILTER:-""} \
   --ginkgo.focus=${GINKGO_FOCUS:-""} 

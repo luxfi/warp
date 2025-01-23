@@ -133,7 +133,7 @@ func CreateDefaultRelayerConfig(
 		Expect(err).Should(BeNil())
 
 		sources[i] = &relayercfg.SourceBlockchain{
-			SubnetID:     l1Info.L1ID.String(),
+			SubnetID:     l1Info.SubnetID.String(),
 			BlockchainID: l1Info.BlockchainID.String(),
 			VM:           relayercfg.EVM.String(),
 			RPCEndpoint: config.APIConfig{
@@ -161,7 +161,7 @@ func CreateDefaultRelayerConfig(
 
 		log.Info(
 			"Creating relayer config for source subnet",
-			"subnetID", l1Info.L1ID.String(),
+			"subnetID", l1Info.SubnetID.String(),
 			"blockchainID", l1Info.BlockchainID.String(),
 			"host", host,
 			"port", port,
@@ -173,7 +173,7 @@ func CreateDefaultRelayerConfig(
 		Expect(err).Should(BeNil())
 
 		destinations[i] = &relayercfg.DestinationBlockchain{
-			SubnetID:     l1Info.L1ID.String(),
+			SubnetID:     l1Info.SubnetID.String(),
 			BlockchainID: l1Info.BlockchainID.String(),
 			VM:           relayercfg.EVM.String(),
 			RPCEndpoint: config.APIConfig{
@@ -184,7 +184,7 @@ func CreateDefaultRelayerConfig(
 
 		log.Info(
 			"Creating relayer config for destination subnet",
-			"subnetID", l1Info.L1ID.String(),
+			"subnetID", l1Info.SubnetID.String(),
 			"blockchainID", l1Info.BlockchainID.String(),
 			"host", host,
 			"port", port,
