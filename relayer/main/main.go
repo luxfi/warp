@@ -428,7 +428,7 @@ func createApplicationRelayers(
 	return applicationRelayers, minHeights, nil
 }
 
-// createApplicationRelayers creates Application Relayers for a given source blockchain.
+// createApplicationRelayersForSourceChain creates Application Relayers for a given source blockchain.
 func createApplicationRelayersForSourceChain(
 	ctx context.Context,
 	logger logging.Logger,
