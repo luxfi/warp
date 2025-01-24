@@ -2,6 +2,7 @@
 // See the file LICENSE for licensing terms.
 
 //go:generate mockgen -source=$GOFILE -destination=./mocks/mock_app_request_network.go -package=mocks
+//go:generate mockgen -destination=./mocks/mock_network.go -package=mocks github.com/ava-labs/avalanchego/network Network
 
 package peers
 
