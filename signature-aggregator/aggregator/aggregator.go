@@ -157,7 +157,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		}
 		return nil
 	}
-	err = utils.WithRetriesTimeout(s.logger, connectOp, signatureRequestTimeout)
+	err = utils.WithRetriesTimeout(s.logger, connectOp, connectToValidatorsTimeout)
 
 	accumulatedSignatureWeight := big.NewInt(0)
 
