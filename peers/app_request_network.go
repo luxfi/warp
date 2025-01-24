@@ -352,9 +352,7 @@ func (n *appRequestNetwork) ConnectToCanonicalValidators(subnetID ids.ID) (*Conn
 	}
 
 	peerInfo := n.network.PeerInfo(nil)
-
 	connectedPeers := set.NewSet[ids.NodeID](len(nodeIDs))
-
 	for _, peer := range peerInfo {
 		if nodeIDs.Contains(peer.ID) {
 			connectedPeers.Add(peer.ID)
