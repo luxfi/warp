@@ -47,7 +47,7 @@ const (
 var (
 	// Errors
 	errNotEnoughSignatures     = errors.New("failed to collect a threshold of signatures")
-	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
 
 type SignatureAggregator struct {
@@ -130,7 +130,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 				zap.Uint64("quorumPercentage", quorumPercentage),
 			)
 			s.metrics.FailuresToConnectToSufficientStake.Inc()
-			return ErrNotEnoughConnectedStake
+			return errNotEnoughConnectedStake
 		}
 		return nil
 	}

@@ -4,11 +4,9 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
 	"net/http"
 	"os"
 
@@ -21,8 +19,6 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/config"
 	"github.com/ava-labs/icm-services/signature-aggregator/healthcheck"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
-	"github.com/ava-labs/icm-services/utils"
-	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -146,24 +142,8 @@ func main() {
 
 	healthCheckSubnets := cfg.GetTrackedSubnets().List()
 	healthCheckSubnets = append(healthCheckSubnets, constants.PrimaryNetworkID)
-	primaryNetworkHealthCheckFunc := func(context.Context) error {
-		for _, subnetID := range healthCheckSubnets {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
-			if err != nil {
-				return fmt.Errorf(
-					"Failed to connect to quorum of validator for subnetID: %s, %w", subnetID, err)
-			}
-			if !utils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-				connectedValidators.TotalValidatorWeight,
-				warp.WarpDefaultQuorumNumerator,
-			) {
-				return aggregator.ErrNotEnoughConnectedStake
-			}
-		}
-		return nil
-	}
-	healthcheck.HandleHealthCheckRequest(primaryNetworkHealthCheckFunc)
+	networkHealthcheckFunc := peers.GetNetworkHealthFunc(network, healthCheckSubnets)
+	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
 	logger.Info("Initialization complete")
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
