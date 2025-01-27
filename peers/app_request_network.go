@@ -9,7 +9,9 @@ package peers
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -29,6 +31,9 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/peers/validators"
+	subnetWarp "github.com/ava-labs/subnet-evm/precompile/contracts/warp"
+
+	sharedUtils "github.com/ava-labs/icm-services/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -38,6 +43,10 @@ const (
 	DefaultAppRequestTimeout  = time.Second * 2
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
+)
+
+var (
+	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
 
 type AppRequestNetwork interface {
@@ -398,6 +407,26 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency float64) {
 }
 
 // Non-receiver util functions
+
+func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
+	return func(context.Context) error {
+		for _, subnetID := range subnetIDs {
+			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
+			if err != nil {
+				return fmt.Errorf(
+					"Failed to connect to quorum of validator for subnetID: %s, %w", subnetID, err)
+			}
+			if !sharedUtils.CheckStakeWeightExceedsThreshold(
+				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
+				connectedValidators.TotalValidatorWeight,
+				subnetWarp.WarpDefaultQuorumNumerator,
+			) {
+				return errNotEnoughConnectedStake
+			}
+		}
+		return nil
+	}
+}
 
 func calculateConnectedWeight(
 	validatorSet []*warp.Validator,
