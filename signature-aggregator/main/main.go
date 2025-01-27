@@ -144,18 +144,22 @@ func main() {
 		signatureAggregator,
 	)
 
-	network.TrackSubnet(constants.PrimaryNetworkID)
+	healthCheckSubnets := cfg.GetTrackedSubnets().List()
+	healthCheckSubnets = append(healthCheckSubnets, constants.PrimaryNetworkID)
 	primaryNetworkHealthCheckFunc := func(context.Context) error {
-		connectedValidators, err := network.GetConnectedCanonicalValidators(constants.PrimaryNetworkID)
-		if err != nil {
-			return fmt.Errorf("Failed to connect to primary network validators: %w", err)
-		}
-		if !utils.CheckStakeWeightExceedsThreshold(
-			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-			connectedValidators.TotalValidatorWeight,
-			warp.WarpDefaultQuorumNumerator,
-		) {
-			return aggregator.ErrNotEnoughConnectedStake
+		for _, subnetID := range healthCheckSubnets {
+			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
+			if err != nil {
+				return fmt.Errorf(
+					"Failed to connect to quorum of validator for subnetID: %s, %w", subnetID, err)
+			}
+			if !utils.CheckStakeWeightExceedsThreshold(
+				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
+				connectedValidators.TotalValidatorWeight,
+				warp.WarpDefaultQuorumNumerator,
+			) {
+				return aggregator.ErrNotEnoughConnectedStake
+			}
 		}
 		return nil
 	}
