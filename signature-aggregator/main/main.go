@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/config"
 	"github.com/ava-labs/icm-services/signature-aggregator/healthcheck"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
+	"github.com/ava-labs/icm-services/utils"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -139,7 +143,23 @@ func main() {
 		metricsInstance,
 		signatureAggregator,
 	)
-	healthcheck.HandleHealthCheckRequest(network)
+
+	network.TrackSubnet(constants.PrimaryNetworkID)
+	primaryNetworkHealthCheckFunc := func(context.Context) error {
+		connectedValidators, err := network.GetConnectedCanonicalValidators(constants.PrimaryNetworkID)
+		if err != nil {
+			return fmt.Errorf("Failed to connect to primary network validators: %w", err)
+		}
+		if !utils.CheckStakeWeightExceedsThreshold(
+			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
+			connectedValidators.TotalValidatorWeight,
+			warp.WarpDefaultQuorumNumerator,
+		) {
+			return aggregator.ErrNotEnoughConnectedStake
+		}
+		return nil
+	}
+	healthcheck.HandleHealthCheckRequest(primaryNetworkHealthCheckFunc)
 
 	logger.Info("Initialization complete")
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
