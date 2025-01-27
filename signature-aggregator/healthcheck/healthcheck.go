@@ -19,7 +19,7 @@ func HandleHealthCheckRequest(network peers.AppRequestNetwork) {
 		health.WithCheck(health.Check{
 			Name: "signature-aggregator-health",
 			Check: func(context.Context) error {
-				connectedValidators, err := network.ConnectToCanonicalValidators(constants.PrimaryNetworkID)
+				connectedValidators, err := network.GetConnectedCanonicalValidators(constants.PrimaryNetworkID)
 				if err != nil {
 					return fmt.Errorf("Failed to connect to primary network validators: %w", err)
 				}

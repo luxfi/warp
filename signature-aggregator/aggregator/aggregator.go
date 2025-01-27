@@ -97,10 +97,12 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	signingSubnet ids.ID,
 	quorumPercentage uint64,
 ) (*peers.ConnectedCanonicalValidators, error) {
+	s.network.TrackSubnet(signingSubnet)
+
 	var connectedValidators *peers.ConnectedCanonicalValidators
 	var err error
 	connectOp := func() error {
-		connectedValidators, err = s.network.ConnectToCanonicalValidators(signingSubnet)
+		connectedValidators, err = s.network.GetConnectedCanonicalValidators(signingSubnet)
 		if err != nil {
 			msg := "Failed to connect to canonical validators"
 			s.logger.Error(
