@@ -2,7 +2,7 @@
 // See the file LICENSE for licensing terms.
 
 //go:generate mockgen -source=$GOFILE -destination=./mocks/mock_app_request_network.go -package=mocks
-//go:generate mockgen -destination=./mocks/mock_network.go -package=mocks github.com/ava-labs/avalanchego/network Network
+//go:generate mockgen -destination=./avago_mocks/mock_network.go -package=avago_mocks github.com/ava-labs/avalanchego/network Network
 
 package peers
 
@@ -41,7 +41,7 @@ const (
 )
 
 type AppRequestNetwork interface {
-	ConnectToCanonicalValidators(subnetID ids.ID) (
+	GetConnectedCanonicalValidators(subnetID ids.ID) (
 		*ConnectedCanonicalValidators,
 		error,
 	)
@@ -67,7 +67,7 @@ type appRequestNetwork struct {
 	infoAPI         *InfoAPI
 	logger          logging.Logger
 	lock            *sync.RWMutex
-	validatorClient *validators.CanonicalValidatorClient
+	validatorClient validators.CanonicalValidatorState
 	metrics         *AppRequestNetworkMetrics
 
 	trackedSubnets set.Set[ids.ID]
@@ -234,6 +234,8 @@ func (n *appRequestNetwork) containsSubnet(subnetID ids.ID) bool {
 	return n.trackedSubnets.Contains(subnetID)
 }
 
+// TrackSubnet adds the subnet to the list of tracked subnets
+// and initiates the connections to the subnet's validators asynchronously
 func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	if n.containsSubnet(subnetID) {
 		return
@@ -326,12 +328,9 @@ func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Va
 	return c.ValidatorSet[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
-// ConnectToCanonicalValidators connects to the canonical validators of the given subnet and returns the connected
-// validator information
-func (n *appRequestNetwork) ConnectToCanonicalValidators(subnetID ids.ID) (*ConnectedCanonicalValidators, error) {
-	// Track the subnet
-	n.TrackSubnet(subnetID)
-
+// GetConnectedCanonicalValidators returns the connected validator information for the given subnet
+// at the time of the call.
+func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*ConnectedCanonicalValidators, error) {
 	// Get the subnet's current canonical validator set
 	startPChainAPICall := time.Now()
 	validatorSet, totalValidatorWeight, err := n.validatorClient.GetCurrentCanonicalValidatorSet(subnetID)
@@ -352,7 +351,7 @@ func (n *appRequestNetwork) ConnectToCanonicalValidators(subnetID ids.ID) (*Conn
 		}
 	}
 
-	peerInfo := n.network.PeerInfo(nil)
+	peerInfo := n.network.PeerInfo(nodeIDs.List())
 	connectedPeers := set.NewSet[ids.NodeID](len(nodeIDs))
 	for _, peer := range peerInfo {
 		if nodeIDs.Contains(peer.ID) {
