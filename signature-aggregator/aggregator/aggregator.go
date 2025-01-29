@@ -20,17 +20,15 @@ import (
 	"github.com/ava-labs/avalanchego/proto/pb/p2p"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/subnets"
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	corethMsg "github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/aggregator/cache"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
-	msg "github.com/ava-labs/subnet-evm/plugin/evm/message"
+	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -38,17 +36,12 @@ import (
 type blsSignatureBuf [bls.SignatureLen]byte
 
 const (
-	// Number of retries to collect signatures from validators
-	maxRelayerQueryAttempts = 10
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
-	signatureRequestRetryWaitPeriodMs = 20_000
+	signatureRequestTimeout = 20 * time.Second
 )
 
 var (
-	codec       = msg.Codec
-	corethCodec = corethMsg.Codec
-
 	// Errors
 	errNotEnoughSignatures     = errors.New("failed to collect a threshold of signatures")
 	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
@@ -64,7 +57,6 @@ type SignatureAggregator struct {
 	subnetsMapLock          sync.RWMutex
 	metrics                 *metrics.SignatureAggregatorMetrics
 	cache                   *cache.Cache
-	etnaTime                time.Time
 }
 
 func NewSignatureAggregator(
@@ -73,7 +65,6 @@ func NewSignatureAggregator(
 	messageCreator message.Creator,
 	signatureCacheSize uint64,
 	metrics *metrics.SignatureAggregatorMetrics,
-	etnaTime time.Time,
 ) (*SignatureAggregator, error) {
 	cache, err := cache.NewCache(signatureCacheSize, logger)
 	if err != nil {
@@ -89,7 +80,6 @@ func NewSignatureAggregator(
 		metrics:                 metrics,
 		currentRequestID:        atomic.Uint32{},
 		cache:                   cache,
-		etnaTime:                etnaTime,
 		messageCreator:          messageCreator,
 	}
 	sa.currentRequestID.Store(rand.Uint32())
@@ -224,12 +214,12 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
+	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
-	for attempt := 1; attempt <= maxRelayerQueryAttempts; attempt++ {
+	operation := func() error {
 		responsesExpected := len(connectedValidators.ValidatorSet) - len(signatureMap)
 		s.logger.Debug(
 			"Aggregator collecting signatures from peers.",
-			zap.Int("attempt", attempt),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("signingSubnetID", signingSubnet.String()),
 			zap.Int("validatorSetSize", len(connectedValidators.ValidatorSet)),
@@ -296,7 +286,8 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					zap.String("warpMessageID", unsignedMessage.ID().String()),
 					zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 				)
-				signedMsg, relevant, err := s.handleResponse(
+				var relevant bool
+				signedMsg, relevant, err = s.handleResponse(
 					response,
 					sentTo,
 					requestID,
@@ -309,10 +300,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				if err != nil {
 					// don't increase node failures metric here, because we did
 					// it in handleResponse
-					return nil, fmt.Errorf(
+					return backoff.Permanent(fmt.Errorf(
 						"failed to handle response: %w",
 						err,
-					)
+					))
 				}
 				if relevant {
 					responseCount++
@@ -325,7 +316,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
 						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
-					return signedMsg, nil
+					return nil
 				}
 				// Break once we've had successful or unsuccessful responses from each requested node
 				if responseCount == responsesExpected {
@@ -333,20 +324,20 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				}
 			}
 		}
-		if attempt != maxRelayerQueryAttempts {
-			// Sleep such that all retries are uniformly spread across totalRelayerQueryPeriodMs
-			// TODO: We may want to consider an exponential back off rather than a uniform sleep period.
-			time.Sleep(time.Duration(signatureRequestRetryWaitPeriodMs/maxRelayerQueryAttempts) * time.Millisecond)
-		}
+		return errNotEnoughSignatures
 	}
-	s.logger.Warn(
-		"Failed to collect a threshold of signatures",
-		zap.Int("attempts", maxRelayerQueryAttempts),
-		zap.String("warpMessageID", unsignedMessage.ID().String()),
-		zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
-		zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
-	)
-	return nil, errNotEnoughSignatures
+
+	err = utils.WithRetriesTimeout(s.logger, operation, signatureRequestTimeout)
+	if err != nil {
+		s.logger.Warn(
+			"Failed to collect a threshold of signatures",
+			zap.String("warpMessageID", unsignedMessage.ID().String()),
+			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
+			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
+		)
+		return nil, errNotEnoughSignatures
+	}
+	return signedMsg, nil
 }
 
 func (s *SignatureAggregator) getSubnetID(blockchainID ids.ID) (ids.ID, error) {
@@ -606,64 +597,31 @@ func (s *SignatureAggregator) aggregateSignatures(
 	return aggSig, vdrBitSet, nil
 }
 
-// TODO: refactor this to remove special handling based on etnaTime
-// after Etna release, along with related config and testing code
 func (s *SignatureAggregator) marshalRequest(
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	justification []byte,
 	sourceSubnet ids.ID,
 ) ([]byte, error) {
-	if s.etnaActivated() {
-		// Post-Etna case
-		messageBytes, err := proto.Marshal(
-			&sdk.SignatureRequest{
-				Message:       unsignedMessage.Bytes(),
-				Justification: justification,
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-		return networkP2P.PrefixMessage(
-			networkP2P.ProtocolPrefix(networkP2P.SignatureRequestHandlerID),
-			messageBytes,
-		), nil
-	} else {
-		// Pre-Etna case
-		if sourceSubnet == constants.PrimaryNetworkID {
-			req := corethMsg.MessageSignatureRequest{
-				MessageID: unsignedMessage.ID(),
-			}
-			return corethMsg.RequestToBytes(corethCodec, req)
-		} else {
-			req := msg.MessageSignatureRequest{
-				MessageID: unsignedMessage.ID(),
-			}
-			return msg.RequestToBytes(codec, req)
-		}
+	messageBytes, err := proto.Marshal(
+		&sdk.SignatureRequest{
+			Message:       unsignedMessage.Bytes(),
+			Justification: justification,
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
+	return networkP2P.PrefixMessage(
+		networkP2P.ProtocolPrefix(networkP2P.SignatureRequestHandlerID),
+		messageBytes,
+	), nil
 }
 
 func (s *SignatureAggregator) unmarshalResponse(responseBytes []byte) (blsSignatureBuf, error) {
-	if s.etnaActivated() {
-		// Post-Etna case
-		var sigResponse sdk.SignatureResponse
-		err := proto.Unmarshal(responseBytes, &sigResponse)
-		if err != nil {
-			return blsSignatureBuf{}, err
-		}
-		return blsSignatureBuf(sigResponse.Signature), nil
-	} else {
-		// Pre-Etna case
-		var sigResponse msg.SignatureResponse
-		_, err := msg.Codec.Unmarshal(responseBytes, &sigResponse)
-		if err != nil {
-			return blsSignatureBuf{}, err
-		}
-		return sigResponse.Signature, nil
+	var sigResponse sdk.SignatureResponse
+	err := proto.Unmarshal(responseBytes, &sigResponse)
+	if err != nil {
+		return blsSignatureBuf{}, err
 	}
-}
-
-func (s *SignatureAggregator) etnaActivated() bool {
-	return !s.etnaTime.IsZero() && s.etnaTime.Before(time.Now())
+	return blsSignatureBuf(sigResponse.Signature), nil
 }

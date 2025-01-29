@@ -28,7 +28,7 @@ var (
 )
 
 const (
-	DefaultRPCRetryTimeout = 5 * time.Second
+	DefaultRPCTimeout = 5 * time.Second
 )
 
 //
@@ -86,7 +86,7 @@ func CallWithRetry[T any](ctx context.Context, f func() (T, error)) (T, error) {
 //
 
 // BigToHashSafe ensures that a bignum value is able to fit into a 32 byte buffer before converting it to a common.Hash
-// Returns an error if overflow/truncation would occur by trying to perfom this operation.
+// Returns an error if overflow/truncation would occur by trying to perform this operation.
 func BigToHashSafe(in *big.Int) (common.Hash, error) {
 	if in == nil {
 		return common.Hash{}, ErrNilInput
