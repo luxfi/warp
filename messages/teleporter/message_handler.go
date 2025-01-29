@@ -13,6 +13,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
+	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
+	gasUtils "github.com/ava-labs/icm-contracts/utils/gas-utils"
+	teleporterUtils "github.com/ava-labs/icm-contracts/utils/teleporter-utils"
 	"github.com/ava-labs/icm-services/messages"
 	pbDecider "github.com/ava-labs/icm-services/proto/pb/decider"
 	"github.com/ava-labs/icm-services/relayer/config"
@@ -21,17 +24,14 @@ import (
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/ethclient"
-	teleportermessenger "github.com/ava-labs/teleporter/abi-bindings/go/teleporter/TeleporterMessenger"
-	gasUtils "github.com/ava-labs/teleporter/utils/gas-utils"
-	teleporterUtils "github.com/ava-labs/teleporter/utils/teleporter-utils"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
-// The maximum gas limit that can be specified for a Teleporter message
-// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-const maxTeleporterGasLimit = 12_000_000
+const (
+	defaultBlockAcceptanceTimeout = 30 * time.Second
+)
 
 type factory struct {
 	messageConfig   Config
@@ -162,15 +162,16 @@ func (m *messageHandler) ShouldSendMessage(destinationClient vms.DestinationClie
 	if err != nil {
 		return false, fmt.Errorf("failed to calculate Teleporter message ID: %w", err)
 	}
-
+	requiredGasLimit := m.teleporterMessage.RequiredGasLimit.Uint64()
+	destBlockGasLimit := destinationClient.BlockGasLimit()
 	// Check if the specified gas limit is below the maximum threshold
-	if m.teleporterMessage.RequiredGasLimit.Uint64() > maxTeleporterGasLimit {
+	if requiredGasLimit > destBlockGasLimit {
 		m.logger.Info(
 			"Gas limit exceeds maximum threshold",
 			zap.String("destinationBlockchainID", destinationBlockchainID.String()),
 			zap.String("teleporterMessageID", teleporterMessageID.String()),
 			zap.Uint64("requiredGasLimit", m.teleporterMessage.RequiredGasLimit.Uint64()),
-			zap.Uint64("maxGasLimit", maxTeleporterGasLimit),
+			zap.Uint64("blockGasLimit", destBlockGasLimit),
 		)
 		return false, nil
 	}
@@ -362,14 +363,14 @@ func (m *messageHandler) waitForReceipt(
 	teleporterMessageID ids.ID,
 ) error {
 	destinationBlockchainID := destinationClient.DestinationBlockchainID()
-	callCtx, callCtxCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
 	defer callCtxCancel()
-	receipt, err := utils.CallWithRetry[*types.Receipt](
-		callCtx,
-		func() (*types.Receipt, error) {
-			return destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
-		},
-	)
+	var receipt *types.Receipt
+	operation := func() (err error) {
+		receipt, err = destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
+		return err
+	}
+	err := utils.WithRetriesTimeout(m.logger, operation, defaultBlockAcceptanceTimeout)
 	if err != nil {
 		m.logger.Error(
 			"Failed to get transaction receipt",

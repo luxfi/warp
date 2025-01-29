@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"time"
 
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
@@ -65,13 +64,12 @@ type Config struct {
 	DeciderURL             string                   `mapstructure:"decider-url" json:"decider-url"`
 	SignatureCacheSize     uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`
 	ManuallyTrackedPeers   []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"`
-
-	// mapstructure doesn't handle time.Time out of the box so handle it manually
-	EtnaTime time.Time `json:"etna-time"`
+	AllowPrivateIPs        bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
 
 	// convenience field to fetch a blockchain's subnet ID
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
+	trackedSubnets         set.Set[ids.ID]
 }
 
 func DisplayUsageText() {
@@ -149,6 +147,10 @@ func (c *Config) Validate() error {
 		if _, err := url.ParseRequestURI(c.DeciderURL); err != nil {
 			return fmt.Errorf("Invalid decider URL: %w", err)
 		}
+	}
+
+	for _, l1ID := range c.blockchainIDToSubnetID {
+		c.trackedSubnets.Add(l1ID)
 	}
 
 	return nil
@@ -254,4 +256,12 @@ func (c *Config) GetPChainAPI() *basecfg.APIConfig {
 
 func (c *Config) GetInfoAPI() *basecfg.APIConfig {
 	return c.InfoAPI
+}
+
+func (c *Config) GetAllowPrivateIPs() bool {
+	return c.AllowPrivateIPs
+}
+
+func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
+	return c.trackedSubnets
 }
