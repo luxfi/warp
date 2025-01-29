@@ -40,7 +40,6 @@ import (
 
 const (
 	InboundMessageChannelSize = 1000
-	DefaultAppRequestTimeout  = time.Second * 2
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
 )
