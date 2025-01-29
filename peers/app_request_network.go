@@ -414,7 +414,7 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
 			if err != nil {
 				return fmt.Errorf(
-					"Failed to connect to quorum of validator for subnetID: %s, %w", subnetID, err)
+					"failed to get connected validators: %s, %w", subnetID, err)
 			}
 			if !sharedUtils.CheckStakeWeightExceedsThreshold(
 				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
