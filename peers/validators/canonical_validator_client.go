@@ -23,7 +23,8 @@ import (
 
 var _ CanonicalValidatorState = &CanonicalValidatorClient{}
 
-// CanonicalValidatorState is an interface that wraps validators.State and adds additional necessary
+// CanonicalValidatorState is an interface that wraps [validators.State] and adds additional
+// convenience methods for fetching current and proposed validator sets.
 type CanonicalValidatorState interface {
 	validators.State
 
@@ -31,7 +32,7 @@ type CanonicalValidatorState interface {
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
-// CanonicalValidatorClient wraps platformvm.Client and implements validators.State
+// CanonicalValidatorClient wraps [platformvm.Client] and implements [CanonicalValidatorState]
 type CanonicalValidatorClient struct {
 	logger  logging.Logger
 	client  platformvm.Client
