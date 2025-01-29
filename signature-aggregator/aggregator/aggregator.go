@@ -172,7 +172,9 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	connectedValidators, err := s.connectToQuorumValidators(signingSubnet, quorumPercentage)
 	if err != nil {
 		s.logger.Error(
-			"Failed to connect to quorum of validators",
+			"Failed to fetch quorum of connected canonical validators",
+			zap.Stringer("signingSubnet", signingSubnet),
+			zap.Error(err),
 		)
 		return nil, err
 	}
