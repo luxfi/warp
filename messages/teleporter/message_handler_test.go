@@ -11,13 +11,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
+	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
+	teleporterUtils "github.com/ava-labs/icm-contracts/utils/teleporter-utils"
 	"github.com/ava-labs/icm-services/relayer/config"
 	mock_evm "github.com/ava-labs/icm-services/vms/evm/mocks"
 	mock_vms "github.com/ava-labs/icm-services/vms/mocks"
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/interfaces"
-	teleportermessenger "github.com/ava-labs/teleporter/abi-bindings/go/teleporter/TeleporterMessenger"
-	teleporterUtils "github.com/ava-labs/teleporter/utils/teleporter-utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -116,8 +116,9 @@ func TestShouldSendMessage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	const blockGasLimit = 10_000
 	gasLimitExceededTeleporterMessage := validTeleporterMessage
-	gasLimitExceededTeleporterMessage.RequiredGasLimit = big.NewInt(maxTeleporterGasLimit + 1)
+	gasLimitExceededTeleporterMessage.RequiredGasLimit = big.NewInt(blockGasLimit + 1)
 	gasLimitExceededTeleporterMessageBytes, err := gasLimitExceededTeleporterMessage.Pack()
 	require.NoError(t, err)
 
@@ -233,6 +234,7 @@ func TestShouldSendMessage(t *testing.T) {
 				SenderAddress().
 				Return(test.senderAddressResult).
 				Times(test.senderAddressTimes)
+			mockClient.EXPECT().BlockGasLimit().Return(uint64(blockGasLimit)).AnyTimes()
 			mockClient.EXPECT().DestinationBlockchainID().Return(destinationBlockchainID).AnyTimes()
 			if test.messageReceivedCall != nil {
 				messageReceivedInput := interfaces.CallMsg{

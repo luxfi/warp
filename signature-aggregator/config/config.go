@@ -5,9 +5,10 @@ package config
 
 import (
 	"fmt"
-	"time"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
 )
@@ -35,9 +36,11 @@ type Config struct {
 	APIPort            uint16             `mapstructure:"api-port" json:"api-port"`
 	MetricsPort        uint16             `mapstructure:"metrics-port" json:"metrics-port"`
 	SignatureCacheSize uint64             `mapstructure:"signature-cache-size" json:"signature-cache-size"`
+	AllowPrivateIPs    bool               `mapstructure:"allow-private-ips" json:"allow-private-ips"`
+	TrackedSubnetIDs   []string           `mapstructure:"tracked-subnet-ids" json:"tracked-subnet-ids"`
 
-	// mapstructure doesn't support time.Time out of the box so handle it manually
-	EtnaTime time.Time `json:"etna-time"`
+	// convenience fields
+	trackedSubnets set.Set[ids.ID]
 }
 
 func DisplayUsageText() {
@@ -54,6 +57,14 @@ func (c *Config) Validate() error {
 	if err := c.InfoAPI.Validate(); err != nil {
 		return err
 	}
+	c.trackedSubnets = set.NewSet[ids.ID](len(c.TrackedSubnetIDs))
+	for _, trackedL1 := range c.TrackedSubnetIDs {
+		trackedL1ID, err := ids.FromString(trackedL1)
+		if err != nil {
+			return err
+		}
+		c.trackedSubnets.Add(trackedL1ID)
+	}
 
 	return nil
 }
@@ -66,4 +77,12 @@ func (c *Config) GetPChainAPI() *basecfg.APIConfig {
 
 func (c *Config) GetInfoAPI() *basecfg.APIConfig {
 	return c.InfoAPI
+}
+
+func (c *Config) GetAllowPrivateIPs() bool {
+	return c.AllowPrivateIPs
+}
+
+func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
+	return c.trackedSubnets
 }
