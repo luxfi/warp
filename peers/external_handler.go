@@ -22,10 +22,8 @@ import (
 var _ router.ExternalHandler = &RelayerExternalHandler{}
 
 const (
-	maximumNetworkTimeout = constants.DefaultNetworkMaximumTimeout
-
 	// Re-exposing DefaultAppRequestTimeout for use by message creators to set deadlines
-	DefaultAppRequestTimeout = maximumNetworkTimeout
+	DefaultAppRequestTimeout = constants.DefaultNetworkMaximumTimeout
 )
 
 // Note: all of the external handler's methods are called on peer goroutines. It
@@ -55,7 +53,7 @@ func NewRelayerExternalHandler(
 	cfg := timer.AdaptiveTimeoutConfig{
 		InitialTimeout:     constants.DefaultNetworkInitialTimeout,
 		MinimumTimeout:     constants.DefaultNetworkMinimumTimeout,
-		MaximumTimeout:     maximumNetworkTimeout,
+		MaximumTimeout:     constants.DefaultNetworkMaximumTimeout,
 		TimeoutCoefficient: constants.DefaultNetworkTimeoutCoefficient,
 		TimeoutHalflife:    constants.DefaultNetworkTimeoutHalflife,
 	}
