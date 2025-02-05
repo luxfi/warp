@@ -1,5 +1,5 @@
 [submodule "tests/contracts/lib/teleporter"]
-	path = tests/contracts/lib/teleporter
+	path = tests/contracts/lib/icm-contracts
 	url = https://github.com/ava-labs/icm-contracts
 [submodule "tests/contracts/lib/forge-std"]
 	path = tests/contracts/lib/forge-std
