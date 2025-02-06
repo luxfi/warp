@@ -142,7 +142,7 @@ func (r *ApplicationRelayer) ProcessHeight(
 	handlers []messages.MessageHandler,
 	errChan chan error,
 ) {
-	r.logger.Debug(
+	r.logger.Verbo(
 		"Processing block",
 		zap.Uint64("height", height),
 		zap.Stringer("relayerID", r.relayerID.ID),
@@ -167,7 +167,7 @@ func (r *ApplicationRelayer) ProcessHeight(
 		return
 	}
 	r.checkpointManager.StageCommittedHeight(height)
-	r.logger.Debug(
+	r.logger.Verbo(
 		"Processed block",
 		zap.Uint64("height", height),
 		zap.String("sourceBlockchainID", r.relayerID.SourceBlockchainID.String()),
