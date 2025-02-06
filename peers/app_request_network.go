@@ -259,6 +259,10 @@ func (n *appRequestNetwork) startUpdateValidators() {
 		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 		ticker := time.NewTicker(ValidatorRefreshPeriod)
 		for ; true; <-ticker.C {
+			n.logger.Debug(
+				"Fetching validators for subnets",
+				zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, n.trackedSubnets.List()...)),
+			)
 			n.updateValidatorSet(context.Background(), constants.PrimaryNetworkID)
 			for _, subnet := range n.trackedSubnets.List() {
 				n.updateValidatorSet(context.Background(), subnet)
@@ -273,8 +277,6 @@ func (n *appRequestNetwork) updateValidatorSet(
 ) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
-
-	n.logger.Debug("Fetching validators for subnet ID", zap.Stringer("subnetID", subnetID))
 
 	// Fetch the subnet validators from the P-Chain
 	validators, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
