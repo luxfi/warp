@@ -27,8 +27,8 @@ signature_aggregator_path="$BASE_PATH/build/signature-aggregator"
 # Set the PATHS
 GOPATH="$(go env GOPATH)"
 
-TELEPORTER_PATH="$BASE_PATH"/tests/contracts/lib/teleporter
-source $TELEPORTER_PATH/scripts/constants.sh
+ICM_CONTRACTS_PATH="$BASE_PATH"/tests/contracts/lib/icm-contracts
+source $ICM_CONTRACTS_PATH/scripts/constants.sh
 
 # Avalabs docker hub repo is avaplatform/icm-relayer.
 # Here we default to the local image (icm-relayer) as to avoid unintentional pushes

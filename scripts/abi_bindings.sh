@@ -11,7 +11,7 @@ ICM_RELAYER_PATH=$(
 
 source $ICM_RELAYER_PATH/scripts/constants.sh
 source $ICM_RELAYER_PATH/scripts/versions.sh
-source $TELEPORTER_PATH/scripts/utils.sh
+source $ICM_CONTRACTS_PATH/scripts/utils.sh
 
 setARCH
 
