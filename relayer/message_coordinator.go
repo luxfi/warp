@@ -268,7 +268,7 @@ func (mc *MessageCoordinator) ProcessBlock(
 		// Dispatch all messages in the block to the appropriate application relayer.
 		// An empty slice is still a valid argument to ProcessHeight; in this case the height is immediately committed.
 		handlers := messageHandlers[appRelayer.relayerID.ID]
-		mc.logger.Debug(
+		mc.logger.Verbo(
 			"Dispatching to app relayer",
 			zap.Stringer("relayerID", appRelayer.relayerID.ID),
 			zap.Int("numMessages", len(handlers)),
