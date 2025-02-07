@@ -644,7 +644,8 @@ func (s *SignatureAggregator) marshalRequest(
 }
 
 func (s *SignatureAggregator) unmarshalResponse(responseBytes []byte) (blsSignatureBuf, error) {
-	if len(responseBytes) == 0 { // empty responses are valid and indicate the node has not seen the message
+	// empty responses are valid and indicate the node has not seen the message
+	if len(responseBytes) == 0 {
 		return blsSignatureBuf{}, nil
 	}
 	var sigResponse sdk.SignatureResponse

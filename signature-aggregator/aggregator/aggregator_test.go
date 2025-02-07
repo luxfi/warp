@@ -373,7 +373,7 @@ func TestUnmarshalResponse(t *testing.T) {
 		},
 		{
 			name:              "nil slice",
-			appResponseBytes:  []byte{},
+			appResponseBytes:  nil,
 			expectedSignature: blsSignatureBuf{},
 		},
 		{
