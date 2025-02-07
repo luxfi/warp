@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"crypto/rand"
+
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/message"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
@@ -344,6 +346,59 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 		100,
 	)
 	require.NoError(t, verifyErr)
+}
+
+func TestUnmarshalResponse(t *testing.T) {
+	aggregator, _ := instantiateAggregator(t)
+
+	emptySignatureResponse, err := proto.Marshal(&sdk.SignatureResponse{Signature: []byte{}})
+	require.NoError(t, err)
+
+	randSignature := make([]byte, 96)
+	_, err = rand.Read(randSignature)
+	require.NoError(t, err)
+
+	randSignatureResponse, err := proto.Marshal(&sdk.SignatureResponse{Signature: randSignature})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name              string
+		appResponseBytes  []byte
+		expectedSignature blsSignatureBuf
+		err               error
+	}{
+		{
+			name:              "empty slice",
+			appResponseBytes:  []byte{},
+			expectedSignature: blsSignatureBuf{},
+			err:               errEmptyResponseBytes,
+		},
+		{
+			name:              "nil slice",
+			appResponseBytes:  []byte{},
+			expectedSignature: blsSignatureBuf{},
+			err:               errEmptyResponseBytes,
+		},
+		{
+			name:              "empty signature", // this is a valid signature response for nodes unable or unwilling to sign a message
+			appResponseBytes:  emptySignatureResponse,
+			expectedSignature: blsSignatureBuf{},
+			err:               errEmptyResponseBytes,
+		},
+		{
+			name:              "random signature",
+			appResponseBytes:  randSignatureResponse,
+			expectedSignature: blsSignatureBuf(randSignature),
+			err:               nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			signature, err := aggregator.unmarshalResponse(tc.appResponseBytes)
+			require.Equal(t, tc.err, err)
+			require.Equal(t, tc.expectedSignature, signature)
+		})
+	}
 }
 
 type pChainStateStub struct {
