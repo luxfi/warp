@@ -48,6 +48,7 @@ var (
 	// Errors
 	errNotEnoughSignatures     = errors.New("failed to collect a threshold of signatures")
 	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	errEmptyResponseBytes      = errors.New("received empty app response bytes")
 )
 
 type SignatureAggregator struct {
@@ -547,7 +548,9 @@ func (s *SignatureAggregator) isValidSignatureResponse(
 		return blsSignatureBuf{}, false
 	}
 
-	signature, err := s.unmarshalResponse(appResponse.AppBytes)
+	appResponse.GetAppBytes()
+
+	signature, err := s.unmarshalResponse(appResponse.GetAppBytes())
 	if err != nil {
 		s.logger.Error(
 			"Error unmarshaling signature response",
@@ -644,6 +647,9 @@ func (s *SignatureAggregator) marshalRequest(
 }
 
 func (s *SignatureAggregator) unmarshalResponse(responseBytes []byte) (blsSignatureBuf, error) {
+	if len(responseBytes) == 0 {
+		return blsSignatureBuf{}, errEmptyResponseBytes
+	}
 	var sigResponse sdk.SignatureResponse
 	err := proto.Unmarshal(responseBytes, &sigResponse)
 	if err != nil {
