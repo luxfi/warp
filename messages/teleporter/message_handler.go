@@ -6,6 +6,7 @@ package teleporter
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -112,12 +113,7 @@ func isAllowedRelayer(allowedRelayers []common.Address, eoa common.Address) bool
 		return true
 	}
 
-	for _, addr := range allowedRelayers {
-		if addr == eoa {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedRelayers, eoa)
 }
 
 func (m *messageHandler) GetUnsignedMessage() *warp.UnsignedMessage {
