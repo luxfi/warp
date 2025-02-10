@@ -13,9 +13,17 @@ type Config struct {
 	RewardAddress string `json:"reward-address"`
 }
 
-func (c *Config) Validate() error {
-	if !common.IsHexAddress(c.RewardAddress) {
-		return fmt.Errorf("invalid reward address for EVM source subnet: %s", c.RewardAddress)
+func ConfigFromMap(m map[string]any) (*Config, error) {
+	rewardAddress, ok := m["reward-address"].(string)
+	if !ok {
+		return nil, fmt.Errorf("reward-address not found")
 	}
-	return nil
+
+	if !common.IsHexAddress(rewardAddress) {
+		return nil, fmt.Errorf("invalid reward address for EVM source subnet: %s", rewardAddress)
+	}
+
+	return &Config{
+		RewardAddress: rewardAddress,
+	}, nil
 }
