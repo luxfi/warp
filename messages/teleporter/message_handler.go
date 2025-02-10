@@ -5,7 +5,6 @@ package teleporter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -34,7 +33,7 @@ const (
 )
 
 type factory struct {
-	messageConfig   Config
+	messageConfig   *Config
 	protocolAddress common.Address
 	logger          logging.Logger
 	deciderClient   pbDecider.DeciderServiceClient
@@ -65,19 +64,8 @@ func NewMessageHandlerFactory(
 	messageProtocolConfig config.MessageProtocolConfig,
 	deciderClientConn *grpc.ClientConn,
 ) (messages.MessageHandlerFactory, error) {
-	// Marshal the map and unmarshal into the Teleporter config
-	data, err := json.Marshal(messageProtocolConfig.Settings)
+	messageConfig, err := ConfigFromMap(messageProtocolConfig.Settings)
 	if err != nil {
-		logger.Error("Failed to marshal Teleporter config")
-		return nil, err
-	}
-	var messageConfig Config
-	if err := json.Unmarshal(data, &messageConfig); err != nil {
-		logger.Error("Failed to unmarshal Teleporter config")
-		return nil, err
-	}
-
-	if err := messageConfig.Validate(); err != nil {
 		logger.Error(
 			"Invalid Teleporter config.",
 			zap.Error(err),
