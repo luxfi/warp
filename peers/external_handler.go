@@ -160,7 +160,7 @@ func (h *RelayerExternalHandler) RegisterAppRequest(reqID ids.RequestID) {
 	})
 }
 
-// RegisterResponse registers an AppResponse with the timeout manager
+// registerAppResponse registers an AppResponse with the timeout manager
 func (h *RelayerExternalHandler) registerAppResponse(inboundMessage message.InboundMessage) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
