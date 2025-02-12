@@ -39,11 +39,11 @@ type ManualWarpMessageRequest struct {
 }
 
 func HandleRelayMessage(logger logging.Logger, messageCoordinator *relayer.MessageCoordinator) {
-	http.Handle(RelayAPIPath, relayAPIHandler(logger, messageCoordinator))
+	http.Handle(RelayMessageAPIPath, relayMessageAPIHandler(logger, messageCoordinator))
 }
 
 func HandleRelay(logger logging.Logger, messageCoordinator *relayer.MessageCoordinator) {
-	http.Handle(RelayMessageAPIPath, relayMessageAPIHandler(logger, messageCoordinator))
+	http.Handle(RelayAPIPath, relayAPIHandler(logger, messageCoordinator))
 }
 
 func relayMessageAPIHandler(logger logging.Logger, messageCoordinator *relayer.MessageCoordinator) http.Handler {
