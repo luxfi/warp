@@ -60,7 +60,7 @@ func addQueryParams(endpoint string, queryParams map[string]string) (string, err
 	return uri.String(), nil
 }
 
-// newClientOptions creates a ClientOption slice from httpHeaders
+// newClientHeaderOptions creates a ClientOption slice from httpHeaders
 func newClientHeaderOptions(httpHeaders map[string]string) []rpc.ClientOption {
 	opts := make([]rpc.ClientOption, 0, len(httpHeaders))
 	for key, value := range httpHeaders {
