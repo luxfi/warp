@@ -24,7 +24,7 @@ import (
 
 // MessageCoordinator contains all the logic required to process messages in the relayer.
 // Other components such as the listeners or the API should pass messages to the MessageCoordinator
-// so that it can parse the message(s) and pass them the the proper ApplicationRelayer.
+// so that it can parse the message(s) and pass them the proper ApplicationRelayer.
 type MessageCoordinator struct {
 	logger logging.Logger
 	// Maps Source blockchain ID and protocol address to a Message Handler Factory
@@ -268,7 +268,7 @@ func (mc *MessageCoordinator) ProcessBlock(
 		// Dispatch all messages in the block to the appropriate application relayer.
 		// An empty slice is still a valid argument to ProcessHeight; in this case the height is immediately committed.
 		handlers := messageHandlers[appRelayer.relayerID.ID]
-		mc.logger.Debug(
+		mc.logger.Verbo(
 			"Dispatching to app relayer",
 			zap.Stringer("relayerID", appRelayer.relayerID.ID),
 			zap.Int("numMessages", len(handlers)),

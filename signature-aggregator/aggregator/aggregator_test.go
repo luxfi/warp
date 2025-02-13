@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"crypto/rand"
+
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/message"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
@@ -74,7 +76,7 @@ func instantiateAggregator(t *testing.T) (
 // Generate the validator values.
 type validatorInfo struct {
 	nodeID            ids.NodeID
-	blsSecretKey      *bls.SecretKey
+	blsSigner         *bls.LocalSigner
 	blsPublicKey      *bls.PublicKey
 	blsPublicKeyBytes []byte
 }
@@ -83,18 +85,18 @@ func (v validatorInfo) Compare(o validatorInfo) int {
 	return bytes.Compare(v.blsPublicKeyBytes, o.blsPublicKeyBytes)
 }
 
-func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValidators, []*bls.SecretKey) {
+func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValidators, []*bls.LocalSigner) {
 	validatorValues := make([]validatorInfo, validatorCount)
 	for i := 0; i < validatorCount; i++ {
-		secretKey, err := bls.NewSecretKey()
+		localSigner, err := bls.NewSigner()
 		if err != nil {
 			panic(err)
 		}
-		pubKey := bls.PublicFromSecretKey(secretKey)
+		pubKey := localSigner.PublicKey()
 		nodeID := ids.GenerateTestNodeID()
 		validatorValues[i] = validatorInfo{
 			nodeID:            nodeID,
-			blsSecretKey:      secretKey,
+			blsSigner:         localSigner,
 			blsPublicKey:      pubKey,
 			blsPublicKeyBytes: bls.PublicKeyToUncompressedBytes(pubKey),
 		}
@@ -105,10 +107,10 @@ func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValid
 
 	// Placeholder for results
 	validatorSet := make([]*warp.Validator, validatorCount)
-	validatorSecretKeys := make([]*bls.SecretKey, validatorCount)
+	validatorSigners := make([]*bls.LocalSigner, validatorCount)
 	nodeValidatorIndexMap := make(map[ids.NodeID]int)
 	for i, validator := range validatorValues {
-		validatorSecretKeys[i] = validator.blsSecretKey
+		validatorSigners[i] = validator.blsSigner
 		validatorSet[i] = &warp.Validator{
 			PublicKey:      validator.blsPublicKey,
 			PublicKeyBytes: validator.blsPublicKeyBytes,
@@ -123,7 +125,7 @@ func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValid
 		TotalValidatorWeight:  uint64(validatorCount),
 		ValidatorSet:          validatorSet,
 		NodeValidatorIndexMap: nodeValidatorIndexMap,
-	}, validatorSecretKeys
+	}, validatorSigners
 }
 
 func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
@@ -131,7 +133,8 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(ids.Empty).Return(ids.Empty, nil)
-	mockNetwork.EXPECT().ConnectToCanonicalValidators(ids.Empty).Return(
+	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight:      0,
 			TotalValidatorWeight: 0,
@@ -148,14 +151,15 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(ids.Empty).Return(ids.Empty, nil)
-	mockNetwork.EXPECT().ConnectToCanonicalValidators(ids.Empty).Return(
+	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight:      0,
 			TotalValidatorWeight: 1,
 			ValidatorSet:         []*warp.Validator{},
 		},
 		nil,
-	)
+	).AnyTimes()
 	_, err = aggregator.CreateSignedMessage(msg, nil, ids.Empty, 80)
 	require.ErrorContains(
 		t,
@@ -207,7 +211,8 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	)
 
-	mockNetwork.EXPECT().ConnectToCanonicalValidators(subnetID).Return(
+	mockNetwork.EXPECT().TrackSubnet(subnetID)
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
 		connectedValidators,
 		nil,
 	)
@@ -255,7 +260,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 	require.NoError(t, err)
 
 	// the signers:
-	connectedValidators, validatorSecretKeys := makeConnectedValidators(5)
+	connectedValidators, validatorSigners := makeConnectedValidators(5)
 
 	// prime the aggregator:
 
@@ -267,7 +272,8 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 		nil,
 	)
 
-	mockNetwork.EXPECT().ConnectToCanonicalValidators(subnetID).Return(
+	mockNetwork.EXPECT().TrackSubnet(subnetID)
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
 		connectedValidators,
 		nil,
 	)
@@ -285,14 +291,11 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 	responseChan := make(chan message.InboundMessage, len(appRequests))
 	for _, appRequest := range appRequests {
 		nodeIDs.Add(appRequest.NodeID)
-		validatorSecretKey := validatorSecretKeys[connectedValidators.NodeValidatorIndexMap[appRequest.NodeID]]
+		validatorSigner := validatorSigners[connectedValidators.NodeValidatorIndexMap[appRequest.NodeID]]
 		responseBytes, err := proto.Marshal(
 			&sdk.SignatureResponse{
 				Signature: bls.SignatureToBytes(
-					bls.Sign(
-						validatorSecretKey,
-						msg.Bytes(),
-					),
+					validatorSigner.Sign(msg.Bytes()),
 				),
 			},
 		)
@@ -343,6 +346,54 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 		100,
 	)
 	require.NoError(t, verifyErr)
+}
+
+func TestUnmarshalResponse(t *testing.T) {
+	aggregator, _ := instantiateAggregator(t)
+
+	emptySignatureResponse, err := proto.Marshal(&sdk.SignatureResponse{Signature: []byte{}})
+	require.NoError(t, err)
+
+	randSignature := make([]byte, 96)
+	_, err = rand.Read(randSignature)
+	require.NoError(t, err)
+
+	randSignatureResponse, err := proto.Marshal(&sdk.SignatureResponse{Signature: randSignature})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name              string
+		appResponseBytes  []byte
+		expectedSignature blsSignatureBuf
+	}{
+		{
+			name:              "empty slice",
+			appResponseBytes:  []byte{},
+			expectedSignature: blsSignatureBuf{},
+		},
+		{
+			name:              "nil slice",
+			appResponseBytes:  nil,
+			expectedSignature: blsSignatureBuf{},
+		},
+		{
+			name:              "empty signature",
+			appResponseBytes:  emptySignatureResponse,
+			expectedSignature: blsSignatureBuf{},
+		},
+		{
+			name:              "random signature",
+			appResponseBytes:  randSignatureResponse,
+			expectedSignature: blsSignatureBuf(randSignature),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			signature, err := aggregator.unmarshalResponse(tc.appResponseBytes)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedSignature, signature)
+		})
+	}
 }
 
 type pChainStateStub struct {
