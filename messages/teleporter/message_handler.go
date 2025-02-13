@@ -5,8 +5,8 @@ package teleporter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -30,14 +30,11 @@ import (
 )
 
 const (
-	// The maximum gas limit that can be specified for a Teleporter message
-	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-	maxTeleporterGasLimit         = 12_000_000
 	defaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
 type factory struct {
-	messageConfig   Config
+	messageConfig   *Config
 	protocolAddress common.Address
 	logger          logging.Logger
 	deciderClient   pbDecider.DeciderServiceClient
@@ -68,19 +65,8 @@ func NewMessageHandlerFactory(
 	messageProtocolConfig config.MessageProtocolConfig,
 	deciderClientConn *grpc.ClientConn,
 ) (messages.MessageHandlerFactory, error) {
-	// Marshal the map and unmarshal into the Teleporter config
-	data, err := json.Marshal(messageProtocolConfig.Settings)
+	messageConfig, err := ConfigFromMap(messageProtocolConfig.Settings)
 	if err != nil {
-		logger.Error("Failed to marshal Teleporter config")
-		return nil, err
-	}
-	var messageConfig Config
-	if err := json.Unmarshal(data, &messageConfig); err != nil {
-		logger.Error("Failed to unmarshal Teleporter config")
-		return nil, err
-	}
-
-	if err := messageConfig.Validate(); err != nil {
 		logger.Error(
 			"Invalid Teleporter config.",
 			zap.Error(err),
@@ -127,12 +113,7 @@ func isAllowedRelayer(allowedRelayers []common.Address, eoa common.Address) bool
 		return true
 	}
 
-	for _, addr := range allowedRelayers {
-		if addr == eoa {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedRelayers, eoa)
 }
 
 func (m *messageHandler) GetUnsignedMessage() *warp.UnsignedMessage {
@@ -165,15 +146,16 @@ func (m *messageHandler) ShouldSendMessage(destinationClient vms.DestinationClie
 	if err != nil {
 		return false, fmt.Errorf("failed to calculate Teleporter message ID: %w", err)
 	}
-
+	requiredGasLimit := m.teleporterMessage.RequiredGasLimit.Uint64()
+	destBlockGasLimit := destinationClient.BlockGasLimit()
 	// Check if the specified gas limit is below the maximum threshold
-	if m.teleporterMessage.RequiredGasLimit.Uint64() > maxTeleporterGasLimit {
+	if requiredGasLimit > destBlockGasLimit {
 		m.logger.Info(
 			"Gas limit exceeds maximum threshold",
 			zap.String("destinationBlockchainID", destinationBlockchainID.String()),
 			zap.String("teleporterMessageID", teleporterMessageID.String()),
 			zap.Uint64("requiredGasLimit", m.teleporterMessage.RequiredGasLimit.Uint64()),
-			zap.Uint64("maxGasLimit", maxTeleporterGasLimit),
+			zap.Uint64("blockGasLimit", destBlockGasLimit),
 		)
 		return false, nil
 	}
