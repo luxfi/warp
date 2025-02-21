@@ -2,7 +2,6 @@ package aggregator
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
 	"crypto/rand"
@@ -24,8 +23,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -54,16 +51,6 @@ func instantiateAggregator(t *testing.T) (
 	}
 	aggregator, err := NewSignatureAggregator(
 		mockNetwork,
-		logging.NewLogger(
-			"aggregator_test",
-			logging.NewWrappedCore(
-				logging.Debug,
-				os.Stdout,
-				zapcore.NewConsoleEncoder(
-					zap.NewProductionEncoderConfig(),
-				),
-			),
-		),
 		messageCreator,
 		1024,
 		sigAggMetrics,
