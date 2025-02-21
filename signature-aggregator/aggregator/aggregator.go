@@ -243,8 +243,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
-		numRequestsToSend := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
-		responsesExpected := numRequestsToSend
+		responsesExpected := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
 		log.Debug(
 			"Aggregator collecting signatures from peers.",
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
@@ -291,6 +290,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			zap.String("signingSubnetID", signingSubnet.String()),
 		)
 
+		failedSendNodes := make([]ids.NodeID, 0, responsesExpected)
 		for nodeID := range vdrSet {
 			if !sentTo.Contains(nodeID) {
 				log.Debug(
@@ -299,14 +299,16 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					zap.Error(err),
 				)
 				responsesExpected--
+				failedSendNodes = append(failedSendNodes, nodeID)
 				s.metrics.FailuresSendingToNode.Inc()
 			}
 		}
-		if numRequestsToSend != responsesExpected {
+		if len(failedSendNodes) > 0 {
 			log.Warn(
 				"Failed to make async request to some nodes",
-				zap.Int("numFailures", numRequestsToSend-responsesExpected),
 				zap.Int("numSent", responsesExpected),
+				zap.Int("numFailures", len(failedSendNodes)),
+				zap.Stringers("failedNodes", failedSendNodes),
 			)
 		}
 
