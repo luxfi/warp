@@ -146,7 +146,8 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	inputSigningSubnet ids.ID,
 	quorumPercentage uint64,
 ) (*avalancheWarp.Message, error) {
-	log.Debug("Creating signed message", zap.String("warpMessageID", unsignedMessage.ID().String()))
+	log = log.With(zap.String("warpMessageID", unsignedMessage.ID().String()))
+	log.Debug("Creating signed message")
 	var signingSubnet ids.ID
 	var err error
 	// If signingSubnet is not set we default to the subnet of the source blockchain
@@ -164,7 +165,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	}
 	log.Debug(
 		"Creating signed message with signing subnet",
-		zap.String("warpMessageID", unsignedMessage.ID().String()),
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
@@ -235,7 +235,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		msg := "Failed to create app request message"
 		log.Error(
 			msg,
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Error(err),
 		)
 		return nil, fmt.Errorf("%s: %w", msg, err)
@@ -267,7 +266,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			log.Debug(
 				"Added node ID to query.",
 				zap.String("nodeID", nodeID.String()),
-				zap.String("warpMessageID", unsignedMessage.ID().String()),
 				zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			)
 
@@ -286,7 +284,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		s.metrics.AppRequestCount.Inc()
 		log.Debug(
 			"Sent signature request to network",
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Any("sentTo", sentTo),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("sourceSubnetID", sourceSubnet.String()),
@@ -310,7 +307,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				log.Debug(
 					"Processing response from node",
 					zap.String("nodeID", response.NodeID().String()),
-					zap.String("warpMessageID", unsignedMessage.ID().String()),
 					zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 				)
 				var relevant bool
@@ -340,7 +336,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				if signedMsg != nil {
 					log.Info(
 						"Created signed message.",
-						zap.String("warpMessageID", unsignedMessage.ID().String()),
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
 						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
@@ -359,7 +354,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	if err != nil {
 		log.Warn(
 			"Failed to collect a threshold of signatures",
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 		)
@@ -438,7 +432,6 @@ func (s *SignatureAggregator) handleResponse(
 			"Got valid signature response",
 			zap.String("nodeID", nodeID.String()),
 			zap.Uint64("stakeWeight", validator.Weight),
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 		)
 		signatureMap[vdrIndex] = signature
@@ -453,7 +446,6 @@ func (s *SignatureAggregator) handleResponse(
 			"Got invalid signature response",
 			zap.String("nodeID", nodeID.String()),
 			zap.Uint64("stakeWeight", validator.Weight),
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 		)
 		s.metrics.InvalidSignatureResponses.Inc()
@@ -500,7 +492,6 @@ func (s *SignatureAggregator) aggregateIfSufficientWeight(
 		log.Error(
 			msg,
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Error(err),
 		)
 		return nil, fmt.Errorf("%s: %w", msg, err)
@@ -518,7 +509,6 @@ func (s *SignatureAggregator) aggregateIfSufficientWeight(
 		log.Error(
 			msg,
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Error(err),
 		)
 		return nil, fmt.Errorf("%s: %w", msg, err)
