@@ -63,12 +63,11 @@ type SignatureAggregator struct {
 
 func NewSignatureAggregator(
 	network peers.AppRequestNetwork,
-	logger logging.Logger,
 	messageCreator message.Creator,
 	signatureCacheSize uint64,
 	metrics *metrics.SignatureAggregatorMetrics,
 ) (*SignatureAggregator, error) {
-	cache, err := cache.NewCache(signatureCacheSize, logger)
+	cache, err := cache.NewCache(signatureCacheSize)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to create signature cache: %w",
@@ -182,6 +181,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	accumulatedSignatureWeight := big.NewInt(0)
 	signatureMap := make(map[int][bls.SignatureLen]byte)
 	if cachedSignatures, ok := s.cache.Get(unsignedMessage.ID()); ok {
+		log.Debug("Found cached signatures", zap.Int("signatureCount", len(cachedSignatures)))
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			cachedSignature, found := cachedSignatures[cache.PublicKeyBytes(validator.PublicKeyBytes)]
 			if found {
