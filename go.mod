@@ -7,9 +7,9 @@ require (
 	github.com/ava-labs/avalanchego v1.12.3-0.20250219205418-195557d25676
 	github.com/ava-labs/icm-contracts v1.0.9-0.20250220210828-238d99559d3c
 	github.com/ava-labs/subnet-evm v0.7.2-0.20250218163755-6d2521c6bddd
-	github.com/aws/aws-sdk-go-v2 v1.36.1
-	github.com/aws/aws-sdk-go-v2/config v1.29.6
-	github.com/aws/aws-sdk-go-v2/service/kms v1.37.18
+	github.com/aws/aws-sdk-go-v2 v1.36.3
+	github.com/aws/aws-sdk-go-v2/config v1.29.8
+	github.com/aws/aws-sdk-go-v2/service/kms v1.38.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/ethereum/go-ethereum v1.13.14
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -17,8 +17,8 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.20.5
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/prometheus/client_golang v1.21.0
+	github.com/redis/go-redis/v9 v9.7.1
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.16.0
 	github.com/stretchr/testify v1.10.0
@@ -35,16 +35,16 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.1 // indirect
 	github.com/ava-labs/coreth v0.14.1-rc.1.0.20250219185827-6a9db205a450 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.59 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.28 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.32 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.32 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.24.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.14 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.33.14 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.61 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.25.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.16 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
@@ -104,7 +104,7 @@ require (
 	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
@@ -126,7 +126,7 @@ require (
 	github.com/pires/go-proxyproto v0.6.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.55.0 // indirect
+	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
