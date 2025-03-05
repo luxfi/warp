@@ -15,4 +15,5 @@ type Config interface {
 	GetPChainAPI() *config.APIConfig
 	GetAllowPrivateIPs() bool
 	GetTrackedSubnets() set.Set[ids.ID]
+	GetNodeID() ids.NodeID
 }
