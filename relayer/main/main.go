@@ -170,6 +170,13 @@ func main() {
 		})
 	}
 
+	var nodeID *ids.ID
+	if len(cfg.NodeID) != 0 {
+		// This should never panic because the node ID is validated in the config
+		nodeID = ids.FromStringOrPanic(cfg.NodeID)
+		cfg.NodeID = nodeID.String()
+	}
+
 	network, err := peers.NewNetwork(
 		networkLogger,
 		registerer,
