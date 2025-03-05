@@ -141,6 +141,7 @@ func NewNetwork(
 		return nil, err
 	}
 	testNetworkConfig.AllowPrivateIPs = cfg.GetAllowPrivateIPs()
+	testNetworkConfig.MyNodeID = cfg.GetNodeID()
 
 	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler)
 	if err != nil {
