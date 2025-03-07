@@ -4,9 +4,9 @@ go 1.23.6
 
 require (
 	github.com/alexliesenfeld/health v0.8.0
-	github.com/ava-labs/avalanchego v1.12.3-0.20250302035717-8bd7a2c4cc81
-	github.com/ava-labs/icm-contracts v1.0.9-0.20250220210828-238d99559d3c
-	github.com/ava-labs/subnet-evm v0.7.2-0.20250224144124-a6a3d3388099
+	github.com/ava-labs/avalanchego v1.12.3-0.20250307173819-f584a01e6b95
+	github.com/ava-labs/icm-contracts v1.0.9-0.20250307173936-f6a36b902f4f
+	github.com/ava-labs/subnet-evm v0.7.2
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.8
 	github.com/aws/aws-sdk-go-v2/service/kms v1.38.1
@@ -156,15 +156,15 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.30.0 // indirect
+	golang.org/x/tools v0.31.0 // indirect
 	gonum.org/v1/gonum v0.11.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
