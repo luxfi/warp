@@ -24,4 +24,6 @@ const (
 	ManualWarpMessagesKey     = "manual-warp-messages"
 	DBWriteIntervalSecondsKey = "db-write-interval-seconds"
 	SignatureCacheSizeKey     = "signature-cache-size"
+	TLSKeyPathKey             = "tls-key-path"
+	TLSCertPathKey            = "tls-cert-path"
 )
