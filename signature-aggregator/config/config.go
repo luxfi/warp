@@ -4,6 +4,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -43,6 +44,7 @@ type Config struct {
 	// convenience fields
 	trackedSubnets set.Set[ids.ID]
 	myNodeID       ids.NodeID
+	tlsCert        *tls.Certificate
 }
 
 func DisplayUsageText() {
@@ -99,4 +101,8 @@ func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 
 func (c *Config) GetNodeID() ids.NodeID {
 	return c.myNodeID
+}
+
+func (c *Config) GetTLSCert() *tls.Certificate {
+	return c.tlsCert
 }

@@ -5,6 +5,7 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
@@ -66,8 +67,10 @@ type Config struct {
 	ManuallyTrackedPeers   []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"`
 	AllowPrivateIPs        bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
 	NodeID                 string                   `mapstructure:"node-id" json:"node-id"`
+	TLSCertPath            string                   `json:"tls-cert-path"`
 
 	// convenience field to fetch a blockchain's subnet ID
+	tlsCert                *tls.Certificate `json:"-"`
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
 	trackedSubnets         set.Set[ids.ID]
@@ -278,4 +281,8 @@ func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 
 func (c *Config) GetNodeID() ids.NodeID {
 	return c.myNodeID
+}
+
+func (c *Config) GetTLSCert() *tls.Certificate {
+	return c.tlsCert
 }
