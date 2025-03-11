@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	goLog "log"
 	"math/big"
 	"net/http"
 	"os"
@@ -425,14 +426,14 @@ func WriteSignatureAggregatorConfig(signatureAggregatorConfig signatureaggregato
 	data, err := json.MarshalIndent(signatureAggregatorConfig, "", "\t")
 	Expect(err).Should(BeNil())
 
-	f, err := os.CreateTemp(os.TempDir(), fname)
+	f, err := os.CreateTemp("/tmp", fname)
 	Expect(err).Should(BeNil())
 
 	_, err = f.Write(data)
 	Expect(err).Should(BeNil())
 	signatureAggregatorConfigPath := f.Name()
 
-	log.Info("Created signature-aggregator config", "configPath", signatureAggregatorConfigPath, "config", string(data))
+	goLog.Println("Created signature-aggregator config", "configPath", signatureAggregatorConfigPath, "config", string(data))
 	return signatureAggregatorConfigPath
 }
 
@@ -604,11 +605,11 @@ func runExecutable(
 		for {
 			resp, err := http.Get(healthCheckUrl)
 			if err == nil && resp.StatusCode == 200 {
-				log.Info("Health check passed", "appName", appName)
+				goLog.Println("Health check passed", "appName", appName)
 				close(readyChan)
 				break
 			}
-			log.Info("Health check failed", "appName", appName, "err", err)
+			goLog.Println("Health check failed", "appName", appName, "err", err, "status", resp)
 			time.Sleep(time.Second * 1)
 		}
 	}()

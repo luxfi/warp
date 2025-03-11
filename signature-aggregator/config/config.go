@@ -39,7 +39,8 @@ type Config struct {
 	SignatureCacheSize uint64             `mapstructure:"signature-cache-size" json:"signature-cache-size"`
 	AllowPrivateIPs    bool               `mapstructure:"allow-private-ips" json:"allow-private-ips"`
 	TrackedSubnetIDs   []string           `mapstructure:"tracked-subnet-ids" json:"tracked-subnet-ids"`
-	NodeID             string             `mapstructure:"node-id" json:"node-id"`
+	TLSCertPath        string             `mapstructure:"tls-cert-path" json:"tls-cert-path,omitempty"`
+	TLSKeyPath         string             `mapstructure:"tls-key-path" json:"tls-key-path,omitempty"`
 
 	// convenience fields
 	trackedSubnets set.Set[ids.ID]
@@ -68,14 +69,6 @@ func (c *Config) Validate() error {
 			return err
 		}
 		c.trackedSubnets.Add(trackedL1ID)
-	}
-
-	if c.NodeID != "" {
-		nodeID, err := ids.NodeIDFromString(c.NodeID)
-		if err != nil {
-			return err
-		}
-		c.myNodeID = nodeID
 	}
 
 	return nil
