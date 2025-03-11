@@ -8,6 +8,7 @@ package peers
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
@@ -148,6 +149,7 @@ func NewNetwork(
 	var cert *tls.Certificate
 	if cert = cfg.GetTLSCert(); cert != nil {
 		testNetworkConfig.TLSConfig = peer.TLSConfig(*cert, nil)
+		testNetworkConfig.TLSKey = cert.PrivateKey.(crypto.Signer)
 	} else {
 		cert = &testNetworkConfig.TLSConfig.Certificates[0]
 	}

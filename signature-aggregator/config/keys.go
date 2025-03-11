@@ -16,4 +16,6 @@ const (
 	APIPortKey            = "api-port"
 	MetricsPortKey        = "metrics-port"
 	SignatureCacheSizeKey = "signature-cache-size"
+	TLSCertPathKey        = "tls-cert-path"
+	TLSKeyPathKey         = "tls-key-path"
 )

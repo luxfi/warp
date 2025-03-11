@@ -10,13 +10,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -26,7 +29,6 @@ import (
 	"github.com/ava-labs/icm-contracts/tests/utils"
 	"github.com/ava-labs/icm-services/signature-aggregator/api"
 	testUtils "github.com/ava-labs/icm-services/tests/utils"
-	"github.com/ethereum/go-ethereum/log"
 	. "github.com/onsi/gomega"
 )
 
@@ -38,13 +40,50 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	_, l1BInfo := network.GetTwoL1s()
 	fundedAddress, fundedKey := network.GetFundedAccountInfo()
 
-	relayerNodeID := ids.GenerateTestNodeID()
-	relayerNodeIDSet := set.NewSet[ids.NodeID](1)
-	relayerNodeIDSet.Add(relayerNodeID)
+	// Start the signature-aggregator for the first time to generate the
+	// TLS cert key pair
+	dir, err := os.MkdirTemp("/tmp", "sig-agg-tls-cert")
+	Expect(err).Should(BeNil())
+
+	signatureAggregatorConfig := testUtils.CreateDefaultSignatureAggregatorConfig(
+		[]interfaces.L1TestInfo{l1AInfo, l1BInfo},
+	)
+	keyPath := dir + "/key.pem"
+	certPath := dir + "/cert.pem"
+	signatureAggregatorConfig.TLSCertPath = certPath
+	signatureAggregatorConfig.TLSKeyPath = keyPath
+
+	signatureAggregatorConfigPath := testUtils.WriteSignatureAggregatorConfig(
+		signatureAggregatorConfig,
+		testUtils.DefaultSignatureAggregatorCfgFname,
+	)
+	log.Println("Starting the signature aggregator", "configPath", signatureAggregatorConfigPath)
+	signatureAggregatorCancel, readyChan := testUtils.RunSignatureAggregatorExecutable(
+		ctx,
+		signatureAggregatorConfigPath,
+		signatureAggregatorConfig,
+	)
+	defer signatureAggregatorCancel()
+
+	// Wait for signature-aggregator to start up
+	log.Println("Waiting for the signature-aggregator to start up")
+	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer startupCancel()
+	testUtils.WaitForChannelClose(startupCtx, readyChan)
+	signatureAggregatorCancel()
+
+	// TODO: figure out what's wrong with teh ordering
+	cert, err := staking.LoadTLSCertFromFiles(keyPath, certPath)
+	Expect(err).Should(BeNil())
+	peerCert, err := staking.ParseCertificate(cert.Leaf.Raw)
+	Expect(err).Should(BeNil())
+	nodeID := ids.NodeIDFromCert(peerCert)
+	signatureAggregatorCancel()
+	log.Println("Retrieved nodeID", "nodeID", nodeID)
 
 	// We have to send the message first since we won't be able to listen for receipts once the network is private.
 
-	log.Info("Sending teleporter message from B -> A")
+	log.Println("Sending teleporter message from B -> A")
 	receipt, _, _ := testUtils.SendBasicTeleporterMessage(
 		ctx,
 		teleporter,
@@ -56,6 +95,8 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	warpMessage := getWarpMessageFromLog(ctx, receipt, l1BInfo)
 
 	// Restart l1B and make it private
+	relayerNodeIDSet := set.NewSet[ids.NodeID](1)
+	relayerNodeIDSet.Add(nodeID)
 
 	l1BNodes := set.NewSet[ids.NodeID](1)
 
@@ -83,18 +124,8 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		}
 	}
 
-	// Start the signature-aggregator
-	signatureAggregatorConfig := testUtils.CreateDefaultSignatureAggregatorConfig(
-		[]interfaces.L1TestInfo{l1AInfo, l1BInfo},
-	)
-	signatureAggregatorConfig.NodeID = relayerNodeID.String()
-
-	signatureAggregatorConfigPath := testUtils.WriteSignatureAggregatorConfig(
-		signatureAggregatorConfig,
-		testUtils.DefaultSignatureAggregatorCfgFname,
-	)
-	log.Info("Starting the signature aggregator", "configPath", signatureAggregatorConfigPath)
-	signatureAggregatorCancel, readyChan := testUtils.RunSignatureAggregatorExecutable(
+	// start sig-agg again with the same TLS cert
+	signatureAggregatorCancel, readyChan = testUtils.RunSignatureAggregatorExecutable(
 		ctx,
 		signatureAggregatorConfigPath,
 		signatureAggregatorConfig,
@@ -102,8 +133,8 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	defer signatureAggregatorCancel()
 
 	// Wait for signature-aggregator to start up
-	log.Info("Waiting for the signature-aggregator to start up")
-	startupCtx, startupCancel := context.WithTimeout(ctx, 15*time.Second)
+	log.Println("Waiting for the signature-aggregator to start up")
+	startupCtx, startupCancel = context.WithTimeout(ctx, 15*time.Second)
 	defer startupCancel()
 	testUtils.WaitForChannelClose(startupCtx, readyChan)
 

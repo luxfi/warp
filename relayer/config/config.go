@@ -66,15 +66,14 @@ type Config struct {
 	SignatureCacheSize     uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`
 	ManuallyTrackedPeers   []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"`
 	AllowPrivateIPs        bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
-	NodeID                 string                   `mapstructure:"node-id" json:"node-id"`
-	TLSCertPath            string                   `json:"tls-cert-path"`
+	TLSCertPath            string                   `json:"tls-cert-path,omitempty"`
+	TLSKeyPath             string                   `json:"tls-key-path,omitempty"`
 
 	// convenience field to fetch a blockchain's subnet ID
 	tlsCert                *tls.Certificate `json:"-"`
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
 	trackedSubnets         set.Set[ids.ID]
-	myNodeID               ids.NodeID
 }
 
 func DisplayUsageText() {
@@ -156,14 +155,6 @@ func (c *Config) Validate() error {
 
 	for _, l1ID := range c.blockchainIDToSubnetID {
 		c.trackedSubnets.Add(l1ID)
-	}
-
-	if len(c.NodeID) != 0 {
-		nodeID, err := ids.NodeIDFromString(c.NodeID)
-		if err != nil {
-			return fmt.Errorf("Invalid Node ID: %w", err)
-		}
-		c.myNodeID = nodeID
 	}
 
 	return nil
@@ -277,10 +268,6 @@ func (c *Config) GetAllowPrivateIPs() bool {
 
 func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 	return c.trackedSubnets
-}
-
-func (c *Config) GetNodeID() ids.NodeID {
-	return c.myNodeID
 }
 
 func (c *Config) GetTLSCert() *tls.Certificate {
