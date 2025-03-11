@@ -32,6 +32,18 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// Tests signature aggregation with a private network
+// Steps:
+// - Sets up a primary network and a subnet.
+// - Generates a config with temporary paths set for TLS cert and key
+// - Starts the signature aggregator with the generated config once to populate the TLS cert and key
+// - Reads the nodeID from the TLS cert and stops the signature aggregator
+// - Sends the teleporter message from B -> A
+// - Restarts the subnet B nodes with the validatorOnly flag set to true and nodeID added to allowedNodes
+// - Restarts the signature aggregator with the same config which should re-use
+// now populated TLS cert and key and result in same nodeID
+// - Requests an aggregated signature from the signature aggregator API which
+// will only be returned successfully if the nodeID is explicitly allowed by the subnet
 func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.TeleporterTestInfo) {
 	// Begin Setup step
 	ctx := context.Background()
@@ -42,7 +54,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 
 	// Start the signature-aggregator for the first time to generate the
 	// TLS cert key pair
-	dir, err := os.MkdirTemp("/tmp", "sig-agg-tls-cert")
+	dir, err := os.MkdirTemp(os.TempDir(), "sig-agg-tls-cert")
 	Expect(err).Should(BeNil())
 
 	signatureAggregatorConfig := testUtils.CreateDefaultSignatureAggregatorConfig(
@@ -72,7 +84,6 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	testUtils.WaitForChannelClose(startupCtx, readyChan)
 	signatureAggregatorCancel()
 
-	// TODO: figure out what's wrong with teh ordering
 	cert, err := staking.LoadTLSCertFromFiles(keyPath, certPath)
 	Expect(err).Should(BeNil())
 	peerCert, err := staking.ParseCertificate(cert.Leaf.Raw)
@@ -81,7 +92,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	signatureAggregatorCancel()
 	log.Println("Retrieved nodeID", "nodeID", nodeID)
 
-	// We have to send the message first since we won't be able to listen for receipts once the network is private.
+	// We have to send the message before making the network private.
 
 	log.Println("Sending teleporter message from B -> A")
 	receipt, _, _ := testUtils.SendBasicTeleporterMessage(

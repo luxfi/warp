@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	goLog "log"
 	"math/big"
 	"net/http"
 	"os"
@@ -433,7 +432,7 @@ func WriteSignatureAggregatorConfig(signatureAggregatorConfig signatureaggregato
 	Expect(err).Should(BeNil())
 	signatureAggregatorConfigPath := f.Name()
 
-	goLog.Println("Created signature-aggregator config", "configPath", signatureAggregatorConfigPath, "config", string(data))
+	log.Info("Created signature-aggregator config", "configPath", signatureAggregatorConfigPath, "config", string(data))
 	return signatureAggregatorConfigPath
 }
 
@@ -605,11 +604,11 @@ func runExecutable(
 		for {
 			resp, err := http.Get(healthCheckUrl)
 			if err == nil && resp.StatusCode == 200 {
-				goLog.Println("Health check passed", "appName", appName)
+				log.Info("Health check passed", "appName", appName)
 				close(readyChan)
 				break
 			}
-			goLog.Println("Health check failed", "appName", appName, "err", err, "status", resp)
+			log.Info("Health check failed", "appName", appName, "err", err)
 			time.Sleep(time.Second * 1)
 		}
 	}()
