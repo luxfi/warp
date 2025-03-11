@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func NewConfig(v *viper.Viper) (Config, error) {
@@ -138,13 +139,14 @@ func getTLSCertFromFile(v *viper.Viper) (tls.Certificate, error) {
 
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 		keyMissing = true
-	} else if _, err := os.Stat(certPath); os.IsNotExist(err) {
+	}
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		certMissing = true
 	}
 	if !(keyMissing && certMissing) && (keyMissing || certMissing) {
 		// If only one of the key/cert pair is missing return an error
 		// otherwise, create the staking key/cert pair
-		return tls.Certificate{}, fmt.Errorf("TLS key or cert file is missing from configured path.")
+		return tls.Certificate{}, fmt.Errorf("TLS key or cert file is missing from configured path.", zap.String("keyPath", keyPath), zap.String("certPath", certPath))
 	} else if keyMissing && certMissing {
 		// Create the key/cert pair if [TLSKeyPath] and [TLSCertPath] are set but the files are missing
 		if err := staking.InitNodeStakingKeyPair(keyPath, certPath); err != nil {
