@@ -11,16 +11,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/staking"
-	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -79,7 +75,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 
 	// Wait for signature-aggregator to start up
 	log.Println("Waiting for the signature-aggregator to start up")
-	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
+	startupCtx, startupCancel := context.WithTimeout(ctx, 15*time.Second)
 	defer startupCancel()
 	testUtils.WaitForChannelClose(startupCtx, readyChan)
 	signatureAggregatorCancel()
@@ -125,10 +121,9 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	// Restart l1B nodes
 	for _, tmpnetNode := range network.Nodes {
 		if l1BNodes.Contains(tmpnetNode.NodeID) {
-			port := getTmpnetNodePort(tmpnetNode)
-			tmpnetNode.Flags[config.HTTPPortKey] = port
+			tmpnetNode.RuntimeConfig.ReuseDynamicPorts = true
 			// Restart the network to apply the new chain configs
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(120*time.Second))
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			err := network.RestartNode(ctx, logging.NoLog{}, tmpnetNode)
 			Expect(err).Should(BeNil())
@@ -191,13 +186,4 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	}
 
 	sendRequestToAPI()
-}
-
-// TODO: once tmpnet supports static port option across restarts, remove this function
-func getTmpnetNodePort(node *tmpnet.Node) string {
-	hostPort := strings.TrimPrefix(node.URI, "http://")
-	Expect(hostPort).ShouldNot(BeEmpty())
-	_, port, err := net.SplitHostPort(hostPort)
-	Expect(err).Should(BeNil())
-	return port
 }
