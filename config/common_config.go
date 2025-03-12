@@ -31,7 +31,7 @@ func GetTLSCertFromFile(v *viper.Viper) (tls.Certificate, error) {
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		certMissing = true
 	}
-	if !(keyMissing && certMissing) && (keyMissing || certMissing) {
+	if keyMissing != certMissing {
 		// If only one of the key/cert pair is missing return an error
 		// otherwise, create the staking key/cert pair
 		return tls.Certificate{}, fmt.Errorf("TLS key or cert file is missing from configured path.")
