@@ -425,7 +425,7 @@ func WriteSignatureAggregatorConfig(signatureAggregatorConfig signatureaggregato
 	data, err := json.MarshalIndent(signatureAggregatorConfig, "", "\t")
 	Expect(err).Should(BeNil())
 
-	f, err := os.CreateTemp("/tmp", fname)
+	f, err := os.CreateTemp(os.TempDir(), fname)
 	Expect(err).Should(BeNil())
 
 	_, err = f.Write(data)

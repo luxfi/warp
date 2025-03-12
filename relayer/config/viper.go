@@ -119,7 +119,7 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 		if err != nil {
 			return cfg, fmt.Errorf("failed to initialize TLS certificate: %w", err)
 		}
-		cfg.tlsCert = &cert
+		cfg.tlsCert = cert
 	}
 
 	return cfg, nil
