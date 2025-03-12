@@ -70,7 +70,7 @@ type Config struct {
 	TLSKeyPath             string                   `json:"tls-key-path,omitempty"`
 
 	// convenience field to fetch a blockchain's subnet ID
-	tlsCert                *tls.Certificate `json:"-"`
+	tlsCert                *tls.Certificate
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
 	trackedSubnets         set.Set[ids.ID]
