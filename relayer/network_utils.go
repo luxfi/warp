@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const initialConnectionTimeoutSeconds = 300
+const initialConnectionTimeoutSeconds = 1800
 
 // Convenience function to initialize connections and check stake for all source blockchains.
 // Only returns an error if it fails to get a list of canonical validator or a valid warp config.
