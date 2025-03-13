@@ -217,7 +217,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		msg := "Failed to marshal request bytes"
 		log.Error(
 			msg,
-			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.Error(err),
 		)
 		return nil, fmt.Errorf("%s: %w", msg, err)
