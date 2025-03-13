@@ -68,6 +68,7 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
+	IsConnected(nodeID ids.NodeID) bool
 }
 
 type appRequestNetwork struct {
@@ -253,6 +254,10 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.logger.Debug("Tracking subnet", zap.Stringer("subnetID", subnetID))
 	n.trackedSubnets.Add(subnetID)
 	n.updateValidatorSet(context.Background(), subnetID)
+}
+
+func (n *appRequestNetwork) IsConnected(nodeID ids.NodeID) bool {
+	return len(n.network.PeerInfo([]ids.NodeID{nodeID})) == 1
 }
 
 func (n *appRequestNetwork) startUpdateValidators() {
