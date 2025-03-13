@@ -33,6 +33,9 @@ func InitializeConnectionsAndCheckStake(
 	network peers.AppRequestNetwork,
 	cfg *config.Config,
 ) error {
+	for _, sourceBlockchainConfig := range cfg.SourceBlockchains {
+		network.TrackSubnet(sourceBlockchainConfig.GetSubnetID())
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), initialConnectionTimeoutSeconds*time.Second)
 	defer cancel()
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
