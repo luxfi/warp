@@ -5,7 +5,7 @@ go 1.23.6
 require (
 	github.com/alexliesenfeld/health v0.8.0
 	github.com/ava-labs/avalanchego v1.13.0-fuji-rc.2.0.20250313194317-c78027fe41c9
-	github.com/ava-labs/icm-contracts v1.0.9-0.20250307173936-f6a36b902f4f
+	github.com/ava-labs/icm-contracts v1.0.9-0.20250313201018-6720d04bee51
 	github.com/ava-labs/subnet-evm v0.7.2
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.8
