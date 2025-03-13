@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/peers/avago_mocks"
 	validator_mocks "github.com/ava-labs/icm-services/peers/validators/mocks"
 	"github.com/prometheus/client_golang/prometheus"
@@ -137,8 +138,10 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 				totalWeight += vdr.Weight
 			}
 			mockValidatorClient.EXPECT().GetCurrentCanonicalValidatorSet(subnetID).Return(
-				testCase.validators,
-				totalWeight,
+				avalancheWarp.CanonicalValidatorSet{
+					Validators:  testCase.validators,
+					TotalWeight: testCase.expectedTotalWeight,
+				},
 				nil,
 			).Times(1)
 
