@@ -85,17 +85,17 @@ func (m *MockMessageHandler) EXPECT() *MockMessageHandlerMockRecorder {
 }
 
 // GetLogContext mocks base method.
-func (m *MockMessageHandler) GetLogContext(destinationClient vms.DestinationClient) []zap.Field {
+func (m *MockMessageHandler) GetLogContext() []zap.Field {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLogContext", destinationClient)
+	ret := m.ctrl.Call(m, "GetLogContext")
 	ret0, _ := ret[0].([]zap.Field)
 	return ret0
 }
 
 // GetLogContext indicates an expected call of GetLogContext.
-func (mr *MockMessageHandlerMockRecorder) GetLogContext(destinationClient any) *gomock.Call {
+func (mr *MockMessageHandlerMockRecorder) GetLogContext() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogContext", reflect.TypeOf((*MockMessageHandler)(nil).GetLogContext), destinationClient)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogContext", reflect.TypeOf((*MockMessageHandler)(nil).GetLogContext))
 }
 
 // GetMessageRoutingInfo mocks base method.

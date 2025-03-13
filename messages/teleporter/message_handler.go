@@ -340,7 +340,7 @@ func (m *messageHandler) SendMessage(
 	return txHash, nil
 }
 
-func (*messageHandler) GetLogContext(_ vms.DestinationClient) []zap.Field {
+func (*messageHandler) GetLogContext() []zap.Field {
 	return nil
 }
 
