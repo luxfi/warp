@@ -217,6 +217,6 @@ func (m *messageHandler) GetMessageRoutingInfo() (
 		nil
 }
 
-func (m *messageHandler) GetLogContext(destinationClient vms.DestinationClient) []zap.Field {
+func (m *messageHandler) GetLogContext() []zap.Field {
 	return []zap.Field{zap.String("unsignedWarpMessageID", m.unsignedMessage.ID().String())}
 }

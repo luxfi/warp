@@ -33,7 +33,7 @@ type MessageHandler interface {
 
 	// GetLogContext returns extra fields to be set in the logger
 	// when passing it along to the signature aggregator
-	GetLogContext(destinationClient vms.DestinationClient) []zap.Field
+	GetLogContext() []zap.Field
 
 	// GetMessageRoutingInfo returns the source chain ID, origin sender address,
 	// destination chain ID, and destination address.
