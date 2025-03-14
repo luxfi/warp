@@ -81,8 +81,12 @@ func connectToNonPrimaryNetworkPeers(
 				)
 				return err
 			}
-			if ok, warpConfig, err := checkForSufficientConnectedStake(logger, cfg, connectedValidators, blockchainID); ok && err == nil {
-				break
+			if ok, warpConfig, err := checkForSufficientConnectedStake(
+				logger,
+				cfg,
+				connectedValidators,
+				blockchainID); ok {
+				return err
 			} else {
 				logger.Warn(
 					"Failed to connect to a threshold of stake, retrying...",
@@ -127,8 +131,8 @@ func connectToPrimaryNetworkPeers(
 				)
 				return err
 			}
-			if ok, warpConfig, err := checkForSufficientConnectedStake(logger, cfg, connectedValidators, blockchainID); ok && err == nil {
-				break
+			if ok, warpConfig, err := checkForSufficientConnectedStake(logger, cfg, connectedValidators, blockchainID); ok {
+				return err
 			} else {
 				logger.Warn(
 					"Failed to connect to a threshold of stake, retrying...",
