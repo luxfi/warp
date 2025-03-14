@@ -74,20 +74,6 @@ func (mr *MockAppRequestNetworkMockRecorder) GetSubnetID(blockchainID any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnetID", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetSubnetID), blockchainID)
 }
 
-// IsConnected mocks base method.
-func (m *MockAppRequestNetwork) IsConnected(nodeID ids.NodeID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsConnected", nodeID)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsConnected indicates an expected call of IsConnected.
-func (mr *MockAppRequestNetworkMockRecorder) IsConnected(nodeID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockAppRequestNetwork)(nil).IsConnected), nodeID)
-}
-
 // RegisterAppRequest mocks base method.
 func (m *MockAppRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 	m.ctrl.T.Helper()
