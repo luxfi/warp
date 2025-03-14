@@ -16,9 +16,10 @@ import (
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
-const initialConnectionTimeoutSeconds = 1800
+const retryPeriodSeconds = 5
 
 // Convenience function to initialize connections and check stake for all source blockchains.
 // Only returns an error if it fails to get a list of canonical validator or a valid warp config.
@@ -36,26 +37,38 @@ func InitializeConnectionsAndCheckStake(
 	for _, sourceBlockchainConfig := range cfg.SourceBlockchains {
 		network.TrackSubnet(sourceBlockchainConfig.GetSubnetID())
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), initialConnectionTimeoutSeconds*time.Second)
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		time.Duration(cfg.InitialConnectionTimeoutSeconds)*time.Second,
+	)
 	defer cancel()
+
+	var eg errgroup.Group
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		if sourceBlockchain.GetSubnetID() == constants.PrimaryNetworkID {
-			if err := connectToPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
-				return fmt.Errorf(
-					"failed to connect to primary network peers: %w",
-					err,
-				)
-			}
+			eg.Go(func() error {
+				err := connectToPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain)
+				if err != nil {
+					return fmt.Errorf(
+						"failed to connect to primary network peers: %w",
+						err,
+					)
+				}
+				return nil
+			})
 		} else {
-			if err := connectToNonPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
-				return fmt.Errorf(
-					"failed to connect to non-primary network peers: %w",
-					err,
-				)
-			}
+			eg.Go(func() error {
+				if err := connectToNonPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
+					return fmt.Errorf(
+						"failed to connect to non-primary network peers: %w",
+						err,
+					)
+				}
+				return nil
+			})
 		}
 	}
-	return nil
+	return eg.Wait()
 }
 
 // Connect to the validators of the source blockchain. For each destination blockchain,
@@ -81,28 +94,28 @@ func connectToNonPrimaryNetworkPeers(
 				)
 				return err
 			}
-			ok, warpConfig, err := checkForSufficientConnectedStake(
+			ok, err := checkForSufficientConnectedStake(
 				logger,
 				cfg,
 				connectedValidators,
-				blockchainID); 
+				blockchainID)
 			if err != nil {
 				return err
-			} 
+			}
 			if ok {
 				break
 			}
-		        logger.Warn(
-			        "Failed to connect to a threshold of stake, retrying...",
-			        zap.String("destinationBlockchainID", blockchainID.String()),
-			        zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-			        zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-		        )
-		        select {
-		        case <-ctx.Done():
-			        return ctx.Err()
-		        default:
-			        time.Sleep(5 * time.Second) // Retry after a short delay
+			logger.Warn(
+				"Failed to connect to a threshold of stake, retrying...",
+				zap.String("destinationBlockchainID", blockchainID.String()),
+				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
+				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				time.Sleep(5 * time.Second) // Retry after a short delay
 			}
 		}
 	}
@@ -133,22 +146,27 @@ func connectToPrimaryNetworkPeers(
 				)
 				return err
 			}
-			if ok, warpConfig, err := checkForSufficientConnectedStake(logger, cfg, connectedValidators, blockchainID); ok {
+			ok, err := checkForSufficientConnectedStake(
+				logger,
+				cfg,
+				connectedValidators,
+				blockchainID)
+			if err != nil {
 				return err
-			} else {
-				logger.Warn(
-					"Failed to connect to a threshold of stake, retrying...",
-					zap.String("destinationBlockchainID", blockchainID.String()),
-					zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-					zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-					zap.Any("WarpConfig", warpConfig),
-				)
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-					time.Sleep(1 * time.Second) // Retry after a short delay
-				}
+			} else if ok {
+				break
+			}
+			logger.Warn(
+				"Failed to connect to a threshold of stake, retrying...",
+				zap.String("destinationBlockchainID", blockchainID.String()),
+				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
+				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				time.Sleep(retryPeriodSeconds)
 			}
 		}
 	}
@@ -161,7 +179,7 @@ func checkForSufficientConnectedStake(
 	cfg *config.Config,
 	connectedValidators *peers.ConnectedCanonicalValidators,
 	destinationBlockchainID ids.ID,
-) (bool, *config.WarpConfig, error) {
+) (bool, error) {
 	warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
 	if err != nil {
 		logger.Error(
@@ -169,11 +187,11 @@ func checkForSufficientConnectedStake(
 			zap.String("destinationBlockchainID", destinationBlockchainID.String()),
 			zap.Error(err),
 		)
-		return false, nil, err
+		return false, err
 	}
 	return utils.CheckStakeWeightExceedsThreshold(
 		big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
 		connectedValidators.ValidatorSet.TotalWeight,
 		warpConfig.QuorumNumerator,
-	), &warpConfig, nil
+	), nil
 }
