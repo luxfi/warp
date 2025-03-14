@@ -22,10 +22,8 @@ import (
 const retryPeriodSeconds = 5
 
 // Convenience function to initialize connections and check stake for all source blockchains.
-// Only returns an error if it fails to get a list of canonical validator or a valid warp config.
-//
-// Failing a sufficient stake check will only log an error but still return successfully
-// since each attempted relay will make an attempt at reconnecting to any missing validators.
+// This function blocks until it successfully connects to sufficient stake for all source blockchains
+// or returns an error if unable to fetch warpConfigs or to connect to sufficient stake before timeout.
 //
 // Sufficient stake is determined by the Warp quora of the configured supported destinations,
 // or if the subnet supports all destinations, by the quora of all configured destinations.
@@ -43,7 +41,7 @@ func InitializeConnectionsAndCheckStake(
 	)
 	defer cancel()
 
-	var eg errgroup.Group
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		if sourceBlockchain.GetSubnetID() == constants.PrimaryNetworkID {
 			eg.Go(func() error {
@@ -115,7 +113,7 @@ func connectToNonPrimaryNetworkPeers(
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				time.Sleep(5 * time.Second) // Retry after a short delay
+				time.Sleep(retryPeriodSeconds * time.Second)
 			}
 		}
 	}
@@ -166,7 +164,7 @@ func connectToPrimaryNetworkPeers(
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				time.Sleep(retryPeriodSeconds)
+				time.Sleep(retryPeriodSeconds * time.Second)
 			}
 		}
 	}
