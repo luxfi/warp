@@ -81,26 +81,28 @@ func connectToNonPrimaryNetworkPeers(
 				)
 				return err
 			}
-			if ok, warpConfig, err := checkForSufficientConnectedStake(
+			ok, warpConfig, err := checkForSufficientConnectedStake(
 				logger,
 				cfg,
 				connectedValidators,
-				blockchainID); ok {
+				blockchainID); 
+			if err != nil {
 				return err
-			} else {
-				logger.Warn(
-					"Failed to connect to a threshold of stake, retrying...",
-					zap.String("destinationBlockchainID", blockchainID.String()),
-					zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-					zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-					zap.Any("WarpConfig", warpConfig),
-				)
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-					time.Sleep(5 * time.Second) // Retry after a short delay
-				}
+			} 
+			if ok {
+				break
+			}
+		        logger.Warn(
+			        "Failed to connect to a threshold of stake, retrying...",
+			        zap.String("destinationBlockchainID", blockchainID.String()),
+			        zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
+			        zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+		        )
+		        select {
+		        case <-ctx.Done():
+			        return ctx.Err()
+		        default:
+			        time.Sleep(5 * time.Second) // Retry after a short delay
 			}
 		}
 	}
