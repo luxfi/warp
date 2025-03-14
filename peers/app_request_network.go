@@ -68,7 +68,6 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
-	IsConnected(nodeID ids.NodeID) bool
 }
 
 type appRequestNetwork struct {
@@ -256,10 +255,6 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
-func (n *appRequestNetwork) IsConnected(nodeID ids.NodeID) bool {
-	return len(n.network.PeerInfo([]ids.NodeID{nodeID})) == 1
-}
-
 func (n *appRequestNetwork) startUpdateValidators() {
 	go func() {
 		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
@@ -334,6 +329,7 @@ func (n *appRequestNetwork) Shutdown() {
 // so we need to track the node ID to validator index mapping
 type ConnectedCanonicalValidators struct {
 	ConnectedWeight       uint64
+	ConnectedNodes        set.Set[ids.NodeID]
 	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
@@ -379,6 +375,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*C
 
 	return &ConnectedCanonicalValidators{
 		ConnectedWeight:       connectedWeight,
+		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
 		NodeValidatorIndexMap: nodeValidatorIndexMap,
 	}, nil
