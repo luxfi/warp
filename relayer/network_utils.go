@@ -62,21 +62,21 @@ func checkSufficientConnectedStake(
 	// which is determined by the Warp Quorum configs of the destination blockchains.
 	for _, destination := range sourceBlockchain.SupportedDestinations {
 		destinationBlockchainID := destination.GetBlockchainID()
+		warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
+		if err != nil {
+			logger.Error(
+				"Failed to get warp config from chain config",
+				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
+				zap.Error(err),
+			)
+			return err
+		}
 		for {
 			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
 			if err != nil {
 				logger.Error(
 					"Failed to retrieve currently connected validators",
 					zap.Stringer("subnetID", subnetID),
-					zap.Error(err),
-				)
-				return err
-			}
-			warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
-			if err != nil {
-				logger.Error(
-					"Failed to get warp config from chain config",
-					zap.Stringer("destinationBlockchainID", destinationBlockchainID),
 					zap.Error(err),
 				)
 				return err
