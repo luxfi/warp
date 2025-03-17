@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/relayer/config"
@@ -43,21 +42,15 @@ func InitializeConnectionsAndCheckStake(
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		eg.Go(func() error {
-			if err := connectToPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
-				return fmt.Errorf(
-					"failed to connect to non-primary network peers: %w",
-					err,
-				)
-			}
-			return nil
+			return checkSufficientConnectedStake(ctx, logger, network, cfg, sourceBlockchain)
 		})
 	}
 	return eg.Wait()
 }
 
-// Connect to the validators of the source blockchain. For each destination blockchain,
-// verify that we have connected to a threshold of stake.
-func connectToPeers(
+// Returns when connected to sufficient stake for all supported destinations of the source blockchain or
+// in case of errors or timeouts.
+func checkSufficientConnectedStake(
 	ctx context.Context,
 	logger logging.Logger,
 	network peers.AppRequestNetwork,
@@ -68,65 +61,47 @@ func connectToPeers(
 	// Loop over destination blockchains here to confirm connections to a threshold of stake
 	// which is determined by the Warp Quorum configs of the destination blockchains.
 	for _, destination := range sourceBlockchain.SupportedDestinations {
-		blockchainID := destination.GetBlockchainID()
+		destinationBlockchainID := destination.GetBlockchainID()
 		for {
 			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
 			if err != nil {
 				logger.Error(
-					"Failed to connect to canonical validators",
-					zap.String("subnetID", subnetID.String()),
+					"Failed to retrieve currently connected validators",
+					zap.Stringer("subnetID", subnetID),
 					zap.Error(err),
 				)
 				return err
 			}
-			ok, err := checkForSufficientConnectedStake(
-				logger,
-				cfg,
-				connectedValidators,
-				blockchainID)
+			warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
 			if err != nil {
+				logger.Error(
+					"Failed to get warp config from chain config",
+					zap.Stringer("destinationBlockchainID", destinationBlockchainID),
+					zap.Error(err),
+				)
 				return err
 			}
-			if ok {
+			if utils.CheckStakeWeightExceedsThreshold(
+				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
+				connectedValidators.ValidatorSet.TotalWeight,
+				warpConfig.QuorumNumerator,
+			) {
 				break
 			}
 			logger.Warn(
 				"Failed to connect to a threshold of stake, retrying...",
 				zap.Stringer("subnetID", subnetID),
-				zap.Stringer("destinationBlockchainID", blockchainID),
+				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
 			)
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return fmt.Errorf("failed to connect to sufficient stake: %w", ctx.Err())
 			default:
 				time.Sleep(retryPeriodSeconds * time.Second)
 			}
 		}
 	}
 	return nil
-}
-
-// Fetch the warp config from the destination chain config and check if the connected stake exceeds the threshold
-func checkForSufficientConnectedStake(
-	logger logging.Logger,
-	cfg *config.Config,
-	connectedValidators *peers.ConnectedCanonicalValidators,
-	destinationBlockchainID ids.ID,
-) (bool, error) {
-	warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
-	if err != nil {
-		logger.Error(
-			"Failed to get warp config from chain config",
-			zap.String("destinationBlockchainID", destinationBlockchainID.String()),
-			zap.Error(err),
-		)
-		return false, err
-	}
-	return utils.CheckStakeWeightExceedsThreshold(
-		big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-		connectedValidators.ValidatorSet.TotalWeight,
-		warpConfig.QuorumNumerator,
-	), nil
 }
