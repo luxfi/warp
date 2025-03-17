@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/relayer/config"
@@ -43,35 +42,22 @@ func InitializeConnectionsAndCheckStake(
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
-		if sourceBlockchain.GetSubnetID() == constants.PrimaryNetworkID {
-			eg.Go(func() error {
-				err := connectToPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain)
-				if err != nil {
-					return fmt.Errorf(
-						"failed to connect to primary network peers: %w",
-						err,
-					)
-				}
-				return nil
-			})
-		} else {
-			eg.Go(func() error {
-				if err := connectToNonPrimaryNetworkPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
-					return fmt.Errorf(
-						"failed to connect to non-primary network peers: %w",
-						err,
-					)
-				}
-				return nil
-			})
-		}
+		eg.Go(func() error {
+			if err := connectToPeers(ctx, logger, network, cfg, sourceBlockchain); err != nil {
+				return fmt.Errorf(
+					"failed to connect to non-primary network peers: %w",
+					err,
+				)
+			}
+			return nil
+		})
 	}
 	return eg.Wait()
 }
 
 // Connect to the validators of the source blockchain. For each destination blockchain,
 // verify that we have connected to a threshold of stake.
-func connectToNonPrimaryNetworkPeers(
+func connectToPeers(
 	ctx context.Context,
 	logger logging.Logger,
 	network peers.AppRequestNetwork,
@@ -79,7 +65,8 @@ func connectToNonPrimaryNetworkPeers(
 	sourceBlockchain *config.SourceBlockchain,
 ) error {
 	subnetID := sourceBlockchain.GetSubnetID()
-	network.TrackSubnet(subnetID)
+	// Loop over destination blockchains here to confirm connections to a threshold of stake
+	// which is determined by the Warp Quorum configs of the destination blockchains.
 	for _, destination := range sourceBlockchain.SupportedDestinations {
 		blockchainID := destination.GetBlockchainID()
 		for {
@@ -105,58 +92,8 @@ func connectToNonPrimaryNetworkPeers(
 			}
 			logger.Warn(
 				"Failed to connect to a threshold of stake, retrying...",
-				zap.String("destinationBlockchainID", blockchainID.String()),
-				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				time.Sleep(retryPeriodSeconds * time.Second)
-			}
-		}
-	}
-	return nil
-}
-
-// Connect to the validators of the destination blockchains. Verify that we have connected
-// to a threshold of stake for each blockchain.
-func connectToPrimaryNetworkPeers(
-	ctx context.Context,
-	logger logging.Logger,
-	network peers.AppRequestNetwork,
-	cfg *config.Config,
-	sourceBlockchain *config.SourceBlockchain,
-) error {
-	for _, destination := range sourceBlockchain.SupportedDestinations {
-		blockchainID := destination.GetBlockchainID()
-		subnetID := cfg.GetSubnetID(blockchainID)
-		network.TrackSubnet(subnetID)
-
-		for {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
-			if err != nil {
-				logger.Error(
-					"Failed to connect to canonical validators",
-					zap.String("subnetID", subnetID.String()),
-					zap.Error(err),
-				)
-				return err
-			}
-			ok, err := checkForSufficientConnectedStake(
-				logger,
-				cfg,
-				connectedValidators,
-				blockchainID)
-			if err != nil {
-				return err
-			} else if ok {
-				break
-			}
-			logger.Warn(
-				"Failed to connect to a threshold of stake, retrying...",
-				zap.String("destinationBlockchainID", blockchainID.String()),
+				zap.Stringer("subnetID", subnetID),
+				zap.Stringer("destinationBlockchainID", blockchainID),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
 			)
