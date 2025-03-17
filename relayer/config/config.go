@@ -60,13 +60,13 @@ type Config struct {
 	PChainAPI                       *basecfg.APIConfig       `mapstructure:"p-chain-api" json:"p-chain-api"`
 	InfoAPI                         *basecfg.APIConfig       `mapstructure:"info-api" json:"info-api"`
 	SourceBlockchains               []*SourceBlockchain      `mapstructure:"source-blockchains" json:"source-blockchains"`
-	DestinationBlockchains          []*DestinationBlockchain `mapstructure:"destination-blockchains" json:"destination-blockchains"`
-	ProcessMissedBlocks             bool                     `mapstructure:"process-missed-blocks" json:"process-missed-blocks"`
+	DestinationBlockchains          []*DestinationBlockchain `mapstructure:"destination-blockchains" json:"destination-blockchains"` //nolint:lll
+	ProcessMissedBlocks             bool                     `mapstructure:"process-missed-blocks" json:"process-missed-blocks"`     //nolint:lll
 	DeciderURL                      string                   `mapstructure:"decider-url" json:"decider-url"`
-	SignatureCacheSize              uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`
-	ManuallyTrackedPeers            []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"`
+	SignatureCacheSize              uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`     //nolint: lll
+	ManuallyTrackedPeers            []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"` //nolint:lll
 	AllowPrivateIPs                 bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
-	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds"` // nolint:ll
+	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds"` // nolint:lll
 
 	// convenience field to fetch a blockchain's subnet ID
 	blockchainIDToSubnetID map[ids.ID]ids.ID
