@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
 
 type AppRequestNetwork interface {
@@ -421,7 +421,7 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 				connectedValidators.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
-				return errNotEnoughConnectedStake
+				return ErrNotEnoughConnectedStake
 			}
 		}
 		return nil
