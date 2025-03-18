@@ -76,36 +76,42 @@ func checkSufficientConnectedStake(
 		maxQuorumNumerator = max(maxQuorumNumerator, warpConfig.QuorumNumerator)
 	}
 
-	ticker := time.Tick(retryPeriodSeconds * time.Second)
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("failed to connect to sufficient stake: %w", ctx.Err())
-	case <-ticker:
-		for {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
-			if err != nil {
-				logger.Error(
-					"Failed to retrieve currently connected validators",
-					zap.Stringer("subnetID", subnetID),
-					zap.Error(err),
-				)
-				return err
-			}
-			if utils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-				connectedValidators.ValidatorSet.TotalWeight,
-				maxQuorumNumerator,
-			) {
-				break
-			}
-			logger.Warn(
-				"Failed to connect to a threshold of stake, retrying...",
+	checkConns := func() error {
+		connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
+		if err != nil {
+			logger.Error(
+				"Failed to retrieve currently connected validators",
 				zap.Stringer("subnetID", subnetID),
-				zap.Uint64("quorumNumerator", maxQuorumNumerator),
-				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+				zap.Error(err),
 			)
+			return err
+		}
+		if utils.CheckStakeWeightExceedsThreshold(
+			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
+			connectedValidators.ValidatorSet.TotalWeight,
+			maxQuorumNumerator,
+		) {
+			return nil
+		}
+		logger.Warn(
+			"Failed to connect to a threshold of stake, retrying...",
+			zap.Stringer("subnetID", subnetID),
+			zap.Uint64("quorumNumerator", maxQuorumNumerator),
+			zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
+			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+		)
+		return fmt.Errorf("failed to connect to sufficient stake")
+	}
+
+	ticker := time.Tick(retryPeriodSeconds * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("failed to connect to sufficient stake: %w", ctx.Err())
+		case <-ticker:
+			if err := checkConns(); err == nil {
+				return nil
+			}
 		}
 	}
-	return nil
 }
