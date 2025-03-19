@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/peer"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
 	offchainregistry "github.com/ava-labs/icm-services/messages/off-chain-registry"
@@ -170,10 +171,14 @@ func main() {
 		})
 	}
 
+	trackedSubnets := set.NewSet[ids.ID](len(cfg.SourceBlockchains))
+	for _, sourceChain := range cfg.SourceBlockchains {
+		trackedSubnets.Add(sourceChain.GetSubnetID())
+	}
 	network, err := peers.NewNetwork(
 		networkLogger,
 		registerer,
-		cfg.GetTrackedSubnets(),
+		trackedSubnets,
 		manuallyTrackedPeers,
 		&cfg,
 	)
