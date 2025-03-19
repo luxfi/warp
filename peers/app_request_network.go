@@ -48,7 +48,7 @@ const (
 
 var (
 	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
-	errTrackingTooManySubnets  = errors.New(fmt.Sprintf("cannot track more than %d subnets", maxTrackedSubnets))
+	errTrackingTooManySubnets  = fmt.Errorf("cannot track more than %d subnets", maxTrackedSubnets)
 )
 
 type AppRequestNetwork interface {
