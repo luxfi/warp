@@ -229,6 +229,26 @@ func (c *Config) InitializeWarpConfigs() error {
 	return nil
 }
 
+// Initializes the tracked subnets list. This should only be called after the configuration has been validated and
+// [Config.InitializeWarpConfigs] has been called
+func (c *Config) InitializeTrackedSubnets() error {
+	for _, sourceBlockchain := range c.SourceBlockchains {
+		c.trackedSubnets.Add(sourceBlockchain.GetSubnetID())
+	}
+	for _, destinationBlockchain := range c.DestinationBlockchains {
+		warpCfg, err := c.GetWarpConfig(destinationBlockchain.GetBlockchainID())
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get warp config for destination blockchain %s: %w",
+			)
+		}
+		if !warpCfg.RequirePrimaryNetworkSigners {
+			c.trackedSubnets.Add(destinationBlockchain.GetSubnetID())
+		}
+	}
+	return nil
+}
+
 func (c *Config) HasOverwrittenOptions() bool {
 	return len(c.overwrittenOptions) > 0
 }

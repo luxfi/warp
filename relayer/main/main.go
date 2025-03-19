@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/avalanchego/network/peer"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
 	offchainregistry "github.com/ava-labs/icm-services/messages/off-chain-registry"
@@ -84,6 +83,10 @@ func main() {
 	// We do this here so that BuildConfig doesn't need to make RPC calls
 	if err = cfg.InitializeWarpConfigs(); err != nil {
 		panic(fmt.Errorf("couldn't initialize warp quorums: %w", err))
+	}
+
+	if err = cfg.InitializeTrackedSubnets(); err != nil {
+		panic(fmt.Errorf("couldn't initialize tracked subnets: %w", err))
 	}
 
 	logLevel, err := logging.ToLevel(cfg.LogLevel)
@@ -171,14 +174,10 @@ func main() {
 		})
 	}
 
-	trackedSubnets := set.NewSet[ids.ID](len(cfg.SourceBlockchains))
-	for _, sourceChain := range cfg.SourceBlockchains {
-		trackedSubnets.Add(sourceChain.GetSubnetID())
-	}
 	network, err := peers.NewNetwork(
 		networkLogger,
 		registerer,
-		trackedSubnets,
+		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
 	)
