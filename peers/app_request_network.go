@@ -43,10 +43,12 @@ const (
 	InboundMessageChannelSize = 1000
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
+	maxTrackedSubnets         = 16
 )
 
 var (
 	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	errTrackingTooManySubnets  = errors.New(fmt.Sprintf("cannot track more than %d subnets", maxTrackedSubnets))
 )
 
 type AppRequestNetwork interface {
@@ -124,10 +126,17 @@ func NewNetwork(
 		return nil, err
 	}
 
+	if trackedSubnets.Len() > maxTrackedSubnets {
+		return nil, errTrackingTooManySubnets
+	}
+
 	validatorClient := validators.NewCanonicalValidatorClient(logger, cfg.GetPChainAPI())
 	manager := snowVdrs.NewManager()
 
 	networkMetrics := prometheus.NewRegistry()
+
+	// Primary network must not be explicitly tracked so removing it prior to creating TestNetworkConfig
+	trackedSubnets.Remove(constants.PrimaryNetworkID)
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,
