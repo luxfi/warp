@@ -47,7 +47,7 @@ const (
 )
 
 var (
-	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 	errTrackingTooManySubnets  = errors.New(fmt.Sprintf("cannot track more than %d subnets", maxTrackedSubnets))
 )
 
@@ -338,6 +338,7 @@ func (n *appRequestNetwork) Shutdown() {
 // so we need to track the node ID to validator index mapping
 type ConnectedCanonicalValidators struct {
 	ConnectedWeight       uint64
+	ConnectedNodes        set.Set[ids.NodeID]
 	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
@@ -383,6 +384,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*C
 
 	return &ConnectedCanonicalValidators{
 		ConnectedWeight:       connectedWeight,
+		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
 		NodeValidatorIndexMap: nodeValidatorIndexMap,
 	}, nil
@@ -430,7 +432,7 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 				connectedValidators.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
-				return errNotEnoughConnectedStake
+				return ErrNotEnoughConnectedStake
 			}
 		}
 		return nil
