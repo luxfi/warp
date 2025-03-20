@@ -43,7 +43,9 @@ const (
 	InboundMessageChannelSize = 1000
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
-	maxTrackedSubnets         = 16
+	// corresponds to maxNumTrackedSubnets is defined in avalanchego peers package
+	// TODO: export this value on the avago side so it can be used here.
+	maxTrackedSubnets = 16
 )
 
 var (
@@ -126,10 +128,6 @@ func NewNetwork(
 		return nil, err
 	}
 
-	if trackedSubnets.Len() > maxTrackedSubnets {
-		return nil, errTrackingTooManySubnets
-	}
-
 	validatorClient := validators.NewCanonicalValidatorClient(logger, cfg.GetPChainAPI())
 	manager := snowVdrs.NewManager()
 
@@ -137,6 +135,9 @@ func NewNetwork(
 
 	// Primary network must not be explicitly tracked so removing it prior to creating TestNetworkConfig
 	trackedSubnets.Remove(constants.PrimaryNetworkID)
+	if trackedSubnets.Len() > maxTrackedSubnets {
+		return nil, errTrackingTooManySubnets
+	}
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,

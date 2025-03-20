@@ -239,7 +239,9 @@ func (c *Config) InitializeTrackedSubnets() error {
 		warpCfg, err := c.GetWarpConfig(destinationBlockchain.GetBlockchainID())
 		if err != nil {
 			return fmt.Errorf(
-				"failed to get warp config for destination blockchain %s: %w", err
+				"failed to get warp config for destination blockchain %s: %w",
+				destinationBlockchain.GetBlockchainID(),
+				err,
 			)
 		}
 		if !warpCfg.RequirePrimaryNetworkSigners {
