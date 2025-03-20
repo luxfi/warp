@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/peers/validators"
 	subnetWarp "github.com/ava-labs/subnet-evm/precompile/contracts/warp"
@@ -45,7 +46,7 @@ const (
 )
 
 var (
-	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
 
 type AppRequestNetwork interface {
@@ -328,14 +329,14 @@ func (n *appRequestNetwork) Shutdown() {
 // so we need to track the node ID to validator index mapping
 type ConnectedCanonicalValidators struct {
 	ConnectedWeight       uint64
-	TotalValidatorWeight  uint64
-	ValidatorSet          []*warp.Validator
+	ConnectedNodes        set.Set[ids.NodeID]
+	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
 
 // Returns the Warp Validator and its index in the canonical Validator ordering for a given nodeID
 func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, int) {
-	return c.ValidatorSet[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
+	return c.ValidatorSet.Validators[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
 // GetConnectedCanonicalValidators returns the validator information in canonical ordering for the given subnet
@@ -343,7 +344,7 @@ func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Va
 func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*ConnectedCanonicalValidators, error) {
 	// Get the subnet's current canonical validator set
 	startPChainAPICall := time.Now()
-	validatorSet, totalValidatorWeight, err := n.validatorClient.GetCurrentCanonicalValidatorSet(subnetID)
+	validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(subnetID)
 	n.setPChainAPICallLatencyMS(float64(time.Since(startPChainAPICall).Milliseconds()))
 	if err != nil {
 		return nil, err
@@ -354,7 +355,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*C
 	// This maps node IDs to the index in the canonical validator set
 	nodeValidatorIndexMap := make(map[ids.NodeID]int)
 	nodeIDs := set.NewSet[ids.NodeID](len(nodeValidatorIndexMap))
-	for i, vdr := range validatorSet {
+	for i, vdr := range validatorSet.Validators {
 		for _, node := range vdr.NodeIDs {
 			nodeValidatorIndexMap[node] = i
 			nodeIDs.Add(node)
@@ -370,11 +371,11 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*C
 	}
 
 	// Calculate the total weight of connected validators.
-	connectedWeight := calculateConnectedWeight(validatorSet, nodeValidatorIndexMap, connectedPeers)
+	connectedWeight := calculateConnectedWeight(validatorSet.Validators, nodeValidatorIndexMap, connectedPeers)
 
 	return &ConnectedCanonicalValidators{
 		ConnectedWeight:       connectedWeight,
-		TotalValidatorWeight:  totalValidatorWeight,
+		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
 		NodeValidatorIndexMap: nodeValidatorIndexMap,
 	}, nil
@@ -419,10 +420,10 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 			}
 			if !sharedUtils.CheckStakeWeightExceedsThreshold(
 				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-				connectedValidators.TotalValidatorWeight,
+				connectedValidators.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
-				return errNotEnoughConnectedStake
+				return ErrNotEnoughConnectedStake
 			}
 		}
 		return nil
