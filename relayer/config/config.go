@@ -265,7 +265,7 @@ func (c *Config) GetOverwrittenOptions() []string {
 
 func (c *Config) GetWarpConfig(blockchainID ids.ID) (WarpConfig, error) {
 	for _, s := range c.DestinationBlockchains {
-		if blockchainID.String() == s.BlockchainID {
+		if blockchainID == s.GetBlockchainID() {
 			return s.warpConfig, nil
 		}
 	}
