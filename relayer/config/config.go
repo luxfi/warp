@@ -213,7 +213,7 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 }
 
 // Initializes Warp configurations (quorum and self-signing settings) for each destination subnet
-func (c *Config) InitializeWarpConfigs() error {
+func (c *Config) initializeWarpConfigs() error {
 	// Fetch the Warp config values for each destination subnet.
 	for _, destinationSubnet := range c.DestinationBlockchains {
 		err := destinationSubnet.initializeWarpConfigs()
@@ -230,8 +230,8 @@ func (c *Config) InitializeWarpConfigs() error {
 }
 
 // Initializes the tracked subnets list. This should only be called after the configuration has been validated and
-// [Config.InitializeWarpConfigs] has been called
-func (c *Config) InitializeTrackedSubnets() error {
+// [Config.initializeWarpConfigs] has been called
+func (c *Config) initializeTrackedSubnets() error {
 	for _, sourceBlockchain := range c.SourceBlockchains {
 		c.trackedSubnets.Add(sourceBlockchain.GetSubnetID())
 	}
@@ -249,6 +249,13 @@ func (c *Config) InitializeTrackedSubnets() error {
 		}
 	}
 	return nil
+}
+
+func (c *Config) Initialize() error {
+	if err := c.initializeWarpConfigs(); err != nil {
+		return err
+	}
+	return c.initializeTrackedSubnets()
 }
 
 func (c *Config) HasOverwrittenOptions() bool {
