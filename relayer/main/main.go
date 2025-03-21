@@ -79,14 +79,10 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("couldn't build config: %w", err))
 	}
-	// Initialize the Warp Config values by fetching via RPC
+	// Initialize the Warp Config values and trackedSubnets by fetching via RPC
 	// We do this here so that BuildConfig doesn't need to make RPC calls
-	if err = cfg.InitializeWarpConfigs(); err != nil {
-		panic(fmt.Errorf("couldn't initialize warp quorums: %w", err))
-	}
-
-	if err = cfg.InitializeTrackedSubnets(); err != nil {
-		panic(fmt.Errorf("couldn't initialize tracked subnets: %w", err))
+	if err = cfg.Initialize(); err != nil {
+		panic(fmt.Errorf("couldn't initialize config: %w", err))
 	}
 
 	logLevel, err := logging.ToLevel(cfg.LogLevel)

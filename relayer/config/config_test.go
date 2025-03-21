@@ -559,7 +559,7 @@ func TestInitializeTrackedSubnets(t *testing.T) {
 		},
 	}
 
-	err := cfg.InitializeTrackedSubnets()
+	err := cfg.initializeTrackedSubnets()
 	require.NoError(t, err)
 
 	expectedSubnets := set.NewSet[ids.ID](3)
