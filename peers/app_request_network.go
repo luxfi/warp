@@ -43,10 +43,14 @@ const (
 	InboundMessageChannelSize = 1000
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
+	// corresponds to maxNumTrackedSubnets is defined in avalanchego peers package
+	// TODO: export this value on the avago side so it can be used here.
+	maxTrackedSubnets = 16
 )
 
 var (
 	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	errTrackingTooManySubnets  = fmt.Errorf("cannot track more than %d subnets", maxTrackedSubnets)
 )
 
 type AppRequestNetwork interface {
@@ -128,6 +132,12 @@ func NewNetwork(
 	manager := snowVdrs.NewManager()
 
 	networkMetrics := prometheus.NewRegistry()
+
+	// Primary network must not be explicitly tracked so removing it prior to creating TestNetworkConfig
+	trackedSubnets.Remove(constants.PrimaryNetworkID)
+	if trackedSubnets.Len() > maxTrackedSubnets {
+		return nil, errTrackingTooManySubnets
+	}
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,
