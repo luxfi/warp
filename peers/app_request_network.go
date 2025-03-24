@@ -147,13 +147,13 @@ func NewNetwork(
 	if trackedSubnets.Len() > maxNumSubnets {
 		return nil, errTrackingTooManySubnets
 	}
-	trackedSubnetsLock := &sync.RWMutex{}
+	trackedSubnetsLock := sync.RWMutex{}
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,
 		manager,
 		trackedSubnets,
-		trackedSubnetsLock,
+		&trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -253,7 +253,7 @@ func NewNetwork(
 		validatorClient:    validatorClient,
 		metrics:            metrics,
 		trackedSubnets:     trackedSubnets,
-		trackedSubnetsLock: trackedSubnetsLock,
+		trackedSubnetsLock: &trackedSubnetsLock,
 		manager:            manager,
 		lruSubnets:         lruSubnets,
 	}
