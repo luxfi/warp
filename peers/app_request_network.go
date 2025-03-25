@@ -174,8 +174,8 @@ func NewNetwork(
 	if err != nil {
 		return nil, err
 	}
-	nodeId := ids.NodeIDFromCert(parsedCert)
-	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeId))
+	nodeID := ids.NodeIDFromCert(parsedCert)
+	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
 	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler)
 	if err != nil {
