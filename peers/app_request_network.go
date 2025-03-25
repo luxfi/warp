@@ -77,13 +77,13 @@ type AppRequestNetwork interface {
 }
 
 type appRequestNetwork struct {
-	network         network.Network
-	handler         *RelayerExternalHandler
-	infoAPI         *InfoAPI
-	logger          logging.Logger
-	lock            *sync.Mutex
-	validatorClient validators.CanonicalValidatorState
-	metrics         *AppRequestNetworkMetrics
+	network           network.Network
+	handler           *RelayerExternalHandler
+	infoAPI           *InfoAPI
+	logger            logging.Logger
+	validatorsSetLock *sync.Mutex
+	validatorClient   validators.CanonicalValidatorState
+	metrics           *AppRequestNetworkMetrics
 
 	// The set of subnetIDs to track. Shared with the underlying Network object, so access
 	// must be protected by the trackedSubnetsLock
@@ -147,13 +147,13 @@ func NewNetwork(
 	if trackedSubnets.Len() > maxNumSubnets {
 		return nil, errTrackingTooManySubnets
 	}
-	trackedSubnetsLock := sync.RWMutex{}
+	trackedSubnetsLock := new(sync.RWMutex)
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,
 		manager,
 		trackedSubnets,
-		&trackedSubnetsLock,
+		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -249,11 +249,11 @@ func NewNetwork(
 		handler:            handler,
 		infoAPI:            infoAPI,
 		logger:             logger,
-		lock:               new(sync.Mutex),
+		validatorsSetLock:  new(sync.Mutex),
 		validatorClient:    validatorClient,
 		metrics:            metrics,
 		trackedSubnets:     trackedSubnets,
-		trackedSubnetsLock: &trackedSubnetsLock,
+		trackedSubnetsLock: trackedSubnetsLock,
 		manager:            manager,
 		lruSubnets:         lruSubnets,
 	}
@@ -319,8 +319,8 @@ func (n *appRequestNetwork) updateValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+	n.validatorsSetLock.Lock()
+	defer n.validatorsSetLock.Unlock()
 
 	// Fetch the subnet validators from the P-Chain
 	validators, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
