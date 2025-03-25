@@ -77,13 +77,13 @@ type AppRequestNetwork interface {
 }
 
 type appRequestNetwork struct {
-	network           network.Network
-	handler           *RelayerExternalHandler
-	infoAPI           *InfoAPI
-	logger            logging.Logger
-	validatorsSetLock *sync.Mutex
-	validatorClient   validators.CanonicalValidatorState
-	metrics           *AppRequestNetworkMetrics
+	network          network.Network
+	handler          *RelayerExternalHandler
+	infoAPI          *InfoAPI
+	logger           logging.Logger
+	validatorSetLock *sync.Mutex
+	validatorClient  validators.CanonicalValidatorState
+	metrics          *AppRequestNetworkMetrics
 
 	// The set of subnetIDs to track. Shared with the underlying Network object, so access
 	// must be protected by the trackedSubnetsLock
@@ -249,7 +249,7 @@ func NewNetwork(
 		handler:            handler,
 		infoAPI:            infoAPI,
 		logger:             logger,
-		validatorsSetLock:  new(sync.Mutex),
+		validatorSetLock:   new(sync.Mutex),
 		validatorClient:    validatorClient,
 		metrics:            metrics,
 		trackedSubnets:     trackedSubnets,
@@ -319,8 +319,8 @@ func (n *appRequestNetwork) updateValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) error {
-	n.validatorsSetLock.Lock()
-	defer n.validatorsSetLock.Unlock()
+	n.validatorSetLock.Lock()
+	defer n.validatorSetLock.Unlock()
 
 	// Fetch the subnet validators from the P-Chain
 	validators, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
