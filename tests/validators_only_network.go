@@ -53,11 +53,19 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	dir, err := os.MkdirTemp(os.TempDir(), "sig-agg-tls-cert")
 	Expect(err).Should(BeNil())
 
-	signatureAggregatorConfig := testUtils.CreateDefaultSignatureAggregatorConfig(
+	// Create a config without TLS cert and key
+	baseConfig := testUtils.CreateDefaultSignatureAggregatorConfig(
 		[]interfaces.L1TestInfo{l1AInfo, l1BInfo},
 	)
+	baseConfigPath := testUtils.WriteSignatureAggregatorConfig(
+		baseConfig,
+		testUtils.DefaultSignatureAggregatorCfgFname,
+	)
+
 	keyPath := dir + "/key.pem"
 	certPath := dir + "/cert.pem"
+
+	signatureAggregatorConfig := baseConfig
 	signatureAggregatorConfig.TLSCertPath = certPath
 	signatureAggregatorConfig.TLSKeyPath = keyPath
 
@@ -71,20 +79,19 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		signatureAggregatorConfigPath,
 		signatureAggregatorConfig,
 	)
-	defer signatureAggregatorCancel()
 
 	// Wait for signature-aggregator to start up
 	log.Println("Waiting for the signature-aggregator to start up")
 	startupCtx, startupCancel := context.WithTimeout(ctx, 15*time.Second)
 	defer startupCancel()
 	testUtils.WaitForChannelClose(startupCtx, readyChan)
-	signatureAggregatorCancel()
 
 	cert, err := staking.LoadTLSCertFromFiles(keyPath, certPath)
 	Expect(err).Should(BeNil())
 	peerCert, err := staking.ParseCertificate(cert.Leaf.Raw)
 	Expect(err).Should(BeNil())
 	nodeID := ids.NodeIDFromCert(peerCert)
+
 	signatureAggregatorCancel()
 	log.Println("Retrieved nodeID", "nodeID", nodeID)
 
@@ -130,20 +137,6 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		}
 	}
 
-	// start sig-agg again with the same TLS cert
-	signatureAggregatorCancel, readyChan = testUtils.RunSignatureAggregatorExecutable(
-		ctx,
-		signatureAggregatorConfigPath,
-		signatureAggregatorConfig,
-	)
-	defer signatureAggregatorCancel()
-
-	// Wait for signature-aggregator to start up
-	log.Println("Waiting for the signature-aggregator to start up")
-	startupCtx, startupCancel = context.WithTimeout(ctx, 15*time.Second)
-	defer startupCancel()
-	testUtils.WaitForChannelClose(startupCtx, readyChan)
-
 	// End setup step
 
 	requestURL := fmt.Sprintf("http://localhost:%d%s", signatureAggregatorConfig.APIPort, api.APIPath)
@@ -155,7 +148,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		Timeout: 20 * time.Second,
 	}
 
-	var sendRequestToAPI = func() {
+	var sendRequestToAPI = func(success bool) {
 		b, err := json.Marshal(reqBody)
 		Expect(err).Should(BeNil())
 		bodyReader := bytes.NewReader(b)
@@ -166,6 +159,12 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 
 		res, err := client.Do(req)
 		Expect(err).Should(BeNil())
+
+		if !success {
+			Expect(res.Status).ShouldNot(Equal("200 OK"))
+			return
+		}
+
 		Expect(res.Status).Should(Equal("200 OK"))
 		Expect(res.Header.Get("Content-Type")).Should(Equal("application/json"))
 
@@ -185,5 +184,37 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		Expect(signedMessage.ID()).Should(Equal(warpMessage.ID()))
 	}
 
-	sendRequestToAPI()
+	// start sig-agg again with a floating TLS cert - this should fail
+	log.Println("Starting the signature aggregator with a floating TLS cert")
+	signatureAggregatorCancel, readyChan = testUtils.RunSignatureAggregatorExecutable(
+		ctx,
+		baseConfigPath,
+		baseConfig,
+	)
+
+	// Wait for signature-aggregator to start up
+	log.Println("Waiting for the signature-aggregator to start up")
+	startupCtx, startupCancel = context.WithTimeout(ctx, 15*time.Second)
+	defer startupCancel()
+	testUtils.WaitForChannelClose(startupCtx, readyChan)
+
+	sendRequestToAPI(false)
+	signatureAggregatorCancel()
+
+	// start sig-agg again with the same TLS cert
+	log.Println("Starting the signature aggregator with the same TLS cert")
+	signatureAggregatorCancel, readyChan = testUtils.RunSignatureAggregatorExecutable(
+		ctx,
+		signatureAggregatorConfigPath,
+		signatureAggregatorConfig,
+	)
+	defer signatureAggregatorCancel()
+
+	// Wait for signature-aggregator to start up
+	log.Println("Waiting for the signature-aggregator to start up")
+	startupCtx, startupCancel = context.WithTimeout(ctx, 15*time.Second)
+	defer startupCancel()
+	testUtils.WaitForChannelClose(startupCtx, readyChan)
+
+	sendRequestToAPI(true)
 }
