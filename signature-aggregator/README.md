@@ -22,7 +22,8 @@ Namely:
 - `AllowPrivateIPs` bool (optional)
 - `TrackedSubnetIDs` []string (optional)
 - `ManuallyTrackedPeers` []PeerConfig
--
+- `TLSCertPath` string (optional)
+- `TLSKeyPath` string (optional)
 
 Sample config that can be used for local testing is `signature-aggregator/sample-signature-aggregator-config.json`
 
