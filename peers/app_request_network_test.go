@@ -177,7 +177,7 @@ func TestTrackSubnets(t *testing.T) {
 		metrics:            metrics,
 		manager:            snowVdrs.NewManager(),
 		lruSubnets:         linked.NewHashmapWithSize[ids.ID, interface{}](maxNumSubnets),
-		lock:               new(sync.Mutex),
+		validatorSetLock:   new(sync.Mutex),
 		trackedSubnetsLock: new(sync.RWMutex),
 	}
 	require.Zero(t, arNetwork.trackedSubnets.Len())
