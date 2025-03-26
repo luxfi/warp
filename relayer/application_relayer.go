@@ -88,6 +88,10 @@ func NewApplicationRelayer(
 	if sourceBlockchain.GetSubnetID() == constants.PrimaryNetworkID && !warpConfig.RequirePrimaryNetworkSigners {
 		// If the message originates from the primary network, and the primary network is validated by
 		// the destination subnet we can "self-sign" the message using the validators of the destination subnet.
+		logger.Info(
+			"Self-signing message originating from primary network",
+			zap.String("destinationBlockchainID", relayerID.DestinationBlockchainID.String()),
+		)
 		signingSubnet = cfg.GetSubnetID(relayerID.DestinationBlockchainID)
 	} else {
 		// Otherwise, the source subnet signs the message.
