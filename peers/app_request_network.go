@@ -27,6 +27,7 @@ import (
 	vdrs "github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/subnets"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/linked"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -78,6 +79,7 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
+	NumConnectedPeers() int
 }
 
 type appRequestNetwork struct {
@@ -182,7 +184,17 @@ func NewNetwork(
 	nodeID := ids.NodeIDFromCert(parsedCert)
 	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
-	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler)
+	// Set the activation time for the latest network upgrade
+	upgradeTime := upgrade.InitiallyActiveTime
+	switch networkID {
+	case constants.MainnetID:
+		upgradeTime = upgrade.Mainnet.FortunaTime
+	case constants.FujiID:
+		upgradeTime = upgrade.Fuji.FortunaTime
+	default:
+	}
+
+	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler, upgradeTime)
 	if err != nil {
 		logger.Error(
 			"Failed to create test network",
@@ -449,6 +461,10 @@ func (n *appRequestNetwork) Send(
 	allower subnets.Allower,
 ) set.Set[ids.NodeID] {
 	return n.network.Send(msg, avagoCommon.SendConfig{NodeIDs: nodeIDs}, subnetID, allower)
+}
+
+func (n *appRequestNetwork) NumConnectedPeers() int {
+	return len(n.network.PeerInfo(nil))
 }
 
 func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
