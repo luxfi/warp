@@ -20,7 +20,26 @@
         "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf": {
           "message-format": "teleporter",
           "settings": {
-            "reward-address": "0x5072..."
+            "reward-address": "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
+          }
+        }
+      }
+    },
+    {
+      "subnet-id": "ie1wUBR2bQDPkGCRf2CBVzmP55eSiyJsFYqeGXnTYt2r33aKW",
+      "blockchain-id": "y97omoP2cSyEVfdSztQHXD9EnfnVP9YKjZwAxhUfGbLAPYT9t",
+      "vm": "evm",
+      "rpc-endpoint": {
+        "base-url": "https://subnets.avax.network/beam/testnet/rpc"
+      },
+      "ws-endpoint": {
+        "base-url": "wss://subnets.avax.network/beam/testnet/ws"
+      },
+      "message-contracts": {
+        "0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf": {
+          "message-format": "teleporter",
+          "settings": {
+            "reward-address": "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
           }
         }
       }
@@ -28,13 +47,23 @@
   ],
   "destination-blockchains": [
     {
-      "subnet-id": "7WtoAMPhrmh5KosDUsFL9yTcvw7YSxiKHPpdfs4JsgW47oZT5",
-      "blockchain-id": "2D8RG4UpSXbPbvPCAWppNJyqTG2i2CAXSkTgmTBBvs7GKNZjsY",
+      "subnet-id": "ie1wUBR2bQDPkGCRf2CBVzmP55eSiyJsFYqeGXnTYt2r33aKW",
+      "blockchain-id": "y97omoP2cSyEVfdSztQHXD9EnfnVP9YKjZwAxhUfGbLAPYT9t",
       "vm": "evm",
       "rpc-endpoint": {
-        "base-url": "https://subnets.avax.network/dispatch/testnet/rpc"
+        "base-url": "https://subnets.avax.network/beam/testnet/rpc"
       },
-      "account-private-key": "0x7493..."
+      "account-private-key": "56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"
+    },
+    {
+      "subnet-id": "11111111111111111111111111111111LpoYY",
+      "blockchain-id": "yH8D7ThNJkxmtkuv2jgBa4P1Rn3Qpr4pPr7QYNfcdoS6k6HWp",
+      "vm": "evm",
+      "rpc-endpoint": {
+        "base-url": "https://api.avax-test.network/ext/bc/C/rpc"
+      },
+      "account-private-key": "56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"
     }
-  ]
+  ],
+  "log-level": "debug"
 }
