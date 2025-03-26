@@ -185,16 +185,15 @@ func NewNetwork(
 	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
 	// Set the activation time for the latest network upgrade
-	upgradeTime := upgrade.InitiallyActiveTime
-	switch networkID {
-	case constants.MainnetID:
-		upgradeTime = upgrade.Mainnet.FortunaTime
-	case constants.FujiID:
-		upgradeTime = upgrade.Fuji.FortunaTime
-	default:
-	}
+	upgradeTime := upgrade.GetConfig(networkID).FortunaTime
 
-	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler, upgradeTime)
+	testNetwork, err := network.NewTestNetwork(
+		logger,
+		networkMetrics,
+		testNetworkConfig,
+		handler,
+		upgradeTime,
+	)
 	if err != nil {
 		logger.Error(
 			"Failed to create test network",
