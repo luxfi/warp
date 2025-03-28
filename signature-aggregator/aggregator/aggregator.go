@@ -324,6 +324,11 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				continue
 			}
 
+			// Do not query explicitly excluded validators
+			if excludedValidators.Contains(i) {
+				continue
+			}
+
 			// Add connected nodes to the request
 			for _, nodeID := range vdr.NodeIDs {
 				if connectedValidators.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
