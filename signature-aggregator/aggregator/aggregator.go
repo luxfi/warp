@@ -217,6 +217,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// Find the corresponding canonical validator set index for each of these, and add to the exlusion list
 	// if ALL of the Node IDs for a validator have Balance = 0
 	if isL1 {
+		s.logger.Debug("Checking L1 validators for zero balance nodes")
 		l1Validators, err := s.pChainClient.GetCurrentL1Validators(context.Background(), signingSubnet, nil, s.pChainClientOptions...)
 		if err != nil {
 			s.logger.Error(
@@ -229,6 +230,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zeroBalanceNodes := set.NewSet[ids.NodeID](0)
 		for _, validator := range l1Validators {
 			if validator.Balance == 0 {
+				s.logger.Debug("Node has zero balance", zap.String("nodeID", validator.NodeID.String()))
 				zeroBalanceNodes.Add(validator.NodeID)
 			}
 		}
@@ -239,6 +241,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				if !zeroBalanceNodes.Contains(nodeID) {
 					break
 				}
+				s.logger.Debug(
+					"Excluding validator",
+					zap.Any("nodeIDs", validator.NodeIDs),
+				)
 				excludedValidators.Add(i)
 			}
 		}
@@ -326,6 +332,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 			// Do not query explicitly excluded validators
 			if excludedValidators.Contains(i) {
+				s.logger.Debug(
+					"Excluded nodes from request",
+					zap.Any("nodeID", vdr.NodeIDs),
+				)
 				continue
 			}
 
