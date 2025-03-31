@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -29,6 +30,9 @@ var (
 
 const (
 	DefaultRPCTimeout = 5 * time.Second
+	// Re-exposing DefaultAppRequestTimeout for use by message creators to set deadlines
+	DefaultAppRequestTimeout          = constants.DefaultNetworkMaximumTimeout
+	DefaultCreateSignedMessageTimeout = DefaultRPCTimeout + DefaultAppRequestTimeout
 )
 
 //
