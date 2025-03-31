@@ -29,9 +29,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
-	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/signature-aggregator/aggregator/cache"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
@@ -81,7 +79,8 @@ func NewSignatureAggregator(
 	messageCreator message.Creator,
 	signatureCacheSize uint64,
 	metrics *metrics.SignatureAggregatorMetrics,
-	pChainAPIConfig *config.APIConfig,
+	pChainClient platformvm.Client,
+	pChainClientOptions []rpc.Option,
 ) (*SignatureAggregator, error) {
 	cache, err := cache.NewCache(signatureCacheSize, logger)
 	if err != nil {
@@ -98,8 +97,8 @@ func NewSignatureAggregator(
 		currentRequestID:        atomic.Uint32{},
 		cache:                   cache,
 		messageCreator:          messageCreator,
-		pChainClient:            platformvm.NewClient(pChainAPIConfig.BaseURL),
-		pChainClientOptions:     peerUtils.InitializeOptions(pChainAPIConfig),
+		pChainClient:            pChainClient,
+		pChainClientOptions:     pChainClientOptions,
 	}
 	sa.currentRequestID.Store(rand.Uint32())
 	return &sa, nil
