@@ -50,6 +50,8 @@ const (
 	// a given subnetID
 	connectToValidatorsTimeout = 5 * time.Second
 
+	// The minimum balance that an L1 validator must maintain in order to participate
+	// in the aggregate signature.
 	minimumL1ValidatorBalance = 2048 * units.NanoAvax
 )
 
@@ -231,10 +233,17 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			)
 			return nil, err
 		}
-		fundedNodes := set.NewSet[ids.NodeID](0)
+
+		// Set of unfunded L1 validator nodes
+		unfundedNodes := set.NewSet[ids.NodeID](0)
 		for _, validator := range l1Validators {
-			if uint64(validator.Balance) > minimumL1ValidatorBalance {
-				fundedNodes.Add(validator.NodeID)
+			s.logger.Debug(
+				"Node has balance",
+				zap.String("nodeID", validator.NodeID.String()),
+				zap.Uint64("balance", uint64(validator.Balance)),
+			)
+			if uint64(validator.Balance) <= minimumL1ValidatorBalance {
+				unfundedNodes.Add(validator.NodeID)
 			} else {
 				s.logger.Debug(
 					"Node has insufficient balance",
@@ -244,11 +253,14 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			}
 		}
 
-		// Only exclude a canonical validator if none of its nodes have sufficient balance
+		// Only exclude a canonical validator if all of its nodes are unfunded L1 validators.
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			exclude := true
 			for _, nodeID := range validator.NodeIDs {
-				if fundedNodes.Contains(nodeID) {
+				// This check will pass if either
+				// 1) the node is an L1 validator with insufficient balance or
+				// 2) the node is a non-L1 (legacy) validator
+				if !unfundedNodes.Contains(nodeID) {
 					exclude = false
 					break
 				}
