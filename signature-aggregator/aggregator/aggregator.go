@@ -220,7 +220,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	excludedValidators := set.NewSet[int](0)
 
 	// Fetch L1 validators and find the node IDs with Balance = 0
-	// Find the corresponding canonical validator set index for each of these, and add to the exlusion list
+	// Find the corresponding canonical validator set index for each of these, and add to the exclusion list
 	// if ALL of the node IDs for a validator have Balance = 0
 	if isL1 {
 		s.logger.Debug("Checking L1 validators for zero balance nodes")
@@ -279,6 +279,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	if cachedSignatures, ok := s.cache.Get(unsignedMessage.ID()); ok {
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			cachedSignature, found := cachedSignatures[cache.PublicKeyBytes(validator.PublicKeyBytes)]
+			// Do not include explicitly excluded validators in the aggregation
 			if found && !excludedValidators.Contains(i) {
 				signatureMap[i] = cachedSignature
 				accumulatedSignatureWeight.Add(
@@ -355,16 +356,8 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				continue
 			}
 
-			// Do not query explicitly excluded validators
-			if excludedValidators.Contains(i) {
-				s.logger.Debug(
-					"Excluded nodes from request",
-					zap.Any("nodeID", vdr.NodeIDs),
-				)
-				continue
-			}
-
-			// Add connected nodes to the request
+			// Add connected nodes to the request. We still query excludedValidators so that we may cache
+			// their signatures for future requests.
 			for _, nodeID := range vdr.NodeIDs {
 				if connectedValidators.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
 					vdrSet.Add(nodeID)
@@ -539,7 +532,10 @@ func (s *SignatureAggregator) handleResponse(
 
 	validator, vdrIndex := connectedValidators.GetValidator(nodeID)
 	signature, valid := s.isValidSignatureResponse(unsignedMessage, response, validator.PublicKey)
-	if valid && !excludedValidators.Contains(vdrIndex) {
+	// Cache any valid signature, but only include in the aggregation if the validator is not explicitly
+	// excluded, that way we can use the cached signature on future requests if the validator is
+	// no longer excluded
+	if valid {
 		s.logger.Debug(
 			"Got valid signature response",
 			zap.String("nodeID", nodeID.String()),
@@ -547,13 +543,15 @@ func (s *SignatureAggregator) handleResponse(
 			zap.String("warpMessageID", unsignedMessage.ID().String()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 		)
-		signatureMap[vdrIndex] = signature
 		s.cache.Add(
 			unsignedMessage.ID(),
 			cache.PublicKeyBytes(validator.PublicKeyBytes),
 			cache.SignatureBytes(signature),
 		)
-		accumulatedSignatureWeight.Add(accumulatedSignatureWeight, new(big.Int).SetUint64(validator.Weight))
+		if !excludedValidators.Contains(vdrIndex) {
+			signatureMap[vdrIndex] = signature
+			accumulatedSignatureWeight.Add(accumulatedSignatureWeight, new(big.Int).SetUint64(validator.Weight))
+		}
 	} else {
 		s.logger.Debug(
 			"Got invalid signature response",
