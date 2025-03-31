@@ -217,9 +217,9 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	signatureMap := make(map[int][bls.SignatureLen]byte)
 	excludedValidators := set.NewSet[int](0)
 
-	// Fetch L1 validators and find the Node IDs with Balance = 0
+	// Fetch L1 validators and find the node IDs with Balance = 0
 	// Find the corresponding canonical validator set index for each of these, and add to the exlusion list
-	// if ALL of the Node IDs for a validator have Balance = 0
+	// if ALL of the node IDs for a validator have Balance = 0
 	if isL1 {
 		s.logger.Debug("Checking L1 validators for zero balance nodes")
 		l1Validators, err := s.pChainClient.GetCurrentL1Validators(pChainCtx, signingSubnet, nil, s.pChainClientOptions...)
