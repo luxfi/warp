@@ -235,7 +235,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			}
 		}
 
-		// Find all the canonical validators that have all their Node IDs in the zeroBalanceNodes set
+		// Find all the canonical validators that have all their node IDs in the zeroBalanceNodes set
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			for _, nodeID := range validator.NodeIDs {
 				if !zeroBalanceNodes.Contains(nodeID) {
