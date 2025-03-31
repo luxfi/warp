@@ -19,11 +19,13 @@ import (
 	"github.com/ava-labs/avalanchego/network/peer"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
 	offchainregistry "github.com/ava-labs/icm-services/messages/off-chain-registry"
 	"github.com/ava-labs/icm-services/messages/teleporter"
 	"github.com/ava-labs/icm-services/peers"
+	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/relayer"
 	"github.com/ava-labs/icm-services/relayer/api"
 	"github.com/ava-labs/icm-services/relayer/checkpoint"
@@ -237,7 +239,8 @@ func main() {
 		sigAggMetrics.NewSignatureAggregatorMetrics(
 			prometheus.DefaultRegisterer,
 		),
-		cfg.GetPChainAPI(),
+		platformvm.NewClient(cfg.GetPChainAPI().BaseURL),
+		peerUtils.InitializeOptions(cfg.GetPChainAPI()),
 	)
 	if err != nil {
 		logger.Fatal("Failed to create signature aggregator", zap.Error(err))
