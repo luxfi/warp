@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/config"
@@ -48,6 +49,8 @@ const (
 	// Maximum amount of time to spend waiting for a connection to a quorum of validators for
 	// a given subnetID
 	connectToValidatorsTimeout = 5 * time.Second
+
+	minimumL1ValidatorBalance = 2048 * units.NanoAvax
 )
 
 var (
@@ -190,9 +193,12 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, err
 	}
 
+	pChainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	isL1 := false
 	if signingSubnet != constants.PrimaryNetworkID {
-		subnet, err := s.pChainClient.GetSubnet(context.Background(), signingSubnet, s.pChainClientOptions...)
+		subnet, err := s.pChainClient.GetSubnet(pChainCtx, signingSubnet, s.pChainClientOptions...)
 		if err != nil {
 			s.logger.Error(
 				"Failed to get subnet",
@@ -201,9 +207,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			)
 			return nil, err
 		}
-		if subnet.ConversionID != ids.Empty {
-			isL1 = true
-		}
+		isL1 = subnet.ConversionID != ids.Empty
 	}
 
 	// Tracks all collected signatures.
@@ -218,7 +222,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// if ALL of the Node IDs for a validator have Balance = 0
 	if isL1 {
 		s.logger.Debug("Checking L1 validators for zero balance nodes")
-		l1Validators, err := s.pChainClient.GetCurrentL1Validators(context.Background(), signingSubnet, nil, s.pChainClientOptions...)
+		l1Validators, err := s.pChainClient.GetCurrentL1Validators(pChainCtx, signingSubnet, nil, s.pChainClientOptions...)
 		if err != nil {
 			s.logger.Error(
 				"Failed to get L1 validators",
@@ -227,20 +231,29 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			)
 			return nil, err
 		}
-		zeroBalanceNodes := set.NewSet[ids.NodeID](0)
+		fundedNodes := set.NewSet[ids.NodeID](0)
 		for _, validator := range l1Validators {
-			if validator.Balance == 0 {
-				s.logger.Debug("Node has zero balance", zap.String("nodeID", validator.NodeID.String()))
-				zeroBalanceNodes.Add(validator.NodeID)
+			if uint64(validator.Balance) > minimumL1ValidatorBalance {
+				fundedNodes.Add(validator.NodeID)
+			} else {
+				s.logger.Debug(
+					"Node has insufficient balance",
+					zap.String("nodeID", validator.NodeID.String()),
+					zap.Uint64("balance", uint64(validator.Balance)),
+				)
 			}
 		}
 
-		// Find all the canonical validators that have all their Node IDs in the zeroBalanceNodes set
+		// Only exclude a canonical validator if none of its nodes have sufficient balance
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
+			exclude := true
 			for _, nodeID := range validator.NodeIDs {
-				if !zeroBalanceNodes.Contains(nodeID) {
+				if fundedNodes.Contains(nodeID) {
+					exclude = false
 					break
 				}
+			}
+			if exclude {
 				s.logger.Debug(
 					"Excluding validator",
 					zap.Any("nodeIDs", validator.NodeIDs),
