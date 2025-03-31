@@ -158,6 +158,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 }
 
 func (s *SignatureAggregator) CreateSignedMessage(
+	ctx context.Context,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	justification []byte,
 	inputSigningSubnet ids.ID,
@@ -195,12 +196,9 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, err
 	}
 
-	pChainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	isL1 := false
 	if signingSubnet != constants.PrimaryNetworkID {
-		subnet, err := s.pChainClient.GetSubnet(pChainCtx, signingSubnet, s.pChainClientOptions...)
+		subnet, err := s.pChainClient.GetSubnet(ctx, signingSubnet, s.pChainClientOptions...)
 		if err != nil {
 			s.logger.Error(
 				"Failed to get subnet",
@@ -224,7 +222,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// if ALL of the node IDs for a validator have Balance = 0
 	if isL1 {
 		s.logger.Debug("Checking L1 validators for zero balance nodes")
-		l1Validators, err := s.pChainClient.GetCurrentL1Validators(pChainCtx, signingSubnet, nil, s.pChainClientOptions...)
+		l1Validators, err := s.pChainClient.GetCurrentL1Validators(ctx, signingSubnet, nil, s.pChainClientOptions...)
 		if err != nil {
 			s.logger.Error(
 				"Failed to get L1 validators",
@@ -323,7 +321,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	outMsg, err := s.messageCreator.AppRequest(
 		unsignedMessage.SourceChainID,
 		requestID,
-		peers.DefaultAppRequestTimeout,
+		utils.DefaultAppRequestTimeout,
 		reqBytes,
 	)
 	if err != nil {
