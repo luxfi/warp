@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -177,7 +178,11 @@ func signatureAggregationAPIHandler(
 			}
 		}
 
+		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
+		defer cancel()
+
 		signedMessage, err := aggregator.CreateSignedMessage(
+			ctx,
 			message,
 			justification,
 			signingSubnetID,
