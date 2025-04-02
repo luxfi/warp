@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	retryTimeout   = 10 * time.Second
-	warpAPITimeout = utils.DefaultRPCTimeout + peers.DefaultAppRequestTimeout
+	retryTimeout = 10 * time.Second
 )
 
 // Errors
@@ -209,7 +208,11 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 
 	// sourceWarpSignatureClient is nil iff the source blockchain is configured to fetch signatures via AppRequest
 	if r.sourceWarpSignatureClient == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
+		defer cancel()
+
 		signedMessage, err = r.signatureAggregator.CreateSignedMessage(
+			ctx,
 			unsignedMessage,
 			nil,
 			r.signingSubnetID,
@@ -275,7 +278,7 @@ func (r *ApplicationRelayer) createSignedMessage(
 		signedWarpMessageBytes hexutil.Bytes
 		err                    error
 	)
-	cctx, cancel := context.WithTimeout(context.Background(), warpAPITimeout)
+	cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
 	defer cancel()
 	operation := func() error {
 		return r.sourceWarpSignatureClient.CallContext(
