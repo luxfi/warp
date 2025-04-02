@@ -512,3 +512,60 @@ func TestCountSuppliedSubnets(t *testing.T) {
 	}
 	require.Equal(t, 2, config.countSuppliedSubnets())
 }
+
+func TestInitializeTrackedSubnets(t *testing.T) {
+	sourceSubnetID1 := ids.GenerateTestID()
+	sourceSubnetID2 := ids.GenerateTestID()
+	destSubnetID1 := ids.GenerateTestID()
+	destSubnetID2 := ids.GenerateTestID()
+
+	destBlockchainID1 := ids.GenerateTestID()
+	destBlockchainID2 := ids.GenerateTestID()
+
+	cfg := &Config{
+		SourceBlockchains: []*SourceBlockchain{
+			{
+				subnetID: sourceSubnetID1,
+				SupportedDestinations: []*SupportedDestination{
+					&SupportedDestination{
+						BlockchainID: destBlockchainID1.String(),
+					},
+				},
+			},
+			{
+				subnetID: sourceSubnetID2,
+				SupportedDestinations: []*SupportedDestination{
+					&SupportedDestination{
+						BlockchainID: destBlockchainID2.String(),
+					},
+				},
+			},
+		},
+		DestinationBlockchains: []*DestinationBlockchain{
+			{
+				subnetID:     destSubnetID1,
+				blockchainID: destBlockchainID1,
+				warpConfig: WarpConfig{
+					RequirePrimaryNetworkSigners: false,
+				},
+			},
+			{
+				subnetID:     destSubnetID2,
+				blockchainID: destBlockchainID2,
+				warpConfig: WarpConfig{
+					RequirePrimaryNetworkSigners: true,
+				},
+			},
+		},
+	}
+
+	err := cfg.initializeTrackedSubnets()
+	require.NoError(t, err)
+
+	expectedSubnets := set.NewSet[ids.ID](3)
+	expectedSubnets.Add(sourceSubnetID1)
+	expectedSubnets.Add(sourceSubnetID2)
+	expectedSubnets.Add(destSubnetID1)
+
+	require.True(t, expectedSubnets.Equals(cfg.GetTrackedSubnets()))
+}
