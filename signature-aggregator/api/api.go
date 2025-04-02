@@ -190,8 +190,8 @@ func signatureAggregationAPIHandler(
 			quorumPercentage,
 		)
 		if err != nil {
+			logger.Warn("Failed to aggregate signatures", zap.Error(err))
 			msg := fmt.Errorf("Failed to aggregate signatures. Error: %w", err).Error()
-			logger.Warn(msg)
 			writeJSONError(logger, w, http.StatusInternalServerError, msg)
 			return
 		}
