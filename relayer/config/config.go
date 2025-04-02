@@ -5,6 +5,7 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/url"
@@ -59,16 +60,19 @@ type Config struct {
 	DBWriteIntervalSeconds          uint64                   `mapstructure:"db-write-interval-seconds" json:"db-write-interval-seconds"` //nolint:lll
 	PChainAPI                       *basecfg.APIConfig       `mapstructure:"p-chain-api" json:"p-chain-api"`
 	InfoAPI                         *basecfg.APIConfig       `mapstructure:"info-api" json:"info-api"`
-	SourceBlockchains               []*SourceBlockchain      `mapstructure:"source-blockchains" json:"source-blockchains"`
+	SourceBlockchains               []*SourceBlockchain      `mapstructure:"source-blockchains" json:"source-blockchains"`           //nolint:lll
 	DestinationBlockchains          []*DestinationBlockchain `mapstructure:"destination-blockchains" json:"destination-blockchains"` //nolint:lll
 	ProcessMissedBlocks             bool                     `mapstructure:"process-missed-blocks" json:"process-missed-blocks"`     //nolint:lll
 	DeciderURL                      string                   `mapstructure:"decider-url" json:"decider-url"`
-	SignatureCacheSize              uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`     //nolint: lll
+	SignatureCacheSize              uint64                   `mapstructure:"signature-cache-size" json:"signature-cache-size"`     //nolint:lll
 	ManuallyTrackedPeers            []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"` //nolint:lll
 	AllowPrivateIPs                 bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
+	TLSCertPath                     string                   `mapstructure:"tls-cert-path" json:"tls-cert-path,omitempty"` //nolint:lll
+	TLSKeyPath                      string                   `mapstructure:"tls-key-path" json:"tls-key-path,omitempty"`
 	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds"` // nolint:lll
 
 	// convenience field to fetch a blockchain's subnet ID
+	tlsCert                *tls.Certificate
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	overwrittenOptions     []string
 	trackedSubnets         set.Set[ids.ID]
@@ -213,7 +217,7 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 }
 
 // Initializes Warp configurations (quorum and self-signing settings) for each destination subnet
-func (c *Config) InitializeWarpConfigs() error {
+func (c *Config) initializeWarpConfigs() error {
 	// Fetch the Warp config values for each destination subnet.
 	for _, destinationSubnet := range c.DestinationBlockchains {
 		err := destinationSubnet.initializeWarpConfigs()
@@ -227,6 +231,35 @@ func (c *Config) InitializeWarpConfigs() error {
 	}
 
 	return nil
+}
+
+// Initializes the tracked subnets list. This should only be called after the configuration has been validated and
+// [Config.initializeWarpConfigs] has been called
+func (c *Config) initializeTrackedSubnets() error {
+	for _, sourceBlockchain := range c.SourceBlockchains {
+		c.trackedSubnets.Add(sourceBlockchain.GetSubnetID())
+	}
+	for _, destinationBlockchain := range c.DestinationBlockchains {
+		warpCfg, err := c.GetWarpConfig(destinationBlockchain.GetBlockchainID())
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get warp config for destination blockchain %s: %w",
+				destinationBlockchain.GetBlockchainID(),
+				err,
+			)
+		}
+		if !warpCfg.RequirePrimaryNetworkSigners {
+			c.trackedSubnets.Add(destinationBlockchain.GetSubnetID())
+		}
+	}
+	return nil
+}
+
+func (c *Config) Initialize() error {
+	if err := c.initializeWarpConfigs(); err != nil {
+		return err
+	}
+	return c.initializeTrackedSubnets()
 }
 
 func (c *Config) HasOverwrittenOptions() bool {
@@ -243,7 +276,7 @@ func (c *Config) GetOverwrittenOptions() []string {
 
 func (c *Config) GetWarpConfig(blockchainID ids.ID) (WarpConfig, error) {
 	for _, s := range c.DestinationBlockchains {
-		if blockchainID.String() == s.BlockchainID {
+		if blockchainID == s.GetBlockchainID() {
 			return s.warpConfig, nil
 		}
 	}
@@ -266,4 +299,8 @@ func (c *Config) GetAllowPrivateIPs() bool {
 
 func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 	return c.trackedSubnets
+}
+
+func (c *Config) GetTLSCert() *tls.Certificate {
+	return c.tlsCert
 }
