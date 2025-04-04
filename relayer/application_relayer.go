@@ -271,6 +271,7 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 	// No delays are implemented between retries since the failure scenario here involves timing differences
 	// and the signature aggregator will not re-query the individual validators from which it has already acquired the signatures.
 	for i := 0; i < maxRetryCount; i++ {
+		startProcessMessageTime := time.Now()
 		txHash, err = r.processMessage(handler)
 		if err == nil {
 			return txHash, nil
@@ -278,6 +279,7 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 		r.logger.Warn(
 			"failed to process message",
 			zap.Int("attempt", i+1),
+			zap.Int64("latencyMS", time.Since(startProcessMessageTime).Milliseconds()),
 			zap.Error(err),
 		)
 	}
