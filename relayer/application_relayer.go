@@ -35,7 +35,7 @@ const (
 	// signatures from the verifying chain's required quorum threshold. This
 	// allows for small weight changes in between the time the signature is constructed
 	// and the time it is verified to not cause the verification to fail.
-	quorumThresholdBufferPercentage = 3
+	quorumThresholdBufferPercentage = uint64(3)
 )
 
 // Errors
@@ -322,7 +322,7 @@ func (r *ApplicationRelayer) createSignedMessage(
 			&signedWarpMessageBytes,
 			"warp_getMessageAggregateSignature",
 			unsignedMessage.ID(),
-			r.warpConfig.QuorumNumerator,
+			r.warpConfig.QuorumNumerator+quorumThresholdBufferPercentage,
 			r.signingSubnetID.String(),
 		)
 	}
