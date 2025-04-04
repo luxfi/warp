@@ -269,7 +269,8 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 	// Retry processing the message if it fails to account for cases where the signature is successfully aggregated
 	// but the message fails to verify on the destination chain due to validator churn
 	// No delays are implemented between retries since the failure scenario here involves timing differences
-	// and the signature aggregator will not re-query the individual validators from which it has already acquired the signatures.
+	// and the signature aggregator will not re-query the individual validators from which it has already
+	// acquired the signatures.
 	for i := 0; i < maxRetryCount; i++ {
 		startProcessMessageTime := time.Now()
 		txHash, err = r.processMessage(handler)
