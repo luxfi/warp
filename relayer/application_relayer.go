@@ -30,6 +30,12 @@ import (
 const (
 	retryTimeout  = 10 * time.Second
 	maxRetryCount = 5
+
+	// The additional percentage of stake weight that we will try to aggregate
+	// signatures from the verifying chain's required quorum threshold. This
+	// allows for small weight changes in between the time the signature is constructed
+	// and the time it is verified to not cause the verification to fail.
+	quorumThresholdBufferPercentage = 3
 )
 
 // Errors
@@ -217,7 +223,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 			unsignedMessage,
 			nil,
 			r.signingSubnetID,
-			r.warpConfig.QuorumNumerator,
+			r.warpConfig.QuorumNumerator+quorumThresholdBufferPercentage,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
