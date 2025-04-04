@@ -283,6 +283,7 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 			zap.Int64("latencyMS", time.Since(startProcessMessageTime).Milliseconds()),
 			zap.Error(err),
 		)
+		time.Sleep(2 * time.Second)
 	}
 	r.logger.Error(
 		"failed to process message after max retries",
