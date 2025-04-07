@@ -162,7 +162,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	justification []byte,
 	inputSigningSubnet ids.ID,
 	requiredQuorumPercentage uint64,
-	bufferQuorumPercentage uint64,
+	quorumPercentageBuffer uint64,
 ) (*avalancheWarp.Message, error) {
 	s.logger.Debug("Creating signed message", zap.String("warpMessageID", unsignedMessage.ID().String()))
 	var signingSubnet ids.ID
@@ -290,7 +290,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		signatureMap,
 		accumulatedSignatureWeight,
 		connectedValidators.ValidatorSet.TotalWeight,
-		requiredQuorumPercentage+bufferQuorumPercentage,
+		requiredQuorumPercentage+quorumPercentageBuffer,
 	); err != nil {
 		return nil, err
 	} else if signedMsg != nil {
@@ -416,7 +416,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					signatureMap,
 					excludedValidators,
 					accumulatedSignatureWeight,
-					requiredQuorumPercentage+bufferQuorumPercentage,
+					requiredQuorumPercentage+quorumPercentageBuffer,
 				)
 				if err != nil {
 					// don't increase node failures metric here, because we did
