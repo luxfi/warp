@@ -10,10 +10,14 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/message"
+	"github.com/ava-labs/avalanchego/network/peer"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/icm-services/peers"
+	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/signature-aggregator/aggregator"
 	"github.com/ava-labs/icm-services/signature-aggregator/api"
 	"github.com/ava-labs/icm-services/signature-aggregator/config"
@@ -106,11 +110,21 @@ func main() {
 		panic(err)
 	}
 
+	var manuallyTrackedPeers []info.Peer
+	for _, p := range cfg.ManuallyTrackedPeers {
+		manuallyTrackedPeers = append(manuallyTrackedPeers, info.Peer{
+			Info: peer.Info{
+				PublicIP: p.GetIP(),
+				ID:       p.GetID(),
+			},
+		})
+	}
+
 	network, err := peers.NewNetwork(
 		networkLogger,
 		prometheus.DefaultRegisterer,
 		cfg.GetTrackedSubnets(),
-		nil,
+		manuallyTrackedPeers,
 		&cfg,
 	)
 	if err != nil {
@@ -127,6 +141,8 @@ func main() {
 		messageCreator,
 		cfg.SignatureCacheSize,
 		metricsInstance,
+		platformvm.NewClient(cfg.GetPChainAPI().BaseURL),
+		peerUtils.InitializeOptions(cfg.GetPChainAPI()),
 	)
 	if err != nil {
 		logger.Fatal("Failed to create signature aggregator", zap.Error(err))
