@@ -55,6 +55,7 @@ const (
 
 var (
 	// Errors
+	errInvalidQuorumPercentage = errors.New("invalid total quorum percentage")
 	errNotEnoughSignatures     = errors.New("failed to collect a threshold of signatures")
 	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
@@ -161,8 +162,18 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	justification []byte,
 	inputSigningSubnet ids.ID,
-	quorumPercentage uint64,
+	requiredQuorumPercentage uint64,
+	quorumPercentageBuffer uint64,
 ) (*avalancheWarp.Message, error) {
+	if requiredQuorumPercentage == 0 || requiredQuorumPercentage+quorumPercentageBuffer > 100 {
+		s.logger.Error(
+			"Invalid quorum percentages",
+			zap.Uint64("requiredQuorumPercentage", requiredQuorumPercentage),
+			zap.Uint64("quorumPercentageBuffer", quorumPercentageBuffer),
+		)
+		return nil, errInvalidQuorumPercentage
+	}
+
 	s.logger.Debug("Creating signed message", zap.String("warpMessageID", unsignedMessage.ID().String()))
 	var signingSubnet ids.ID
 	var err error
@@ -185,7 +196,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	connectedValidators, err := s.connectToQuorumValidators(signingSubnet, quorumPercentage)
+	connectedValidators, err := s.connectToQuorumValidators(signingSubnet, requiredQuorumPercentage)
 	if err != nil {
 		s.logger.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -281,12 +292,15 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		}
 		s.metrics.SignatureCacheHits.Add(float64(len(signatureMap)))
 	}
+
+	// Only return early if we have enough signatures to meet the quorum percentage
+	// plus the buffer percentage.
 	if signedMsg, err := s.aggregateIfSufficientWeight(
 		unsignedMessage,
 		signatureMap,
 		accumulatedSignatureWeight,
 		connectedValidators.ValidatorSet.TotalWeight,
-		quorumPercentage,
+		requiredQuorumPercentage+quorumPercentageBuffer,
 	); err != nil {
 		return nil, err
 	} else if signedMsg != nil {
@@ -412,7 +426,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					signatureMap,
 					excludedValidators,
 					accumulatedSignatureWeight,
-					quorumPercentage,
+					requiredQuorumPercentage+quorumPercentageBuffer,
 				)
 				if err != nil {
 					// don't increase node failures metric here, because we did
@@ -431,6 +445,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 						"Created signed message.",
 						zap.String("warpMessageID", unsignedMessage.ID().String()),
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
+						zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
 						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
 					return nil
@@ -441,6 +456,31 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				}
 			}
 		}
+
+		// If we don't have enough signatures to represent the required quorum percentage plus the buffer
+		// percentage after all the expected responses have been received, check if we have enough signatures
+		// for just the required quorum percentage.
+		signedMsg, err = s.aggregateIfSufficientWeight(
+			unsignedMessage,
+			signatureMap,
+			accumulatedSignatureWeight,
+			connectedValidators.ValidatorSet.TotalWeight,
+			requiredQuorumPercentage,
+		)
+		if err != nil {
+			return err
+		}
+		if signedMsg != nil {
+			s.logger.Info(
+				"Created signed message.",
+				zap.String("warpMessageID", unsignedMessage.ID().String()),
+				zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
+				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+				zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
+			)
+			return nil
+		}
+
 		return errNotEnoughSignatures
 	}
 
@@ -452,6 +492,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
 			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			zap.Error(err),
 		)
 		return nil, errNotEnoughSignatures
 	}
