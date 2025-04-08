@@ -140,6 +140,40 @@ func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValid
 	}, validatorSigners
 }
 
+func TestCreateSignedMessageFailsInvalidQuorumPercentage(t *testing.T) {
+	testCases := []struct {
+		name                     string
+		requiredQuorumPercentage uint64
+		quorumPercentageBuffer   uint64
+	}{
+		{
+			name:                     "Zero required quorum percentage",
+			requiredQuorumPercentage: 0,
+			quorumPercentageBuffer:   5,
+		},
+		{
+			name:                     "Quorum percentage above 100",
+			requiredQuorumPercentage: 96,
+			quorumPercentageBuffer:   5,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			aggregator, _, _ := instantiateAggregator(t)
+			signedMsg, err := aggregator.CreateSignedMessage(
+				context.Background(),
+				nil,
+				nil,
+				ids.Empty,
+				tc.requiredQuorumPercentage,
+				tc.quorumPercentageBuffer,
+			)
+			require.Nil(t, signedMsg)
+			require.ErrorIs(t, err, errInvalidQuorumPercentage)
+		})
+	}
+}
+
 func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	aggregator, mockNetwork, _ := instantiateAggregator(t)
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
