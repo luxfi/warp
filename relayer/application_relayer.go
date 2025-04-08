@@ -30,6 +30,11 @@ import (
 const (
 	retryTimeout  = 10 * time.Second
 	maxRetryCount = 5
+
+	// The additional percentage of stake weight that we will try to aggregate signatures from above the required
+	// quorum. This allows for small weight changes in between the time the signature is constructed and the time
+	// it is verified to not cause the verification to fail.
+	defaultQuorumPercentageBuffer = uint64(3)
 )
 
 // Errors
@@ -212,12 +217,17 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
 		defer cancel()
 
+		quorumPercentageBuffer := utils.CalculateQuorumPercentageBuffer(
+			r.warpConfig.QuorumNumerator,
+			defaultQuorumPercentageBuffer,
+		)
 		signedMessage, err = r.signatureAggregator.CreateSignedMessage(
 			ctx,
 			unsignedMessage,
 			nil,
 			r.signingSubnetID,
 			r.warpConfig.QuorumNumerator,
+			quorumPercentageBuffer,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
@@ -309,6 +319,9 @@ func (r *ApplicationRelayer) createSignedMessage(
 	)
 	cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
 	defer cancel()
+
+	// The warp_getMessageAggregateSignature method does not support the optional quorum percentage
+	// buffer, so just use the required quorum percentage here.
 	operation := func() error {
 		return r.sourceWarpSignatureClient.CallContext(
 			cctx,
