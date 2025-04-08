@@ -4,12 +4,16 @@
 package peers
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/peer"
+	snowVdrs "github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
+	"github.com/ava-labs/avalanchego/utils/linked"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -19,6 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+var metrics, _ = newAppRequestNetworkMetrics(prometheus.DefaultRegisterer)
 
 func TestCalculateConnectedWeight(t *testing.T) {
 	vdr1 := makeValidator(t, 10, 1)
@@ -62,7 +68,6 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 	validator1_1 := makeValidator(t, 1, 1)
 	validator2_1 := makeValidator(t, 2, 1)
 	validator3_2 := makeValidator(t, 3, 2)
-	metrics, _ := newAppRequestNetworkMetrics(prometheus.DefaultRegisterer)
 
 	testCases := []struct {
 		name                    string
@@ -159,6 +164,52 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestTrackSubnets(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetwork := avago_mocks.NewMockNetwork(ctrl)
+	mockValidatorClient := validator_mocks.NewMockCanonicalValidatorState(ctrl)
+	arNetwork := appRequestNetwork{
+		network:            mockNetwork,
+		logger:             logging.NoLog{},
+		validatorClient:    mockValidatorClient,
+		metrics:            metrics,
+		manager:            snowVdrs.NewManager(),
+		lruSubnets:         linked.NewHashmapWithSize[ids.ID, interface{}](maxNumSubnets),
+		validatorSetLock:   new(sync.Mutex),
+		trackedSubnetsLock: new(sync.RWMutex),
+	}
+	require.Zero(t, arNetwork.trackedSubnets.Len())
+	require.Zero(t, arNetwork.lruSubnets.Len())
+	mockValidatorClient.EXPECT().GetProposedValidators(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	for range maxNumSubnets {
+		arNetwork.TrackSubnet(ids.GenerateTestID())
+	}
+	require.Equal(t, arNetwork.trackedSubnets.Len(), arNetwork.lruSubnets.Len())
+	require.Equal(t, arNetwork.trackedSubnets.Len(), maxNumSubnets)
+
+	// Add one more subnet, which should evict the oldest subnet
+	newSubnetID := ids.GenerateTestID()
+	oldestSubnetID, _, ok := arNetwork.lruSubnets.Oldest()
+	require.True(t, ok)
+	arNetwork.TrackSubnet(newSubnetID)
+	require.Equal(t, maxNumSubnets, arNetwork.trackedSubnets.Len())
+	require.Equal(t, maxNumSubnets, arNetwork.lruSubnets.Len())
+	require.False(t, arNetwork.trackedSubnets.Contains(oldestSubnetID))
+	_, has := arNetwork.lruSubnets.Get(oldestSubnetID)
+	require.False(t, has)
+
+	it := arNetwork.lruSubnets.NewIterator()
+	require.NotNil(t, it)
+	for range maxNumSubnets {
+		require.True(t, it.Next())
+		subnetID := it.Key()
+		// confirm that they are still in sync
+		require.True(t, arNetwork.trackedSubnets.Contains(subnetID))
+	}
+	// confirm that the iterator is exhausted after maxNumSubnets iterations
+	require.False(t, it.Next())
 }
 
 func makeValidator(t *testing.T, weight uint64, numNodeIDs int) warp.Validator {
