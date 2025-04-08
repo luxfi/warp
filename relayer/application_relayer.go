@@ -264,7 +264,6 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 }
 
 func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (common.Hash, error) {
-	var txHash common.Hash
 	var err error
 	// Retry processing the message if it fails to account for cases where the signature is successfully aggregated
 	// but the message fails to verify on the destination chain due to validator churn
@@ -272,6 +271,7 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 	// and the signature aggregator will not re-query the individual validators from which it has already
 	// acquired the signatures.
 	for i := 0; i < maxRetryCount; i++ {
+		var txHash common.Hash
 		startProcessMessageTime := time.Now()
 		txHash, err = r.processMessage(handler)
 		if err == nil {
