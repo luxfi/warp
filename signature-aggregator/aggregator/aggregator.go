@@ -55,6 +55,7 @@ const (
 
 var (
 	// Errors
+	errInvalidQuorumPercentage = errors.New("invalid total quorum percentage")
 	errNotEnoughSignatures     = errors.New("failed to collect a threshold of signatures")
 	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 )
@@ -164,6 +165,15 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	requiredQuorumPercentage uint64,
 	quorumPercentageBuffer uint64,
 ) (*avalancheWarp.Message, error) {
+	if requiredQuorumPercentage == 0 || requiredQuorumPercentage+quorumPercentageBuffer > 100 {
+		s.logger.Error(
+			"Invalid quorum percentages",
+			zap.Uint64("requiredQuorumPercentage", requiredQuorumPercentage),
+			zap.Uint64("quorumPercentageBuffer", quorumPercentageBuffer),
+		)
+		return nil, errInvalidQuorumPercentage
+	}
+
 	s.logger.Debug("Creating signed message", zap.String("warpMessageID", unsignedMessage.ID().String()))
 	var signingSubnet ids.ID
 	var err error
