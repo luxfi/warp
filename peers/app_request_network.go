@@ -8,6 +8,8 @@ package peers
 
 import (
 	"context"
+	"crypto"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,11 +21,15 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/message"
 	"github.com/ava-labs/avalanchego/network"
+	"github.com/ava-labs/avalanchego/network/peer"
 	avagoCommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	snowVdrs "github.com/ava-labs/avalanchego/snow/validators"
 	vdrs "github.com/ava-labs/avalanchego/snow/validators"
+	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/subnets"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/linked"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/sampler"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -43,10 +49,15 @@ const (
 	InboundMessageChannelSize = 1000
 	ValidatorRefreshPeriod    = time.Second * 5
 	NumBootstrapNodes         = 5
+	// Maximum number of subnets that can be tracked by the app request network
+	// This value is defined in avalanchego peers package
+	// TODO: use the avalanchego constant when it is exported
+	maxNumSubnets = 16
 )
 
 var (
-	errNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
+	errTrackingTooManySubnets  = fmt.Errorf("cannot track more than %d subnets", maxNumSubnets)
 )
 
 type AppRequestNetwork interface {
@@ -68,19 +79,27 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
+	NumConnectedPeers() int
 }
 
 type appRequestNetwork struct {
-	network         network.Network
-	handler         *RelayerExternalHandler
-	infoAPI         *InfoAPI
-	logger          logging.Logger
-	lock            *sync.RWMutex
-	validatorClient validators.CanonicalValidatorState
-	metrics         *AppRequestNetworkMetrics
+	network          network.Network
+	handler          *RelayerExternalHandler
+	infoAPI          *InfoAPI
+	logger           logging.Logger
+	validatorSetLock *sync.Mutex
+	validatorClient  validators.CanonicalValidatorState
+	metrics          *AppRequestNetworkMetrics
 
+	// The set of subnetIDs to track. Shared with the underlying Network object, so access
+	// must be protected by the trackedSubnetsLock
 	trackedSubnets set.Set[ids.ID]
-	manager        vdrs.Manager
+	// invariant: members of lruSubnets should always be exactly the same as trackedSubnets
+	// and the size of lruSubnets should be less than or equal to maxNumSubnets
+	lruSubnets         *linked.Hashmap[ids.ID, interface{}]
+	trackedSubnetsLock *sync.RWMutex
+
+	manager vdrs.Manager
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
@@ -128,11 +147,19 @@ func NewNetwork(
 	manager := snowVdrs.NewManager()
 
 	networkMetrics := prometheus.NewRegistry()
+
+	// Primary network must not be explicitly tracked so removing it prior to creating TestNetworkConfig
+	trackedSubnets.Remove(constants.PrimaryNetworkID)
+	if trackedSubnets.Len() > maxNumSubnets {
+		return nil, errTrackingTooManySubnets
+	}
+	trackedSubnetsLock := new(sync.RWMutex)
 	testNetworkConfig, err := network.NewTestNetworkConfig(
 		networkMetrics,
 		networkID,
 		manager,
 		trackedSubnets,
+		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -142,8 +169,31 @@ func NewNetwork(
 		return nil, err
 	}
 	testNetworkConfig.AllowPrivateIPs = cfg.GetAllowPrivateIPs()
+	// Set the TLS config if exists and log the NodeID
+	var cert *tls.Certificate
+	if cert = cfg.GetTLSCert(); cert != nil {
+		testNetworkConfig.TLSConfig = peer.TLSConfig(*cert, nil)
+		testNetworkConfig.TLSKey = cert.PrivateKey.(crypto.Signer)
+	} else {
+		cert = &testNetworkConfig.TLSConfig.Certificates[0]
+	}
+	parsedCert, err := staking.ParseCertificate(cert.Leaf.Raw)
+	if err != nil {
+		return nil, err
+	}
+	nodeID := ids.NodeIDFromCert(parsedCert)
+	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
-	testNetwork, err := network.NewTestNetwork(logger, networkMetrics, testNetworkConfig, handler)
+	// Set the activation time for the latest network upgrade
+	upgradeTime := upgrade.GetConfig(networkID).FortunaTime
+
+	testNetwork, err := network.NewTestNetwork(
+		logger,
+		networkMetrics,
+		testNetworkConfig,
+		handler,
+		upgradeTime,
+	)
 	if err != nil {
 		logger.Error(
 			"Failed to create test network",
@@ -218,17 +268,23 @@ func NewNetwork(
 	go logger.RecoverAndPanic(func() {
 		testNetwork.Dispatch()
 	})
+	lruSubnets := linked.NewHashmapWithSize[ids.ID, interface{}](maxNumSubnets)
+	for _, subnetID := range trackedSubnets.List() {
+		lruSubnets.Put(subnetID, nil)
+	}
 
 	arNetwork := &appRequestNetwork{
-		network:         testNetwork,
-		handler:         handler,
-		infoAPI:         infoAPI,
-		logger:          logger,
-		lock:            new(sync.RWMutex),
-		validatorClient: validatorClient,
-		metrics:         metrics,
-		trackedSubnets:  trackedSubnets,
-		manager:         manager,
+		network:            testNetwork,
+		handler:            handler,
+		infoAPI:            infoAPI,
+		logger:             logger,
+		validatorSetLock:   new(sync.Mutex),
+		validatorClient:    validatorClient,
+		metrics:            metrics,
+		trackedSubnets:     trackedSubnets,
+		trackedSubnetsLock: trackedSubnetsLock,
+		manager:            manager,
+		lruSubnets:         lruSubnets,
 	}
 
 	arNetwork.startUpdateValidators()
@@ -236,22 +292,33 @@ func NewNetwork(
 	return arNetwork, nil
 }
 
-// Helper to scope read lock acquisition
-func (n *appRequestNetwork) containsSubnet(subnetID ids.ID) bool {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-	return n.trackedSubnets.Contains(subnetID)
+// Helper to scope lock acquisition
+func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) {
+	n.trackedSubnetsLock.Lock()
+	defer n.trackedSubnetsLock.Unlock()
+	if n.trackedSubnets.Contains(subnetID) {
+		// update the access to keep it in the LRU
+		n.lruSubnets.Put(subnetID, nil)
+		return
+	}
+	if n.lruSubnets.Len() >= maxNumSubnets {
+		oldestSubnetID, _, _ := n.lruSubnets.Oldest()
+		if !n.trackedSubnets.Contains(oldestSubnetID) {
+			panic(fmt.Sprintf("SubnetID present in LRU but not in trackedSubnets: %s", oldestSubnetID))
+		}
+		n.trackedSubnets.Remove(oldestSubnetID)
+		n.lruSubnets.Delete(oldestSubnetID)
+		n.logger.Info("Removing LRU subnetID from tracked subnets", zap.Stringer("subnetID", oldestSubnetID))
+	}
+	n.logger.Info("Tracking subnet", zap.Stringer("subnetID", subnetID))
+	n.lruSubnets.Put(subnetID, nil)
+	n.trackedSubnets.Add(subnetID)
 }
 
 // TrackSubnet adds the subnet to the list of tracked subnets
 // and initiates the connections to the subnet's validators asynchronously
 func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
-	if n.containsSubnet(subnetID) {
-		return
-	}
-
-	n.logger.Debug("Tracking subnet", zap.Stringer("subnetID", subnetID))
-	n.trackedSubnets.Add(subnetID)
+	n.trackSubnet(subnetID)
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
@@ -260,12 +327,17 @@ func (n *appRequestNetwork) startUpdateValidators() {
 		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 		ticker := time.NewTicker(ValidatorRefreshPeriod)
 		for ; true; <-ticker.C {
+			n.trackedSubnetsLock.RLock()
+			subnets := n.trackedSubnets.List()
+			n.trackedSubnetsLock.RUnlock()
+
 			n.logger.Debug(
 				"Fetching validators for subnets",
-				zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, n.trackedSubnets.List()...)),
+				zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
 			)
+
 			n.updateValidatorSet(context.Background(), constants.PrimaryNetworkID)
-			for _, subnet := range n.trackedSubnets.List() {
+			for _, subnet := range subnets {
 				n.updateValidatorSet(context.Background(), subnet)
 			}
 		}
@@ -276,8 +348,8 @@ func (n *appRequestNetwork) updateValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
+	n.validatorSetLock.Lock()
+	defer n.validatorSetLock.Unlock()
 
 	// Fetch the subnet validators from the P-Chain
 	validators, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
@@ -329,6 +401,7 @@ func (n *appRequestNetwork) Shutdown() {
 // so we need to track the node ID to validator index mapping
 type ConnectedCanonicalValidators struct {
 	ConnectedWeight       uint64
+	ConnectedNodes        set.Set[ids.NodeID]
 	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
@@ -374,6 +447,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(subnetID ids.ID) (*C
 
 	return &ConnectedCanonicalValidators{
 		ConnectedWeight:       connectedWeight,
+		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
 		NodeValidatorIndexMap: nodeValidatorIndexMap,
 	}, nil
@@ -386,6 +460,10 @@ func (n *appRequestNetwork) Send(
 	allower subnets.Allower,
 ) set.Set[ids.NodeID] {
 	return n.network.Send(msg, avagoCommon.SendConfig{NodeIDs: nodeIDs}, subnetID, allower)
+}
+
+func (n *appRequestNetwork) NumConnectedPeers() int {
+	return len(n.network.PeerInfo(nil))
 }
 
 func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
@@ -421,7 +499,7 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 				connectedValidators.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
-				return errNotEnoughConnectedStake
+				return ErrNotEnoughConnectedStake
 			}
 		}
 		return nil
