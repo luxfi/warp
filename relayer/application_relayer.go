@@ -6,6 +6,7 @@ package relayer
 import (
 	"context"
 	"errors"
+	"runtime"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -22,9 +23,9 @@ import (
 	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"golang.org/x/sync/errgroup"
-
+	_ "go.uber.org/automaxprocs"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -39,6 +40,16 @@ const (
 
 // Errors
 var errFailedToGetAggSig = errors.New("failed to get aggregate signature from node endpoint")
+
+// Global worker pool shared by all ApplicationRelayers
+var workerPool = make(chan struct{}, runtime.GOMAXPROCS(0))
+
+func init() {
+	// Initialize the number of available workers in the pool to GOMAXPROCS
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		workerPool <- struct{}{}
+	}
+}
 
 // CheckpointManager stores committed heights in the database
 type CheckpointManager interface {
@@ -274,6 +285,10 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 }
 
 func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (common.Hash, error) {
+	// Wait for an available worker, and release it on return
+	<-workerPool
+	defer func() { workerPool <- struct{}{} }()
+
 	var err error
 	// Retry processing the message if it fails to account for cases where the signature is successfully aggregated
 	// but the message fails to verify on the destination chain due to validator churn
