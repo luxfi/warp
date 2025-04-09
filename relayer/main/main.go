@@ -521,6 +521,15 @@ func createApplicationRelayersForSourceChain(
 			return nil, 0, err
 		}
 		applicationRelayers[relayerID.ID] = applicationRelayer
+
+		logger.Info(
+			"Created application relayer",
+			zap.String("relayerID", relayerID.ID.String()),
+			zap.String("sourceBlockchainID", relayerID.SourceBlockchainID.String()),
+			zap.String("destinationBlockchainID", relayerID.DestinationBlockchainID.String()),
+			zap.String("originSenderAddress", relayerID.OriginSenderAddress.String()),
+			zap.String("destinationAddress", relayerID.DestinationAddress.String()),
+		)
 	}
 	return applicationRelayers, minHeight, nil
 }
