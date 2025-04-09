@@ -22,9 +22,8 @@ import (
 	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"golang.org/x/sync/errgroup"
-
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -188,10 +187,9 @@ func (r *ApplicationRelayer) ProcessHeight(
 // Relays a message to the destination chain. Does not checkpoint the height.
 // returns the transaction hash if the message is successfully relayed.
 func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (common.Hash, error) {
-	r.logger.Debug(
+	r.logger.Info(
 		"Relaying message",
-		zap.String("sourceBlockchainID", r.sourceBlockchain.BlockchainID),
-		zap.String("relayerID", r.relayerID.ID.String()),
+		zap.Stringer("relayerID", r.relayerID.ID),
 	)
 	shouldSend, err := handler.ShouldSendMessage(r.destinationClient)
 	if err != nil {
@@ -265,8 +263,9 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 	}
 	r.logger.Info(
 		"Finished relaying message to destination chain",
-		zap.String("destinationBlockchainID", r.relayerID.DestinationBlockchainID.String()),
-		zap.String("txHash", txHash.Hex()),
+		zap.Stringer("relayerID", r.relayerID.ID),
+		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
+		zap.Stringer("txHash", txHash),
 	)
 	r.incSuccessfulRelayMessageCount()
 
