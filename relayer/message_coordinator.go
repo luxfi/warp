@@ -255,9 +255,23 @@ func (mc *MessageCoordinator) ProcessBlock(
 			continue
 		}
 		if appRelayer == nil {
-			mc.logger.Debug("Application relayer not found. Skipping message relay")
+			mc.logger.Debug(
+				"Application relayer not found. Skipping message relay",
+				zap.Stringer("warpMessageID", warpLogInfo.UnsignedMessage.ID()),
+				zap.Stringer("sourceBlockchainID", warpLogInfo.UnsignedMessage.SourceChainID),
+				zap.Stringer("originSenderAddress", warpLogInfo.SourceAddress),
+				zap.Stringer("originTxID", warpLogInfo.SourceTxID),
+			)
 			continue
 		}
+		mc.logger.Info(
+			"Registering message handler",
+			zap.Stringer("relayerID", appRelayer.relayerID.ID),
+			zap.Stringer("warpMessageID", warpLogInfo.UnsignedMessage.ID()),
+			zap.Stringer("sourceBlockchainID", warpLogInfo.UnsignedMessage.SourceChainID),
+			zap.Stringer("originSenderAddress", warpLogInfo.SourceAddress),
+			zap.Stringer("originTxID", warpLogInfo.SourceTxID),
+		)
 		messageHandlers[appRelayer.relayerID.ID] = append(messageHandlers[appRelayer.relayerID.ID], handler)
 	}
 	// Initiate message relay of all registered messages
