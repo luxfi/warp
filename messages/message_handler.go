@@ -46,7 +46,6 @@ type MessageHandler interface {
 	SendMessage(signedMessage *warp.Message) (common.Hash, error)
 
 	// GetLogContext returns extra fields to be set in the logger
-	// when passing it along to the signature aggregator
 	GetLogContext() []zap.Field
 
 	// GetUnsignedMessage returns the unsigned message
