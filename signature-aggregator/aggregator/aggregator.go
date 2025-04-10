@@ -148,7 +148,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 		}
 		return nil
 	}
-	err = utils.WithRetriesTimeout(log, connectOp, connectToValidatorsTimeout)
+	err = utils.WithRetriesTimeout(log, connectOp, connectToValidatorsTimeout, "connect to validators")
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +484,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return errNotEnoughSignatures
 	}
 
-	err = utils.WithRetriesTimeout(log, operation, signatureRequestTimeout)
+	err = utils.WithRetriesTimeout(log, operation, signatureRequestTimeout, "request signatures")
 	if err != nil {
 		log.Warn(
 			"Failed to collect a threshold of signatures",
