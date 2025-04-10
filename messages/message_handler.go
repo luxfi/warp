@@ -7,10 +7,10 @@ package messages
 
 import (
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ethereum/go-ethereum/common"
-	"go.uber.org/zap"
 )
 
 // MessageManager is specific to each message protocol. The interface handles choosing which messages to send
@@ -45,8 +45,8 @@ type MessageHandler interface {
 	// returns the transaction hash if the transaction is successful.
 	SendMessage(signedMessage *warp.Message) (common.Hash, error)
 
-	// GetLogContext returns extra fields to be set in the logger
-	GetLogContext() []zap.Field
+	// LoggerWithContext returns a logger with the message context
+	LoggerWithContext(logging.Logger) logging.Logger
 
 	// GetUnsignedMessage returns the unsigned message
 	GetUnsignedMessage() *warp.UnsignedMessage
