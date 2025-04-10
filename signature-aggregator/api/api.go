@@ -35,9 +35,15 @@ type AggregateSignatureRequest struct {
 	Justification string `json:"justification"`
 	// Optional hex or cb58 encoded signing subnet ID. If omitted will default to the subnetID of the source blockchain
 	SigningSubnetID string `json:"signing-subnet-id"`
-	// Optional. Integer from 0 to 100 representing the percentage of the quorum that is required to sign the message
-	// defaults to 67 if omitted.
+	// Optional. Integer from 0 to 100 representing the percentage of the weight of the signing Subnet that is required
+	// to sign the message. Defaults to 67 if omitted.
 	QuorumPercentage uint64 `json:"quorum-percentage"`
+	// Optional. Integer from 0 to 100 representing the additional percentage of weight of the signing Subnet that
+	// will be attempted to add to the signature. `QuorumPercentage`+`QuorumPercentageBuffer` must be less than or
+	// equal to 100. Obtaining signatures from more validators can take a longer time, but signatures representing
+	// a large percentage of the Subnet weight are less prone to become invalid due to validator weight changes.
+	// Defaults to 0 if omitted.
+	QuorumPercentageBuffer uint64 `json:"quorum-percentage-buffer"`
 }
 
 type AggregateSignatureResponse struct {
@@ -162,6 +168,17 @@ func signatureAggregationAPIHandler(
 			writeJSONError(logger, w, http.StatusBadRequest, msg)
 			return
 		}
+
+		if quorumPercentage+req.QuorumPercentageBuffer > 100 {
+			msg := "Invalid quorum buffer number"
+			logger.Warn(
+				msg,
+				zap.Uint64("quorum-buffer-num", req.QuorumPercentageBuffer),
+			)
+			writeJSONError(logger, w, http.StatusBadRequest, msg)
+			return
+		}
+
 		var signingSubnetID ids.ID
 		if req.SigningSubnetID != "" {
 			signingSubnetID, err = utils.HexOrCB58ToID(
@@ -189,10 +206,11 @@ func signatureAggregationAPIHandler(
 			justification,
 			signingSubnetID,
 			quorumPercentage,
+			req.QuorumPercentageBuffer,
 		)
 		if err != nil {
 			logger.Warn("Failed to aggregate signatures", zap.Error(err))
-			msg := fmt.Errorf("Failed to aggregate signatures. Error: %w", err).Error()
+			msg := fmt.Errorf("failed to aggregate signatures. error: %w", err).Error()
 			writeJSONError(logger, w, http.StatusInternalServerError, msg)
 			return
 		}

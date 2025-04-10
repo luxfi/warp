@@ -127,6 +127,41 @@ func makeConnectedValidators(validatorCount int) (*peers.ConnectedCanonicalValid
 	}, validatorSigners
 }
 
+func TestCreateSignedMessageFailsInvalidQuorumPercentage(t *testing.T) {
+	testCases := []struct {
+		name                     string
+		requiredQuorumPercentage uint64
+		quorumPercentageBuffer   uint64
+	}{
+		{
+			name:                     "Zero required quorum percentage",
+			requiredQuorumPercentage: 0,
+			quorumPercentageBuffer:   5,
+		},
+		{
+			name:                     "Quorum percentage above 100",
+			requiredQuorumPercentage: 96,
+			quorumPercentageBuffer:   5,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			aggregator, _, _ := instantiateAggregator(t)
+			signedMsg, err := aggregator.CreateSignedMessage(
+				context.Background(),
+				logging.NoLog{},
+				nil,
+				nil,
+				ids.Empty,
+				tc.requiredQuorumPercentage,
+				tc.quorumPercentageBuffer,
+			)
+			require.Nil(t, signedMsg)
+			require.ErrorIs(t, err, errInvalidQuorumPercentage)
+		})
+	}
+}
+
 func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	aggregator, mockNetwork, _ := instantiateAggregator(t)
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
@@ -143,7 +178,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 		},
 		nil,
 	)
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
 	require.ErrorContains(t, err, "no signatures")
 }
 
@@ -163,7 +198,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 		},
 		nil,
 	).AnyTimes()
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
 	require.ErrorContains(
 		t,
 		err,
@@ -248,7 +283,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	).Times(1)
 
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0)
 	require.ErrorIs(
 		t,
 		err,
@@ -257,104 +292,134 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 }
 
 func TestCreateSignedMessageSucceeds(t *testing.T) {
-	var msg *warp.UnsignedMessage // to be signed
-	chainID := ids.GenerateTestID()
-	networkID := constants.UnitTestID
-	msg, err := warp.NewUnsignedMessage(
-		networkID,
-		chainID,
-		utils.RandomBytes(1234),
-	)
-	require.NoError(t, err)
-
-	// the signers:
-	connectedValidators, validatorSigners := makeConnectedValidators(5)
-
-	// prime the aggregator:
-
-	aggregator, mockNetwork, mockPClient := instantiateAggregator(t)
-
-	subnetID := ids.GenerateTestID()
-	mockNetwork.EXPECT().GetSubnetID(chainID).Return(
-		subnetID,
-		nil,
-	)
-
-	mockNetwork.EXPECT().TrackSubnet(subnetID)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
-		connectedValidators,
-		nil,
-	)
-
-	mockPClient.EXPECT().GetSubnet(gomock.Any(), subnetID).Return(
-		platformvm.GetSubnetClientResponse{},
-		nil,
-	).Times(1)
-
-	// prime the signers' responses:
-
-	requestID := aggregator.currentRequestID.Load() + 1
-
-	appRequests := makeAppRequests(chainID, requestID, connectedValidators)
-	for _, appRequest := range appRequests {
-		mockNetwork.EXPECT().RegisterAppRequest(appRequest).Times(1)
+	// The test sets up valid signature responses from 4 of 5 equally weighted validators.
+	testCases := []struct {
+		name                     string
+		requiredQuorumPercentage uint64
+		quorumPercentageBuffer   uint64
+	}{
+		{
+			name:                     "Succeeds with buffer",
+			requiredQuorumPercentage: 67,
+			quorumPercentageBuffer:   5,
+		},
+		{
+			name:                     "Succeeds without buffer",
+			requiredQuorumPercentage: 80,
+			quorumPercentageBuffer:   5,
+		},
 	}
 
-	var nodeIDs set.Set[ids.NodeID]
-	responseChan := make(chan message.InboundMessage, len(appRequests))
-	for _, appRequest := range appRequests {
-		nodeIDs.Add(appRequest.NodeID)
-		validatorSigner := validatorSigners[connectedValidators.NodeValidatorIndexMap[appRequest.NodeID]]
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var msg *warp.UnsignedMessage // to be signed
+			chainID := ids.GenerateTestID()
+			networkID := constants.UnitTestID
+			msg, err := warp.NewUnsignedMessage(
+				networkID,
+				chainID,
+				utils.RandomBytes(1234),
+			)
+			require.NoError(t, err)
 
-		signature, err := validatorSigner.Sign(msg.Bytes())
-		require.NoError(t, err)
-		responseBytes, err := proto.Marshal(
-			&sdk.SignatureResponse{
-				Signature: bls.SignatureToBytes(
-					signature,
-				),
-			},
-		)
-		require.NoError(t, err)
-		responseChan <- message.InboundAppResponse(
-			chainID,
-			requestID,
-			responseBytes,
-			appRequest.NodeID,
-		)
+			// the signers:
+			connectedValidators, validatorSigners := makeConnectedValidators(5)
+
+			// prime the aggregator:
+
+			aggregator, mockNetwork, mockPClient := instantiateAggregator(t)
+
+			subnetID := ids.GenerateTestID()
+			mockNetwork.EXPECT().GetSubnetID(chainID).Return(
+				subnetID,
+				nil,
+			)
+
+			mockNetwork.EXPECT().TrackSubnet(subnetID)
+			mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
+				connectedValidators,
+				nil,
+			)
+
+			mockPClient.EXPECT().GetSubnet(gomock.Any(), subnetID).Return(
+				platformvm.GetSubnetClientResponse{},
+				nil,
+			).Times(1)
+
+			// prime the signers' responses:
+
+			requestID := aggregator.currentRequestID.Load() + 1
+
+			appRequests := makeAppRequests(chainID, requestID, connectedValidators)
+			for _, appRequest := range appRequests {
+				mockNetwork.EXPECT().RegisterAppRequest(appRequest).Times(1)
+			}
+
+			var nodeIDs set.Set[ids.NodeID]
+			responseChan := make(chan message.InboundMessage, len(appRequests))
+			for i, appRequest := range appRequests {
+				nodeIDs.Add(appRequest.NodeID)
+				validatorSigner := validatorSigners[connectedValidators.NodeValidatorIndexMap[appRequest.NodeID]]
+
+				// Simulate 1 of 5 validators responding with an invalid signature
+				var signatureBytes []byte
+				if i == len(appRequests)-1 {
+					signatureBytes = make([]byte, 0)
+				} else {
+					signature, err := validatorSigner.Sign(msg.Bytes())
+					require.NoError(t, err)
+					signatureBytes = bls.SignatureToBytes(signature)
+				}
+
+				responseBytes, err := proto.Marshal(
+					&sdk.SignatureResponse{
+						Signature: signatureBytes,
+					},
+				)
+				require.NoError(t, err)
+				responseChan <- message.InboundAppResponse(
+					chainID,
+					requestID,
+					responseBytes,
+					appRequest.NodeID,
+				)
+			}
+			mockNetwork.EXPECT().RegisterRequestID(
+				requestID,
+				len(appRequests),
+			).Return(responseChan).Times(1)
+
+			mockNetwork.EXPECT().Send(
+				gomock.Any(),
+				nodeIDs,
+				subnetID,
+				subnets.NoOpAllower,
+			).Times(1).Return(nodeIDs)
+
+			// aggregate the signatures:
+			// This should still succeed because we have 4 out of 5 valid signatures,
+			// even though we're not able to get the quorum percentage buffer.
+			signedMessage, err := aggregator.CreateSignedMessage(
+				context.Background(),
+				logging.NoLog{},
+				msg,
+				nil,
+				subnetID,
+				tc.requiredQuorumPercentage,
+				tc.quorumPercentageBuffer,
+			)
+			require.NoError(t, err)
+
+			verifyErr := signedMessage.Signature.Verify(
+				msg,
+				networkID,
+				connectedValidators.ValidatorSet,
+				tc.requiredQuorumPercentage,
+				100,
+			)
+			require.NoError(t, verifyErr)
+		})
 	}
-	mockNetwork.EXPECT().RegisterRequestID(
-		requestID,
-		len(appRequests),
-	).Return(responseChan).Times(1)
-
-	mockNetwork.EXPECT().Send(
-		gomock.Any(),
-		nodeIDs,
-		subnetID,
-		subnets.NoOpAllower,
-	).Times(1).Return(nodeIDs)
-
-	// aggregate the signatures:
-	var quorumPercentage uint64 = 80
-	signedMessage, err := aggregator.CreateSignedMessage(
-		context.Background(),
-		logging.NoLog{},
-		msg,
-		nil,
-		subnetID,
-		quorumPercentage,
-	)
-	require.NoError(t, err)
-
-	verifyErr := signedMessage.Signature.Verify(
-		msg,
-		networkID,
-		connectedValidators.ValidatorSet,
-		quorumPercentage,
-		100,
-	)
-	require.NoError(t, verifyErr)
 }
 
 func TestUnmarshalResponse(t *testing.T) {

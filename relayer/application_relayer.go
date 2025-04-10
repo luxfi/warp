@@ -23,13 +23,18 @@ import (
 	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"golang.org/x/sync/errgroup"
-
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	retryTimeout = 10 * time.Second
+	retryTimeout  = 10 * time.Second
+	maxRetryCount = 5
+
+	// The additional percentage of stake weight that we will try to aggregate signatures from above the required
+	// quorum. This allows for small weight changes in between the time the signature is constructed and the time
+	// it is verified to not cause the verification to fail.
+	defaultQuorumPercentageBuffer = uint64(3)
 )
 
 // Errors
@@ -182,11 +187,10 @@ func (r *ApplicationRelayer) ProcessHeight(
 
 // Relays a message to the destination chain. Does not checkpoint the height.
 // returns the transaction hash if the message is successfully relayed.
-func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (common.Hash, error) {
-	r.logger.Debug(
+func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (common.Hash, error) {
+	r.logger.Info(
 		"Relaying message",
-		zap.String("sourceBlockchainID", r.sourceBlockchain.BlockchainID),
-		zap.String("relayerID", r.relayerID.ID.String()),
+		zap.Stringer("relayerID", r.relayerID.ID),
 	)
 	shouldSend, err := handler.ShouldSendMessage()
 	if err != nil {
@@ -213,6 +217,10 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
 		defer cancel()
 
+		quorumPercentageBuffer := utils.CalculateQuorumPercentageBuffer(
+			r.warpConfig.QuorumNumerator,
+			defaultQuorumPercentageBuffer,
+		)
 		signedMessage, err = r.signatureAggregator.CreateSignedMessage(
 			ctx,
 			r.logger.With(logContext...),
@@ -220,6 +228,7 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 			nil,
 			r.signingSubnetID,
 			r.warpConfig.QuorumNumerator,
+			quorumPercentageBuffer,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
@@ -257,12 +266,41 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 	}
 	r.logger.Info(
 		"Finished relaying message to destination chain",
-		zap.String("destinationBlockchainID", r.relayerID.DestinationBlockchainID.String()),
-		zap.String("txHash", txHash.Hex()),
+		zap.Stringer("relayerID", r.relayerID.ID),
+		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
+		zap.Stringer("txHash", txHash),
 	)
 	r.incSuccessfulRelayMessageCount()
 
 	return txHash, nil
+}
+
+func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (common.Hash, error) {
+	var err error
+	// Retry processing the message if it fails to account for cases where the signature is successfully aggregated
+	// but the message fails to verify on the destination chain due to validator churn
+	// No delays are implemented between retries since the failure scenario here involves timing differences
+	// and the signature aggregator will not re-query the individual validators from which it has already
+	// acquired the signatures.
+	for i := 0; i < maxRetryCount; i++ {
+		var txHash common.Hash
+		startProcessMessageTime := time.Now()
+		txHash, err = r.processMessage(handler)
+		if err == nil {
+			return txHash, nil
+		}
+		r.logger.Warn(
+			"failed to process message",
+			zap.Int("attempt", i+1),
+			zap.Int64("latencyMS", time.Since(startProcessMessageTime).Milliseconds()),
+			zap.Error(err),
+		)
+	}
+	r.logger.Error(
+		"failed to process message after max retries",
+		zap.Error(err),
+	)
+	return common.Hash{}, err
 }
 
 func (r *ApplicationRelayer) RelayerID() database.RelayerID {
@@ -283,6 +321,9 @@ func (r *ApplicationRelayer) createSignedMessage(
 	)
 	cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
 	defer cancel()
+
+	// The warp_getMessageAggregateSignature method does not support the optional quorum percentage
+	// buffer, so just use the required quorum percentage here.
 	operation := func() error {
 		return r.sourceWarpSignatureClient.CallContext(
 			cctx,
