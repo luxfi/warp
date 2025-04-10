@@ -317,8 +317,8 @@ func (m *messageHandler) SendMessage(
 	return txHash, nil
 }
 
-func (m *messageHandler) GetLogContext() []zap.Field {
-	return m.logFields
+func (m *messageHandler) LoggerWithContext(logger logging.Logger) logging.Logger {
+	return logger.With(m.logFields...)
 }
 
 func (m *messageHandler) waitForReceipt(
