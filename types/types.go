@@ -35,6 +35,7 @@ type WarpBlockInfo struct {
 // from the manual Warp message information provided via configuration.
 type WarpMessageInfo struct {
 	SourceAddress   common.Address
+	SourceTxID      common.Hash
 	UnsignedMessage *avalancheWarp.UnsignedMessage
 }
 
@@ -92,6 +93,7 @@ func NewWarpMessageInfo(log types.Log) (*WarpMessageInfo, error) {
 
 	return &WarpMessageInfo{
 		SourceAddress:   common.BytesToAddress(log.Topics[1][:]),
+		SourceTxID:      log.TxHash,
 		UnsignedMessage: unsignedMsg,
 	}, nil
 }
