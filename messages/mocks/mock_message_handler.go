@@ -12,12 +12,12 @@ package mocks
 import (
 	reflect "reflect"
 
+	logging "github.com/ava-labs/avalanchego/utils/logging"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	messages "github.com/ava-labs/icm-services/messages"
 	vms "github.com/ava-labs/icm-services/vms"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
-	zap "go.uber.org/zap"
 )
 
 // MockMessageHandlerFactory is a mock of MessageHandlerFactory interface.
@@ -98,20 +98,6 @@ func (m *MockMessageHandler) EXPECT() *MockMessageHandlerMockRecorder {
 	return m.recorder
 }
 
-// GetLogContext mocks base method.
-func (m *MockMessageHandler) GetLogContext() []zap.Field {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLogContext")
-	ret0, _ := ret[0].([]zap.Field)
-	return ret0
-}
-
-// GetLogContext indicates an expected call of GetLogContext.
-func (mr *MockMessageHandlerMockRecorder) GetLogContext() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogContext", reflect.TypeOf((*MockMessageHandler)(nil).GetLogContext))
-}
-
 // GetUnsignedMessage mocks base method.
 func (m *MockMessageHandler) GetUnsignedMessage() *warp.UnsignedMessage {
 	m.ctrl.T.Helper()
@@ -124,6 +110,20 @@ func (m *MockMessageHandler) GetUnsignedMessage() *warp.UnsignedMessage {
 func (mr *MockMessageHandlerMockRecorder) GetUnsignedMessage() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnsignedMessage", reflect.TypeOf((*MockMessageHandler)(nil).GetUnsignedMessage))
+}
+
+// LoggerWithContext mocks base method.
+func (m *MockMessageHandler) LoggerWithContext(arg0 logging.Logger) logging.Logger {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoggerWithContext", arg0)
+	ret0, _ := ret[0].(logging.Logger)
+	return ret0
+}
+
+// LoggerWithContext indicates an expected call of LoggerWithContext.
+func (mr *MockMessageHandlerMockRecorder) LoggerWithContext(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoggerWithContext", reflect.TypeOf((*MockMessageHandler)(nil).LoggerWithContext), arg0)
 }
 
 // SendMessage mocks base method.
