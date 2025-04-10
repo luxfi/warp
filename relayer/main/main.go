@@ -43,6 +43,9 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	// Sets GOMAXPROCS to the CPU quota for containerized environments
+	_ "go.uber.org/automaxprocs"
 )
 
 var version = "v0.0.0-dev"
@@ -520,6 +523,15 @@ func createApplicationRelayersForSourceChain(
 			return nil, 0, err
 		}
 		applicationRelayers[relayerID.ID] = applicationRelayer
+
+		logger.Info(
+			"Created application relayer",
+			zap.String("relayerID", relayerID.ID.String()),
+			zap.String("sourceBlockchainID", relayerID.SourceBlockchainID.String()),
+			zap.String("destinationBlockchainID", relayerID.DestinationBlockchainID.String()),
+			zap.String("originSenderAddress", relayerID.OriginSenderAddress.String()),
+			zap.String("destinationAddress", relayerID.DestinationAddress.String()),
+		)
 	}
 	return applicationRelayers, minHeight, nil
 }
