@@ -58,7 +58,7 @@ func NewWarpBlockInfo(logger logging.Logger, header *types.Header, ethClient eth
 			})
 			return err
 		}
-		err = utils.WithRetriesTimeout(logger, operation, utils.DefaultRPCTimeout)
+		err = utils.WithRetriesTimeout(logger, operation, utils.DefaultRPCTimeout, "get warp logs from block")
 		if err != nil {
 			return nil, err
 		}
