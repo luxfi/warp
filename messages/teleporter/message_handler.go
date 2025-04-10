@@ -334,7 +334,7 @@ func (m *messageHandler) waitForReceipt(
 		receipt, err = destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
 		return err
 	}
-	err := utils.WithRetriesTimeout(m.logger, operation, defaultBlockAcceptanceTimeout)
+	err := utils.WithRetriesTimeout(m.logger, operation, defaultBlockAcceptanceTimeout, "waitForReceipt")
 	if err != nil {
 		m.logger.Error(
 			"Failed to get transaction receipt",
