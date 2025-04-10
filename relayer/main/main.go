@@ -236,7 +236,6 @@ func main() {
 
 	signatureAggregator, err := aggregator.NewSignatureAggregator(
 		network,
-		logger,
 		messageCreator,
 		cfg.SignatureCacheSize,
 		sigAggMetrics.NewSignatureAggregatorMetrics(

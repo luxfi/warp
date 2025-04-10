@@ -201,6 +201,7 @@ func signatureAggregationAPIHandler(
 
 		signedMessage, err := aggregator.CreateSignedMessage(
 			ctx,
+			logger,
 			message,
 			justification,
 			signingSubnetID,

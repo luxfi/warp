@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
 	"github.com/ava-labs/icm-services/peers"
@@ -191,7 +192,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 		"Relaying message",
 		zap.Stringer("relayerID", r.relayerID.ID),
 	)
-	shouldSend, err := handler.ShouldSendMessage(r.destinationClient)
+	shouldSend, err := handler.ShouldSendMessage()
 	if err != nil {
 		r.logger.Error(
 			"Failed to check if message should be sent",
@@ -221,6 +222,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 		)
 		signedMessage, err = r.signatureAggregator.CreateSignedMessage(
 			ctx,
+			handler.LoggerWithContext(r.logger),
 			unsignedMessage,
 			nil,
 			r.signingSubnetID,
@@ -252,7 +254,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 	// create signed message latency (ms)
 	r.setCreateSignedMessageLatencyMS(float64(time.Since(startCreateSignedMessageTime).Milliseconds()))
 
-	txHash, err := handler.SendMessage(signedMessage, r.destinationClient)
+	txHash, err := handler.SendMessage(signedMessage)
 	if err != nil {
 		r.logger.Error(
 			"Failed to send warp message",
@@ -331,7 +333,7 @@ func (r *ApplicationRelayer) createSignedMessage(
 			r.signingSubnetID.String(),
 		)
 	}
-	err = utils.WithRetriesTimeout(r.logger, operation, retryTimeout)
+	err = utils.WithRetriesTimeout(r.logger, operation, retryTimeout, "warp_getMessageAggregateSignature")
 	if err != nil {
 		r.logger.Error(
 			"Failed to get aggregate signature from node endpoint.",
