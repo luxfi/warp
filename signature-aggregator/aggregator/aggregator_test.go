@@ -3,7 +3,6 @@ package aggregator
 import (
 	"bytes"
 	"context"
-	"os"
 	"testing"
 
 	"crypto/rand"
@@ -27,8 +26,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -60,16 +57,6 @@ func instantiateAggregator(t *testing.T) (
 	mockPClient := avago_mocks.NewMockClient(mockController)
 	aggregator, err := NewSignatureAggregator(
 		mockNetwork,
-		logging.NewLogger(
-			"aggregator_test",
-			logging.NewWrappedCore(
-				logging.Debug,
-				os.Stdout,
-				zapcore.NewConsoleEncoder(
-					zap.NewProductionEncoderConfig(),
-				),
-			),
-		),
 		messageCreator,
 		1024,
 		sigAggMetrics,
@@ -162,6 +149,7 @@ func TestCreateSignedMessageFailsInvalidQuorumPercentage(t *testing.T) {
 			aggregator, _, _ := instantiateAggregator(t)
 			signedMsg, err := aggregator.CreateSignedMessage(
 				context.Background(),
+				logging.NoLog{},
 				nil,
 				nil,
 				ids.Empty,
@@ -190,7 +178,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 		},
 		nil,
 	)
-	_, err = aggregator.CreateSignedMessage(context.Background(), msg, nil, ids.Empty, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
 	require.ErrorContains(t, err, "no signatures")
 }
 
@@ -210,7 +198,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 		},
 		nil,
 	).AnyTimes()
-	_, err = aggregator.CreateSignedMessage(context.Background(), msg, nil, ids.Empty, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
 	require.ErrorContains(
 		t,
 		err,
@@ -295,7 +283,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	).Times(1)
 
-	_, err = aggregator.CreateSignedMessage(context.Background(), msg, nil, subnetID, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0)
 	require.ErrorIs(
 		t,
 		err,
@@ -413,6 +401,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 			// even though we're not able to get the quorum percentage buffer.
 			signedMessage, err := aggregator.CreateSignedMessage(
 				context.Background(),
+				logging.NoLog{},
 				msg,
 				nil,
 				subnetID,

@@ -135,7 +135,7 @@ func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.H
 		header, err = s.rpcClient.HeaderByNumber(cctx, headerNumber)
 		return err
 	}
-	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout)
+	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout, "get header by number")
 	if err != nil {
 		s.logger.Error(
 			"Failed to get header by number",
@@ -171,7 +171,7 @@ func (s *subscriber) subscribe(retryTimeout time.Duration) error {
 		sub, err = s.wsClient.SubscribeNewHead(cctx, s.headers)
 		return err
 	}
-	err := utils.WithRetriesTimeout(s.logger, operation, retryTimeout)
+	err := utils.WithRetriesTimeout(s.logger, operation, retryTimeout, "subscribe")
 	if err != nil {
 		s.logger.Error(
 			"Failed to subscribe to node",

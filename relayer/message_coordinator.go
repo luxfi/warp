@@ -70,37 +70,37 @@ func (mc *MessageCoordinator) getAppRelayerMessageHandler(
 		)
 		return nil, nil, nil
 	}
-	messageHandler, err := messageHandlerFactory.NewMessageHandler(warpMessageInfo.UnsignedMessage)
+	routeInfo, err := messageHandlerFactory.GetMessageRoutingInfo(warpMessageInfo.UnsignedMessage)
 	if err != nil {
 		mc.logger.Error("Failed to create message handler", zap.Error(err))
 		return nil, nil, err
 	}
 
-	// Fetch the message delivery data
-	//nolint:lll
-	sourceBlockchainID, originSenderAddress, destinationBlockchainID, destinationAddress, err := messageHandler.GetMessageRoutingInfo()
-	if err != nil {
-		mc.logger.Error("Failed to get message routing information", zap.Error(err))
-		return nil, nil, err
-	}
-
 	mc.logger.Info(
 		"Unpacked warp message",
-		zap.Stringer("sourceBlockchainID", sourceBlockchainID),
-		zap.Stringer("originSenderAddress", originSenderAddress),
-		zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-		zap.Stringer("destinationAddress", destinationAddress),
+		zap.Stringer("sourceBlockchainID", routeInfo.SourceChainID),
+		zap.Stringer("originSenderAddress", routeInfo.SenderAddress),
+		zap.Stringer("destinationBlockchainID", routeInfo.DestinationChainID),
+		zap.Stringer("destinationAddress", routeInfo.DestinationAddress),
 		zap.Stringer("warpMessageID", warpMessageInfo.UnsignedMessage.ID()),
 	)
 
 	appRelayer := mc.getApplicationRelayer(
-		sourceBlockchainID,
-		originSenderAddress,
-		destinationBlockchainID,
-		destinationAddress,
+		routeInfo.SourceChainID,
+		routeInfo.SenderAddress,
+		routeInfo.DestinationChainID,
+		routeInfo.DestinationAddress,
 	)
 	if appRelayer == nil {
 		return nil, nil, nil
+	}
+	messageHandler, err := messageHandlerFactory.NewMessageHandler(
+		warpMessageInfo.UnsignedMessage,
+		appRelayer.destinationClient,
+	)
+	if err != nil {
+		mc.logger.Error("Failed to create message handler", zap.Error(err))
+		return nil, nil, err
 	}
 	return appRelayer, messageHandler, nil
 }
@@ -255,9 +255,23 @@ func (mc *MessageCoordinator) ProcessBlock(
 			continue
 		}
 		if appRelayer == nil {
-			mc.logger.Debug("Application relayer not found. Skipping message relay")
+			mc.logger.Debug(
+				"Application relayer not found. Skipping message relay",
+				zap.Stringer("warpMessageID", warpLogInfo.UnsignedMessage.ID()),
+				zap.Stringer("sourceBlockchainID", warpLogInfo.UnsignedMessage.SourceChainID),
+				zap.Stringer("originSenderAddress", warpLogInfo.SourceAddress),
+				zap.Stringer("originTxID", warpLogInfo.SourceTxID),
+			)
 			continue
 		}
+		mc.logger.Info(
+			"Registering message handler",
+			zap.Stringer("relayerID", appRelayer.relayerID.ID),
+			zap.Stringer("warpMessageID", warpLogInfo.UnsignedMessage.ID()),
+			zap.Stringer("sourceBlockchainID", warpLogInfo.UnsignedMessage.SourceChainID),
+			zap.Stringer("originSenderAddress", warpLogInfo.SourceAddress),
+			zap.Stringer("originTxID", warpLogInfo.SourceTxID),
+		)
 		messageHandlers[appRelayer.relayerID.ID] = append(messageHandlers[appRelayer.relayerID.ID], handler)
 	}
 	// Initiate message relay of all registered messages
