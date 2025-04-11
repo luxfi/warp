@@ -66,6 +66,7 @@ type ApplicationRelayer struct {
 	checkpointManager         CheckpointManager
 	sourceWarpSignatureClient *rpc.Client // nil if configured to fetch signatures via AppRequest for the source blockchain
 	signatureAggregator       *aggregator.SignatureAggregator
+	processMessageSemaphore   chan struct{}
 }
 
 func NewApplicationRelayer(
@@ -78,6 +79,7 @@ func NewApplicationRelayer(
 	checkpointManager CheckpointManager,
 	cfg *config.Config,
 	signatureAggregator *aggregator.SignatureAggregator,
+	processMessageSemaphore chan struct{},
 ) (*ApplicationRelayer, error) {
 	warpConfig, err := cfg.GetWarpConfig(relayerID.DestinationBlockchainID)
 	if err != nil {
@@ -137,6 +139,7 @@ func NewApplicationRelayer(
 		checkpointManager:         checkpointManager,
 		sourceWarpSignatureClient: warpClient,
 		signatureAggregator:       signatureAggregator,
+		processMessageSemaphore:   processMessageSemaphore,
 	}
 
 	return &ar, nil
@@ -160,7 +163,13 @@ func (r *ApplicationRelayer) ProcessHeight(
 	)
 	var eg errgroup.Group
 	for _, handler := range handlers {
+		// Acquire the semaphore to limit the number of messages being processed concurrently globally.
+		r.processMessageSemaphore <- struct{}{}
+
 		eg.Go(func() error {
+			defer func() {
+				<-r.processMessageSemaphore
+			}()
 			_, err := r.ProcessMessage(handler)
 			return err
 		})
