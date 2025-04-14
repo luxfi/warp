@@ -514,9 +514,9 @@ func (s *SignatureAggregator) getSubnetID(
 		return subnetID, nil
 	}
 	log.Info("Signing subnet not found, requesting from PChain", zap.String("blockchainID", blockchainID.String()))
-	ctx, cancel := context.WithTimeout(ctx, pChainSubnetIDTimeout)
+	getSubnetIDCtx, cancel := context.WithTimeout(ctx, pChainSubnetIDTimeout)
 	defer cancel()
-	subnetID, err := s.network.GetSubnetID(ctx, blockchainID)
+	subnetID, err := s.network.GetSubnetID(getSubnetIDCtx, blockchainID)
 	if err != nil {
 		return ids.ID{}, fmt.Errorf("source blockchain not found for chain ID %s", blockchainID)
 	}
