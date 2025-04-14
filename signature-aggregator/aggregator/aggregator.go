@@ -51,9 +51,6 @@ const (
 	// The minimum balance that an L1 validator must maintain in order to participate
 	// in the aggregate signature.
 	minimumL1ValidatorBalance = 2048 * units.NanoAvax
-
-	// The maximum amount of time to spend waiting for a subnet ID from the PChain
-	pChainSubnetIDTimeout = 1 * time.Second
 )
 
 var (
@@ -514,7 +511,7 @@ func (s *SignatureAggregator) getSubnetID(
 		return subnetID, nil
 	}
 	log.Info("Signing subnet not found, requesting from PChain", zap.String("blockchainID", blockchainID.String()))
-	getSubnetIDCtx, cancel := context.WithTimeout(ctx, pChainSubnetIDTimeout)
+	getSubnetIDCtx, cancel := context.WithTimeout(ctx, utils.DefaultRPCTimeout)
 	defer cancel()
 	subnetID, err := s.network.GetSubnetID(getSubnetIDCtx, blockchainID)
 	if err != nil {
