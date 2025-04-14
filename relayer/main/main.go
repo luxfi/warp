@@ -249,6 +249,10 @@ func main() {
 		panic(err)
 	}
 
+	// Limits the global number of messages that can be processed concurrently by the application
+	// to avoid trying to issue too many requests at once.
+	processMessageSemaphore := make(chan struct{}, cfg.MaxConcurrentMessages)
+
 	applicationRelayers, minHeights, err := createApplicationRelayers(
 		context.Background(),
 		logger,
@@ -260,6 +264,7 @@ func main() {
 		sourceClients,
 		destinationClients,
 		signatureAggregator,
+		processMessageSemaphore,
 	)
 	if err != nil {
 		logger.Fatal("Failed to create application relayers", zap.Error(err))
@@ -390,6 +395,7 @@ func createApplicationRelayers(
 	sourceClients map[ids.ID]ethclient.Client,
 	destinationClients map[ids.ID]vms.DestinationClient,
 	signatureAggregator *aggregator.SignatureAggregator,
+	processMessagesSemaphore chan struct{},
 ) (map[common.Hash]*relayer.ApplicationRelayer, map[ids.ID]uint64, error) {
 	applicationRelayers := make(map[common.Hash]*relayer.ApplicationRelayer)
 	minHeights := make(map[ids.ID]uint64)
@@ -413,6 +419,7 @@ func createApplicationRelayers(
 			currentHeight,
 			destinationClients,
 			signatureAggregator,
+			processMessagesSemaphore,
 		)
 		if err != nil {
 			logger.Error(
@@ -449,6 +456,7 @@ func createApplicationRelayersForSourceChain(
 	currentHeight uint64,
 	destinationClients map[ids.ID]vms.DestinationClient,
 	signatureAggregator *aggregator.SignatureAggregator,
+	processMessageSemaphore chan struct{},
 ) (map[common.Hash]*relayer.ApplicationRelayer, uint64, error) {
 	// Create the ApplicationRelayers
 	logger.Info(
@@ -469,6 +477,7 @@ func createApplicationRelayersForSourceChain(
 		height = currentHeight + 1
 		minHeight = height
 	}
+
 	for _, relayerID := range database.GetSourceBlockchainRelayerIDs(&sourceBlockchain) {
 		// Calculate the catch-up starting block height, and update the min height if necessary
 		if cfg.ProcessMissedBlocks {
@@ -513,6 +522,7 @@ func createApplicationRelayersForSourceChain(
 			checkpointManager,
 			cfg,
 			signatureAggregator,
+			processMessageSemaphore,
 		)
 		if err != nil {
 			logger.Error(
