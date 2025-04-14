@@ -161,6 +161,14 @@ func (c *Config) Validate() error {
 		c.trackedSubnets.Add(l1ID)
 	}
 
+	if c.InitialConnectionTimeoutSeconds == 0 {
+		return errors.New("initial-connection-timeout-seconds must be greater than 0")
+	}
+
+	if c.MaxConcurrentMessages == 0 {
+		return errors.New("max-concurrent-messages must be greater than 0")
+	}
+
 	return nil
 }
 
