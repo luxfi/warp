@@ -65,7 +65,7 @@ type AppRequestNetwork interface {
 		*ConnectedCanonicalValidators,
 		error,
 	)
-	GetSubnetID(blockchainID ids.ID) (ids.ID, error)
+	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
 	RegisterAppRequest(requestID ids.RequestID)
 	RegisterRequestID(
 		requestID uint32,
@@ -472,8 +472,8 @@ func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 func (n *appRequestNetwork) RegisterRequestID(requestID uint32, numExpectedResponse int) chan message.InboundMessage {
 	return n.handler.RegisterRequestID(requestID, numExpectedResponse)
 }
-func (n *appRequestNetwork) GetSubnetID(blockchainID ids.ID) (ids.ID, error) {
-	return n.validatorClient.GetSubnetID(context.Background(), blockchainID)
+func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
+	return n.validatorClient.GetSubnetID(ctx, blockchainID)
 }
 
 //

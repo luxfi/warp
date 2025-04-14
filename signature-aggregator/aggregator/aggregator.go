@@ -51,6 +51,9 @@ const (
 	// The minimum balance that an L1 validator must maintain in order to participate
 	// in the aggregate signature.
 	minimumL1ValidatorBalance = 2048 * units.NanoAvax
+
+	// The maximum amount of time to spend waiting for a subnet ID from the PChain
+	pChainSubnetIDTimeout = 1 * time.Second
 )
 
 var (
@@ -177,7 +180,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	var signingSubnet ids.ID
 	var err error
 	// If signingSubnet is not set we default to the subnet of the source blockchain
-	sourceSubnet, err := s.getSubnetID(log, unsignedMessage.SourceChainID)
+	sourceSubnet, err := s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"source message subnet not found for chainID %s",
@@ -499,7 +502,11 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	return signedMsg, nil
 }
 
-func (s *SignatureAggregator) getSubnetID(log logging.Logger, blockchainID ids.ID) (ids.ID, error) {
+func (s *SignatureAggregator) getSubnetID(
+	ctx context.Context,
+	log logging.Logger,
+	blockchainID ids.ID,
+) (ids.ID, error) {
 	s.subnetsMapLock.RLock()
 	subnetID, ok := s.subnetIDsByBlockchainID[blockchainID]
 	s.subnetsMapLock.RUnlock()
@@ -507,7 +514,9 @@ func (s *SignatureAggregator) getSubnetID(log logging.Logger, blockchainID ids.I
 		return subnetID, nil
 	}
 	log.Info("Signing subnet not found, requesting from PChain", zap.String("blockchainID", blockchainID.String()))
-	subnetID, err := s.network.GetSubnetID(blockchainID)
+	ctx, cancel := context.WithTimeout(ctx, pChainSubnetIDTimeout)
+	defer cancel()
+	subnetID, err := s.network.GetSubnetID(ctx, blockchainID)
 	if err != nil {
 		return ids.ID{}, fmt.Errorf("source blockchain not found for chain ID %s", blockchainID)
 	}
