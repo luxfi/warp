@@ -70,8 +70,8 @@ type Config struct {
 	AllowPrivateIPs                 bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
 	TLSCertPath                     string                   `mapstructure:"tls-cert-path" json:"tls-cert-path,omitempty"` //nolint:lll
 	TLSKeyPath                      string                   `mapstructure:"tls-key-path" json:"tls-key-path,omitempty"`
-	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds"` // nolint:lll
-	MaxConcurrentMessages           uint64                   `mapstructure:"max-concurrent-messages" json:"max-concurrent-messages"`                       //nolint:lll
+	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds,omitempty"` // nolint:lll
+	MaxConcurrentMessages           uint64                   `mapstructure:"max-concurrent-messages" json:"max-concurrent-messages,omitempty"`                       //nolint:lll
 
 	// convenience field to fetch a blockchain's subnet ID
 	tlsCert                *tls.Certificate
