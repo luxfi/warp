@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
+	metricsServer "github.com/ava-labs/icm-services/metrics"
 	"github.com/ava-labs/icm-services/peers"
 	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/signature-aggregator/aggregator"
@@ -134,8 +135,17 @@ func main() {
 	}
 	defer network.Shutdown()
 
-	registry := metrics.Initialize(cfg.MetricsPort)
-	metricsInstance := metrics.NewSignatureAggregatorMetrics(registry)
+	registries, err := metricsServer.StartMetricsServer(
+		logger,
+		cfg.MetricsPort,
+		[]string{"signature-aggregator"},
+	)
+	if err != nil {
+		logger.Fatal("Failed to start metrics server", zap.Error(err))
+		panic(err)
+	}
+
+	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries["signature-aggregator"])
 
 	signatureAggregator, err := aggregator.NewSignatureAggregator(
 		network,
