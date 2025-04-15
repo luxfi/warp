@@ -66,7 +66,7 @@ type SignatureAggregator struct {
 	subnetIDsByBlockchainID map[ids.ID]ids.ID
 	messageCreator          message.Creator
 	currentRequestID        atomic.Uint32
-	subnetsMapLock          sync.RWMutex
+	subnetsMapLock          sync.Mutex
 	metrics                 *metrics.SignatureAggregatorMetrics
 	cache                   *cache.Cache
 	pChainClient            platformvm.Client
@@ -504,9 +504,10 @@ func (s *SignatureAggregator) getSubnetID(
 	log logging.Logger,
 	blockchainID ids.ID,
 ) (ids.ID, error) {
-	s.subnetsMapLock.RLock()
+	s.subnetsMapLock.Lock()
+	defer s.subnetsMapLock.Unlock()
+
 	subnetID, ok := s.subnetIDsByBlockchainID[blockchainID]
-	s.subnetsMapLock.RUnlock()
 	if ok {
 		return subnetID, nil
 	}
@@ -517,14 +518,8 @@ func (s *SignatureAggregator) getSubnetID(
 	if err != nil {
 		return ids.ID{}, fmt.Errorf("source blockchain not found for chain ID %s", blockchainID)
 	}
-	s.setSubnetID(blockchainID, subnetID)
-	return subnetID, nil
-}
-
-func (s *SignatureAggregator) setSubnetID(blockchainID ids.ID, subnetID ids.ID) {
-	s.subnetsMapLock.Lock()
 	s.subnetIDsByBlockchainID[blockchainID] = subnetID
-	s.subnetsMapLock.Unlock()
+	return subnetID, nil
 }
 
 // Attempts to create a signed Warp message from the accumulated responses.
