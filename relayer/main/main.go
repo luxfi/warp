@@ -5,8 +5,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"runtime"
@@ -298,7 +298,13 @@ func main() {
 
 	// start the health check server
 	go func() {
-		log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil))
+		err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("Health check server closed")
+		} else if err != nil {
+			logger.Error("Health check server exited with error", zap.Error(err))
+			os.Exit(1)
+		}
 	}()
 
 	// Create listeners for each of the subnets configured as a source
