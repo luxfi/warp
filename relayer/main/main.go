@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/ava-labs/avalanchego/api/info"
-	"github.com/ava-labs/avalanchego/api/metrics"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/message"
 	"github.com/ava-labs/avalanchego/network/peer"
@@ -24,6 +23,7 @@ import (
 	"github.com/ava-labs/icm-services/messages"
 	offchainregistry "github.com/ava-labs/icm-services/messages/off-chain-registry"
 	"github.com/ava-labs/icm-services/messages/teleporter"
+	metricsServer "github.com/ava-labs/icm-services/metrics"
 	"github.com/ava-labs/icm-services/peers"
 	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/relayer"
@@ -37,7 +37,6 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -128,17 +127,11 @@ func main() {
 	}
 
 	// Initialize metrics gathered through prometheus
-	gatherer := metrics.NewPrefixGatherer() // shared gatherer
-	relayerRegistry := prometheus.NewRegistry()
-	peerNetworkRegistry := prometheus.NewRegistry()
-	if err := gatherer.Register("app", relayerRegistry); err != nil {
-		logger.Fatal("Failed to set up prometheus metrics", zap.Error(err))
-		panic(err)
-	}
-	if err := gatherer.Register("peers", peerNetworkRegistry); err != nil {
-		logger.Fatal("Failed to set up prometheus metrics", zap.Error(err))
-		panic(err)
-	}
+	registries, err := metricsServer.StartMetricsServer(
+		logger,
+		cfg.MetricsPort,
+		[]string{"app", "peers"},
+	)
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -183,8 +176,8 @@ func main() {
 
 	network, err := peers.NewNetwork(
 		networkLogger,
-		relayerRegistry,
-		peerNetworkRegistry,
+		registries["app"],
+		registries["peers"],
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -201,7 +194,7 @@ func main() {
 		panic(err)
 	}
 
-	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(relayerRegistry)
+	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(registries["app"])
 	if err != nil {
 		logger.Fatal("Failed to create application relayer metrics", zap.Error(err))
 		panic(err)
@@ -244,7 +237,7 @@ func main() {
 		messageCreator,
 		cfg.SignatureCacheSize,
 		sigAggMetrics.NewSignatureAggregatorMetrics(
-			relayerRegistry,
+			registries["app"],
 		),
 		platformvm.NewClient(cfg.GetPChainAPI().BaseURL),
 		peerUtils.InitializeOptions(cfg.GetPChainAPI()),
@@ -293,9 +286,6 @@ func main() {
 	go func() {
 		log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil))
 	}()
-
-	// start the metrics server
-	startMetricsServer(logger, gatherer, cfg.MetricsPort)
 
 	// Create listeners for each of the subnets configured as a source
 	errGroup, ctx := errgroup.WithContext(context.Background())
@@ -586,14 +576,4 @@ func createHealthTrackers(cfg *config.Config) map[ids.ID]*atomic.Bool {
 		healthTrackers[sourceBlockchain.GetBlockchainID()] = atomic.NewBool(true)
 	}
 	return healthTrackers
-}
-
-func startMetricsServer(logger logging.Logger, gatherer prometheus.Gatherer, port uint16) {
-	http.Handle("/metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
-
-	go func() {
-		logger.Info("starting metrics server...",
-			zap.Uint16("port", port))
-		log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
-	}()
 }
