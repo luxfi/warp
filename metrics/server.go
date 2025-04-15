@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -35,8 +36,10 @@ func StartMetricsServer(logger logging.Logger, port uint16, names []string) (map
 		logger.Info("Starting metrics server...",
 			zap.Uint16("port", port))
 		err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
-		if err != nil {
-			logger.Fatal("Metrics server exited with error", zap.Error(err))
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("Metrics check server closed")
+		} else if err != nil {
+			logger.Error("Metrics check server exited with error", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
