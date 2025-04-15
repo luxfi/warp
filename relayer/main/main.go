@@ -128,8 +128,14 @@ func main() {
 	}
 
 	// Initialize metrics gathered through prometheus
-	gatherer, registerer, err := initializeMetrics()
-	if err != nil {
+	gatherer := metrics.NewPrefixGatherer() // shared gatherer
+	relayerRegistry := prometheus.NewRegistry()
+	peerNetworkRegistry := prometheus.NewRegistry()
+	if err := gatherer.Register("app", relayerRegistry); err != nil {
+		logger.Fatal("Failed to set up prometheus metrics", zap.Error(err))
+		panic(err)
+	}
+	if err := gatherer.Register("peers", peerNetworkRegistry); err != nil {
 		logger.Fatal("Failed to set up prometheus metrics", zap.Error(err))
 		panic(err)
 	}
@@ -177,7 +183,8 @@ func main() {
 
 	network, err := peers.NewNetwork(
 		networkLogger,
-		registerer,
+		relayerRegistry,
+		peerNetworkRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -194,9 +201,7 @@ func main() {
 		panic(err)
 	}
 
-	startMetricsServer(logger, gatherer, cfg.MetricsPort)
-
-	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(registerer)
+	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(relayerRegistry)
 	if err != nil {
 		logger.Fatal("Failed to create application relayer metrics", zap.Error(err))
 		panic(err)
@@ -239,7 +244,7 @@ func main() {
 		messageCreator,
 		cfg.SignatureCacheSize,
 		sigAggMetrics.NewSignatureAggregatorMetrics(
-			prometheus.DefaultRegisterer,
+			relayerRegistry,
 		),
 		platformvm.NewClient(cfg.GetPChainAPI().BaseURL),
 		peerUtils.InitializeOptions(cfg.GetPChainAPI()),
@@ -288,6 +293,9 @@ func main() {
 	go func() {
 		log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil))
 	}()
+
+	// start the metrics server
+	startMetricsServer(logger, gatherer, cfg.MetricsPort)
 
 	// Create listeners for each of the subnets configured as a source
 	errGroup, ctx := errgroup.WithContext(context.Background())
@@ -588,13 +596,4 @@ func startMetricsServer(logger logging.Logger, gatherer prometheus.Gatherer, por
 			zap.Uint16("port", port))
 		log.Fatalln(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
-}
-
-func initializeMetrics() (prometheus.Gatherer, prometheus.Registerer, error) {
-	gatherer := metrics.NewPrefixGatherer()
-	registry := prometheus.NewRegistry()
-	if err := gatherer.Register("app", registry); err != nil {
-		return nil, nil, err
-	}
-	return gatherer, registry, nil
 }
