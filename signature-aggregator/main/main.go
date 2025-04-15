@@ -123,6 +123,7 @@ func main() {
 	network, err := peers.NewNetwork(
 		networkLogger,
 		prometheus.DefaultRegisterer,
+		prometheus.DefaultRegisterer,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
