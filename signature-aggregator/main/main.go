@@ -182,5 +182,6 @@ func main() {
 	} else if err != nil {
 		logger.Error("server error", zap.Error(err))
 		log.Fatal(err)
+		os.Exit(1)
 	}
 }
