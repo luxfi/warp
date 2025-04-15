@@ -6,7 +6,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -178,9 +177,9 @@ func main() {
 	logger.Info("Initialization complete")
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
 	if errors.Is(err, http.ErrServerClosed) {
-		logger.Info("server closed")
+		logger.Info("Server closed")
 	} else if err != nil {
-		logger.Error("server error", zap.Error(err))
-		log.Fatal(err)
+		logger.Fatal("Server error", zap.Error(err))
+		os.Exit(1)
 	}
 }
