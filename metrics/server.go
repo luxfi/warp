@@ -33,8 +33,10 @@ func StartMetricsServer(logger logging.Logger, port uint16, names []string) (map
 	)
 
 	go func() {
-		logger.Info("Starting metrics server...",
-			zap.Uint16("port", port))
+		logger.Info(
+			"Starting metrics server...",
+			zap.Uint16("port", port),
+		)
 		err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 		if errors.Is(err, http.ErrServerClosed) {
 			logger.Info("Metrics check server closed")
