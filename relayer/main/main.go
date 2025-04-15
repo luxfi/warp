@@ -140,6 +140,10 @@ func main() {
 			peerNetworkMetricsPrefix,
 		},
 	)
+	if err != nil {
+		logger.Fatal("Failed to start metrics server", zap.Error(err))
+		panic(err)
+	}
 	relayerMetricsRegistry := registries[relayerMetricsPrefix]
 	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
 
