@@ -28,7 +28,11 @@ import (
 	"go.uber.org/zap"
 )
 
-var version = "v0.0.0-dev"
+const (
+	version = "v0.0.0-dev"
+
+	sigAggMetricsPrefix = "signature-aggregator"
+)
 
 func main() {
 	fs := config.BuildFlagSet()
@@ -102,7 +106,7 @@ func main() {
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
 		logger,
-		prometheus.DefaultRegisterer,
+		prometheus.NewRegistry(), // isolate this from the rest of the metrics
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -138,14 +142,14 @@ func main() {
 	registries, err := metricsServer.StartMetricsServer(
 		logger,
 		cfg.MetricsPort,
-		[]string{"signature-aggregator"},
+		[]string{sigAggMetricsPrefix},
 	)
 	if err != nil {
 		logger.Fatal("Failed to start metrics server", zap.Error(err))
 		panic(err)
 	}
 
-	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries["signature-aggregator"])
+	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries[sigAggMetricsPrefix])
 
 	signatureAggregator, err := aggregator.NewSignatureAggregator(
 		network,

@@ -47,7 +47,12 @@ import (
 	_ "go.uber.org/automaxprocs"
 )
 
-var version = "v0.0.0-dev"
+const (
+	version = "v0.0.0-dev"
+
+	relayerMetricsPrefix     = "app"
+	peerNetworkMetricsPrefix = "peers"
+)
 
 func main() {
 	fs := config.BuildFlagSet()
@@ -130,8 +135,13 @@ func main() {
 	registries, err := metricsServer.StartMetricsServer(
 		logger,
 		cfg.MetricsPort,
-		[]string{"app", "peers"},
+		[]string{
+			relayerMetricsPrefix,
+			peerNetworkMetricsPrefix,
+		},
 	)
+	relayerMetricsRegistry := registries[relayerMetricsPrefix]
+	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -155,7 +165,7 @@ func main() {
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
 		logger,
-		prometheus.DefaultRegisterer,
+		prometheus.NewRegistry(), // isolate this from the rest of the metrics
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -176,8 +186,8 @@ func main() {
 
 	network, err := peers.NewNetwork(
 		networkLogger,
-		registries["app"],
-		registries["peers"],
+		relayerMetricsRegistry,
+		peerNetworkMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -194,7 +204,7 @@ func main() {
 		panic(err)
 	}
 
-	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(registries["app"])
+	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(relayerMetricsRegistry)
 	if err != nil {
 		logger.Fatal("Failed to create application relayer metrics", zap.Error(err))
 		panic(err)
@@ -237,7 +247,7 @@ func main() {
 		messageCreator,
 		cfg.SignatureCacheSize,
 		sigAggMetrics.NewSignatureAggregatorMetrics(
-			registries["app"],
+			relayerMetricsRegistry,
 		),
 		platformvm.NewClient(cfg.GetPChainAPI().BaseURL),
 		peerUtils.InitializeOptions(cfg.GetPChainAPI()),

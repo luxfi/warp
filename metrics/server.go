@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// Starts a metrics server on the given port and registers the provided names with the metrics gatherer.
+// Returns a map of registries, keyed by the provided names.
 func StartMetricsServer(logger logging.Logger, port uint16, names []string) (map[string]*prometheus.Registry, error) {
 	gatherer := metrics.NewPrefixGatherer()
 
