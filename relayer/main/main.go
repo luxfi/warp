@@ -302,7 +302,7 @@ func main() {
 		if errors.Is(err, http.ErrServerClosed) {
 			logger.Info("Health check server closed")
 		} else if err != nil {
-			logger.Error("Health check server exited with error", zap.Error(err))
+			logger.Fatal("Health check server exited with error", zap.Error(err))
 			os.Exit(1)
 		}
 	}()
