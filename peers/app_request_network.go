@@ -351,7 +351,9 @@ func (n *appRequestNetwork) updateValidatorSet(
 	defer n.validatorSetLock.Unlock()
 
 	// Fetch the subnet validators from the P-Chain
-	validators, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
+	getProposedValidatorsCtx, getProposedValidatorsCtxCancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	defer getProposedValidatorsCtxCancel()
+	validators, err := n.validatorClient.GetProposedValidators(getProposedValidatorsCtx, subnetID)
 	if err != nil {
 		return err
 	}
