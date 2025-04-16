@@ -6,7 +6,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
+	metricsServer "github.com/ava-labs/icm-services/metrics"
 	"github.com/ava-labs/icm-services/peers"
 	peerUtils "github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/signature-aggregator/aggregator"
@@ -27,7 +27,11 @@ import (
 	"go.uber.org/zap"
 )
 
-var version = "v0.0.0-dev"
+const (
+	version = "v0.0.0-dev"
+
+	sigAggMetricsPrefix = "signature-aggregator"
+)
 
 func main() {
 	fs := config.BuildFlagSet()
@@ -101,7 +105,7 @@ func main() {
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
 		logger,
-		prometheus.DefaultRegisterer,
+		prometheus.NewRegistry(), // isolate this from the rest of the metrics
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -123,6 +127,7 @@ func main() {
 	network, err := peers.NewNetwork(
 		networkLogger,
 		prometheus.DefaultRegisterer,
+		prometheus.DefaultRegisterer,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -133,8 +138,17 @@ func main() {
 	}
 	defer network.Shutdown()
 
-	registry := metrics.Initialize(cfg.MetricsPort)
-	metricsInstance := metrics.NewSignatureAggregatorMetrics(registry)
+	registries, err := metricsServer.StartMetricsServer(
+		logger,
+		cfg.MetricsPort,
+		[]string{sigAggMetricsPrefix},
+	)
+	if err != nil {
+		logger.Fatal("Failed to start metrics server", zap.Error(err))
+		panic(err)
+	}
+
+	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries[sigAggMetricsPrefix])
 
 	signatureAggregator, err := aggregator.NewSignatureAggregator(
 		network,
@@ -163,9 +177,9 @@ func main() {
 	logger.Info("Initialization complete")
 	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
 	if errors.Is(err, http.ErrServerClosed) {
-		logger.Info("server closed")
+		logger.Info("Server closed")
 	} else if err != nil {
-		logger.Error("server error", zap.Error(err))
-		log.Fatal(err)
+		logger.Fatal("Server error", zap.Error(err))
+		os.Exit(1)
 	}
 }
