@@ -105,12 +105,13 @@ type appRequestNetwork struct {
 // NewNetwork creates a P2P network client for interacting with validators
 func NewNetwork(
 	logger logging.Logger,
-	registerer prometheus.Registerer,
+	relayerRegistry prometheus.Registerer,
+	peerNetworkRegistry prometheus.Registerer,
 	trackedSubnets set.Set[ids.ID],
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
 ) (AppRequestNetwork, error) {
-	metrics, err := newAppRequestNetworkMetrics(registerer)
+	metrics, err := newAppRequestNetworkMetrics(relayerRegistry)
 	if err != nil {
 		logger.Error("Failed to create app request network metrics", zap.Error(err))
 		return nil, err
@@ -146,8 +147,6 @@ func NewNetwork(
 	validatorClient := validators.NewCanonicalValidatorClient(logger, cfg.GetPChainAPI())
 	manager := snowVdrs.NewManager()
 
-	networkMetrics := prometheus.NewRegistry()
-
 	// Primary network must not be explicitly tracked so removing it prior to creating TestNetworkConfig
 	trackedSubnets.Remove(constants.PrimaryNetworkID)
 	if trackedSubnets.Len() > maxNumSubnets {
@@ -155,7 +154,7 @@ func NewNetwork(
 	}
 	trackedSubnetsLock := new(sync.RWMutex)
 	testNetworkConfig, err := network.NewTestNetworkConfig(
-		networkMetrics,
+		peerNetworkRegistry,
 		networkID,
 		manager,
 		trackedSubnets,
@@ -189,7 +188,7 @@ func NewNetwork(
 
 	testNetwork, err := network.NewTestNetwork(
 		logger,
-		networkMetrics,
+		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
 		upgradeTime,
