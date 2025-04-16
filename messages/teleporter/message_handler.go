@@ -327,10 +327,10 @@ func (m *messageHandler) waitForReceipt(
 	txHash common.Hash,
 	teleporterMessageID ids.ID,
 ) error {
-	callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
-	defer callCtxCancel()
 	var receipt *types.Receipt
 	operation := func() (err error) {
+		callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
+		defer callCtxCancel()
 		receipt, err = destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
 		return err
 	}

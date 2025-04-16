@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
 	relayerTypes "github.com/ava-labs/icm-services/types"
+	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/interfaces"
@@ -296,7 +297,9 @@ func FetchWarpMessage(
 	warpID ids.ID,
 	blockNum *big.Int,
 ) (*relayerTypes.WarpMessageInfo, error) {
-	logs, err := ethClient.FilterLogs(context.Background(), interfaces.FilterQuery{
+	fetchLogsCtx, fetchLogsCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
+	defer fetchLogsCtxCancel()
+	logs, err := ethClient.FilterLogs(fetchLogsCtx, interfaces.FilterQuery{
 		Topics:    [][]common.Hash{{relayerTypes.WarpPrecompileLogFilter}, nil, {common.Hash(warpID)}},
 		Addresses: []common.Address{warp.ContractAddress},
 		FromBlock: blockNum,
