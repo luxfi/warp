@@ -7,6 +7,7 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 
@@ -25,10 +26,15 @@ import (
 )
 
 const (
-	// Set the max fee to twice the estimated base fee.
-	// TODO: Revisit this constant factor when we add profit determination, or make it configurable
-	BaseFeeFactor        = 2
-	MaxPriorityFeePerGas = 2500000000 // 2.5 gwei
+	// If the max base fee is not explicitly set, use 3x the current
+	// base fee estimate
+	defaultBaseFeeFactor        = 3
+	defaultMaxPriorityFeePerGas = 2500000000 // 2.5 gwei
+)
+
+var (
+	errInvalidMaxBaseFee           = errors.New("invalid max base fee")
+	errInvalidMaxPriorityFeePerGas = errors.New("invalid max priority fee per gas")
 )
 
 // Client interface wraps the ethclient.Client interface for mocking purposes.
@@ -45,6 +51,8 @@ type destinationClient struct {
 	evmChainID              *big.Int
 	currentNonce            uint64
 	blockGasLimit           uint64
+	maxBaseFee              *big.Int
+	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
 }
 
@@ -110,6 +118,34 @@ func NewDestinationClient(
 		zap.Uint64("nonce", nonce),
 	)
 
+	var maxBaseFee *big.Int
+	if len(destinationBlockchain.MaxBaseFee) > 0 {
+		var ok bool
+		maxBaseFee, ok = new(big.Int).SetString(destinationBlockchain.MaxBaseFee, 10)
+		if !ok || maxBaseFee.Cmp(big.NewInt(0)) <= 0 {
+			logger.Error(
+				"Invalid max base fee",
+				zap.String("maxBaseFee", destinationBlockchain.MaxBaseFee),
+			)
+			return nil, errInvalidMaxBaseFee
+		}
+	}
+
+	var maxPriorityFeePerGas *big.Int
+	if len(destinationBlockchain.MaxPriorityFeePerGas) > 0 {
+		var ok bool
+		maxPriorityFeePerGas, ok = new(big.Int).SetString(destinationBlockchain.MaxPriorityFeePerGas, 10)
+		if !ok || maxPriorityFeePerGas.Cmp(big.NewInt(0)) <= 0 {
+			logger.Error(
+				"Invalid max priority fee per gas",
+				zap.String("maxPriorityFeePerGas", destinationBlockchain.MaxPriorityFeePerGas),
+			)
+			return nil, errInvalidMaxPriorityFeePerGas
+		}
+	} else {
+		maxPriorityFeePerGas = big.NewInt(defaultMaxPriorityFeePerGas)
+	}
+
 	return &destinationClient{
 		client:                  client,
 		lock:                    new(sync.Mutex),
@@ -119,6 +155,8 @@ func NewDestinationClient(
 		currentNonce:            nonce,
 		logger:                  logger,
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
+		maxBaseFee:              maxBaseFee,
+		maxPriorityFeePerGas:    maxPriorityFeePerGas,
 	}, nil
 }
 
@@ -128,20 +166,28 @@ func (c *destinationClient) SendTx(
 	gasLimit uint64,
 	callData []byte,
 ) (common.Hash, error) {
-	// Get the current base fee estimation, which is based on the previous blocks gas usage.
-	baseFeeCtx, baseFeeCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
-	defer baseFeeCtxCancel()
-	baseFee, err := c.client.EstimateBaseFee(baseFeeCtx)
-	if err != nil {
-		c.logger.Error(
-			"Failed to get base fee",
-			zap.Error(err),
-		)
-		return common.Hash{}, err
+	// If the max base fee isn't explitictly set, then default to fetching the
+	// current base fee estimate and multiply it by `BaseFeeFactor` to allow for
+	// an increase prior to the transaction being included in a block.
+	var maxBaseFee *big.Int
+	if c.maxBaseFee != nil {
+		maxBaseFee = c.maxBaseFee
+	} else {
+		// Get the current base fee estimation, which is based on the previous blocks gas usage.
+		baseFeeCtx, baseFeeCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
+		defer baseFeeCtxCancel()
+		baseFee, err := c.client.EstimateBaseFee(baseFeeCtx)
+		if err != nil {
+			c.logger.Error(
+				"Failed to get base fee",
+				zap.Error(err),
+			)
+			return common.Hash{}, err
+		}
+		maxBaseFee = new(big.Int).Mul(baseFee, big.NewInt(defaultBaseFeeFactor))
 	}
 
 	// Get the suggested gas tip cap of the network
-	// TODO: Add a configurable ceiling to this value
 	gasTipCapCtx, gasTipCapCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 	defer gasTipCapCtxCancel()
 	gasTipCap, err := c.client.SuggestGasTipCap(gasTipCapCtx)
@@ -152,10 +198,12 @@ func (c *destinationClient) SendTx(
 		)
 		return common.Hash{}, err
 	}
+	if gasTipCap.Cmp(c.maxPriorityFeePerGas) > 0 {
+		gasTipCap = c.maxPriorityFeePerGas
+	}
 
 	to := common.HexToAddress(toAddress)
-	gasFeeCap := baseFee.Mul(baseFee, big.NewInt(BaseFeeFactor))
-	gasFeeCap.Add(gasFeeCap, big.NewInt(MaxPriorityFeePerGas))
+	gasFeeCap := new(big.Int).Add(maxBaseFee, gasTipCap)
 
 	// Synchronize nonce access so that we send transactions in nonce order.
 	// Hold the lock until the transaction is sent to minimize the chance of
