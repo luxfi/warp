@@ -22,14 +22,16 @@ const (
 // Destination blockchain configuration. Specifies how to connect to and issue
 // transactions on the destination blockchain.
 type DestinationBlockchain struct {
-	SubnetID          string            `mapstructure:"subnet-id" json:"subnet-id"`
-	BlockchainID      string            `mapstructure:"blockchain-id" json:"blockchain-id"`
-	VM                string            `mapstructure:"vm" json:"vm"`
-	RPCEndpoint       basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
-	KMSKeyID          string            `mapstructure:"kms-key-id" json:"kms-key-id"`
-	KMSAWSRegion      string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
-	AccountPrivateKey string            `mapstructure:"account-private-key" json:"account-private-key"`
-	BlockGasLimit     uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	SubnetID             string            `mapstructure:"subnet-id" json:"subnet-id"`
+	BlockchainID         string            `mapstructure:"blockchain-id" json:"blockchain-id"`
+	VM                   string            `mapstructure:"vm" json:"vm"`
+	RPCEndpoint          basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
+	KMSKeyID             string            `mapstructure:"kms-key-id" json:"kms-key-id"`
+	KMSAWSRegion         string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
+	AccountPrivateKey    string            `mapstructure:"account-private-key" json:"account-private-key"`
+	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	MaxBaseFee           string            `mapstructure:"max-base-fee" json:"max-base-fee"`
+	MaxPriorityFeePerGas string            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
 
 	// Fetched from the chain after startup
 	warpConfig WarpConfig
