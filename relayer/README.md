@@ -309,6 +309,18 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The AWS region in which the KMS key is located. Required if `kms-key-id` is provided.
 
+  `"block-gas-limit": unsigned integer`
+
+  - The maximum amount of gas that can be used in a single block on this blockchain. The relayer will not attempt to deliver messages that require more gas than this limit to the given chain.
+
+  `"max-base-fee": string`
+
+  - The maximum base fee gas price the relayer is willing to pay on this blockchain. Represented as a decimal encoded unsigned integer string to allow for large values.
+
+  `"max-priority-fee-per-gas": string`
+
+  - The maximum priority fee per gas that the relayer is willing to pay to incentivize transactions being including on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Represented as a decimal encoded unsigned integer string to allow for large values.
+
 `"decider-url": string`
 
 - The URL of a service implementing the gRPC service defined by `proto/decider`, which will be queried for each message to determine whether that message should be relayed.
