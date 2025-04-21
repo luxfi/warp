@@ -38,6 +38,7 @@ func TestSendTx(t *testing.T) {
 		name                  string
 		chainIDErr            error
 		chainIDTimes          int
+		maxBaseFee            *big.Int
 		estimateBaseFeeErr    error
 		estimateBaseFeeTimes  int
 		suggestGasTipCapErr   error
@@ -47,9 +48,18 @@ func TestSendTx(t *testing.T) {
 		expectError           bool
 	}{
 		{
-			name:                  "valid",
+			name:                  "valid - use base fee estimate",
 			chainIDTimes:          1,
+			maxBaseFee:            nil,
 			estimateBaseFeeTimes:  1,
+			suggestGasTipCapTimes: 1,
+			sendTransactionTimes:  1,
+		},
+		{
+			name:                  "valid - max base fee",
+			chainIDTimes:          1,
+			maxBaseFee:            big.NewInt(100),
+			estimateBaseFeeTimes:  0,
 			suggestGasTipCapTimes: 1,
 			sendTransactionTimes:  1,
 		},
@@ -87,6 +97,7 @@ func TestSendTx(t *testing.T) {
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
 				signer:               txSigner,
+				maxBaseFee:           test.maxBaseFee,
 				maxPriorityFeePerGas: big.NewInt(0),
 			}
 			warpMsg := &avalancheWarp.Message{}
