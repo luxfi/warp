@@ -17,6 +17,7 @@ import (
 	mock_evm "github.com/ava-labs/icm-services/vms/evm/mocks"
 	mock_vms "github.com/ava-labs/icm-services/vms/mocks"
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/interfaces"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
@@ -253,4 +254,91 @@ func TestShouldSendMessage(t *testing.T) {
 			require.Equal(t, test.expectedResult, result)
 		})
 	}
+}
+
+func TestSendMessageAlreadyDelivered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	logger := logging.NoLog{}
+
+	validMessageBytes, err := validTeleporterMessage.Pack()
+	require.NoError(t, err)
+
+	validAddressedCall, err := warpPayload.NewAddressedCall(
+		messageProtocolAddress.Bytes(),
+		validMessageBytes,
+	)
+	require.NoError(t, err)
+
+	sourceBlockchainID := ids.Empty
+	warpUnsignedMessage, err := warp.NewUnsignedMessage(
+		0,
+		sourceBlockchainID,
+		validAddressedCall.Bytes(),
+	)
+	require.NoError(t, err)
+
+	messageID, err := teleporterUtils.CalculateMessageID(
+		messageProtocolAddress,
+		sourceBlockchainID,
+		destinationBlockchainID,
+		validTeleporterMessage.MessageNonce,
+	)
+	require.NoError(t, err)
+
+	messageReceivedCallData, err := teleportermessenger.PackMessageReceived(messageID)
+	require.NoError(t, err)
+
+	messageDeliveredResult, err := teleportermessenger.PackMessageReceivedOutput(true)
+	require.NoError(t, err)
+
+	mockClient := mock_vms.NewMockDestinationClient(ctrl)
+
+	factory, err := NewMessageHandlerFactory(
+		logger,
+		messageProtocolAddress,
+		messageProtocolConfig,
+		nil,
+	)
+	require.NoError(t, err)
+	mockClient.EXPECT().DestinationBlockchainID().Return(destinationBlockchainID).AnyTimes()
+	messageHandler, err := factory.NewMessageHandler(warpUnsignedMessage, mockClient)
+	require.NoError(t, err)
+
+	signedMessage, err := warp.NewMessage(
+		warpUnsignedMessage,
+		&warp.BitSetSignature{},
+	)
+	require.NoError(t, err)
+
+	ethClient := mock_evm.NewMockClient(ctrl)
+	mockClient.EXPECT().
+		Client().
+		Return(ethClient).
+		Times(2)
+
+	mockClient.EXPECT().
+		SendTx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Times(1)
+
+	ethClient.EXPECT().
+		TransactionReceipt(gomock.Any(), gomock.Any()).
+		Return(
+			&types.Receipt{
+				Status: types.ReceiptStatusFailed,
+			},
+			nil,
+		).Times(1)
+
+	messageReceivedInput := interfaces.CallMsg{
+		From: bind.CallOpts{}.From,
+		To:   &messageProtocolAddress,
+		Data: messageReceivedCallData,
+	}
+	ethClient.EXPECT().
+		CallContract(gomock.Any(), gomock.Eq(messageReceivedInput), gomock.Any()).
+		Return(messageDeliveredResult, nil).
+		Times(1)
+
+	_, err = messageHandler.SendMessage(signedMessage)
+	require.NoError(t, err)
 }
