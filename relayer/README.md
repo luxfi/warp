@@ -313,13 +313,13 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The maximum amount of gas that can be used in a single block on this blockchain. The relayer will not attempt to deliver messages that require more gas than this limit to the given chain.
 
-  `"max-base-fee": string`
+  `"max-base-fee": unsigned integer`
 
-  - The maximum base fee gas price the relayer is willing to pay on this blockchain. Represented as a decimal encoded unsigned integer string to allow for large values.
+  - The maximum base fee gas price (in WEI) the relayer is willing to pay on this blockchain.
 
-  `"max-priority-fee-per-gas": string`
+  `"max-priority-fee-per-gas": unsigned interger`
 
-  - The maximum priority fee per gas that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Represented as a decimal encoded unsigned integer string to allow for large values.
+  - The maximum priority fee per gas (in WEI) that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value.
 
 `"decider-url": string`
 

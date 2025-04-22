@@ -50,7 +50,7 @@ func TestSendTx(t *testing.T) {
 		{
 			name:                  "valid - use base fee estimate",
 			chainIDTimes:          1,
-			maxBaseFee:            nil,
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapTimes: 1,
 			sendTransactionTimes:  1,
@@ -65,12 +65,14 @@ func TestSendTx(t *testing.T) {
 		},
 		{
 			name:                 "invalid estimateBaseFee",
+			maxBaseFee:           big.NewInt(0),
 			estimateBaseFeeErr:   testError,
 			estimateBaseFeeTimes: 1,
 			expectError:          true,
 		},
 		{
 			name:                  "invalid suggestGasTipCap",
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapErr:   testError,
 			suggestGasTipCapTimes: 1,
@@ -79,6 +81,7 @@ func TestSendTx(t *testing.T) {
 		{
 			name:                  "invalid sendTransaction",
 			chainIDTimes:          1,
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapTimes: 1,
 			sendTransactionErr:    testError,
@@ -105,11 +108,11 @@ func TestSendTx(t *testing.T) {
 
 			gomock.InOrder(
 				mockClient.EXPECT().EstimateBaseFee(gomock.Any()).Return(
-					new(big.Int),
+					big.NewInt(100_000),
 					test.estimateBaseFeeErr,
 				).Times(test.estimateBaseFeeTimes),
 				mockClient.EXPECT().SuggestGasTipCap(gomock.Any()).Return(
-					new(big.Int),
+					big.NewInt(0),
 					test.suggestGasTipCapErr,
 				).Times(test.suggestGasTipCapTimes),
 				mockClient.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(
