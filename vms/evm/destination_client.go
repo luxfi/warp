@@ -166,7 +166,7 @@ func (c *destinationClient) SendTx(
 	gasLimit uint64,
 	callData []byte,
 ) (common.Hash, error) {
-	// If the max base fee isn't explitictly set, then default to fetching the
+	// If the max base fee isn't explicitly set, then default to fetching the
 	// current base fee estimate and multiply it by `BaseFeeFactor` to allow for
 	// an increase prior to the transaction being included in a block.
 	var maxBaseFee *big.Int
