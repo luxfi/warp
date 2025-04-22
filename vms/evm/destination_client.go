@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
@@ -85,7 +86,8 @@ func NewDestinationClient(
 		return nil, err
 	}
 
-	nonce, err := client.NonceAt(context.Background(), sgnr.Address(), nil)
+	// Fetch the pending nonce for the relayer's address to account for restarts due to long-pending txs in the mempool
+	nonce, err := client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
 	if err != nil {
 		logger.Error(
 			"Failed to get nonce",
