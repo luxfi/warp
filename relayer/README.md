@@ -319,7 +319,7 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   `"max-priority-fee-per-gas": string`
 
-  - The maximum priority fee per gas that the relayer is willing to pay to incentivize transactions being including on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Represented as a decimal encoded unsigned integer string to allow for large values.
+  - The maximum priority fee per gas that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Represented as a decimal encoded unsigned integer string to allow for large values.
 
 `"decider-url": string`
 
