@@ -7,7 +7,6 @@ package evm
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"sync"
 
@@ -26,15 +25,8 @@ import (
 )
 
 const (
-	// If the max base fee is not explicitly set, use 3x the current
-	// base fee estimate
-	defaultBaseFeeFactor        = 3
-	defaultMaxPriorityFeePerGas = 2500000000 // 2.5 gwei
-)
-
-var (
-	errInvalidMaxBaseFee           = errors.New("invalid max base fee")
-	errInvalidMaxPriorityFeePerGas = errors.New("invalid max priority fee per gas")
+	// If the max base fee is not explicitly set, use 3x the current base fee estimate
+	defaultBaseFeeFactor = 3
 )
 
 // Client interface wraps the ethclient.Client interface for mocking purposes.
@@ -118,34 +110,6 @@ func NewDestinationClient(
 		zap.Uint64("nonce", nonce),
 	)
 
-	var maxBaseFee *big.Int
-	if len(destinationBlockchain.MaxBaseFee) > 0 {
-		var ok bool
-		maxBaseFee, ok = new(big.Int).SetString(destinationBlockchain.MaxBaseFee, 10)
-		if !ok || maxBaseFee.Cmp(big.NewInt(0)) <= 0 {
-			logger.Error(
-				"Invalid max base fee",
-				zap.String("maxBaseFee", destinationBlockchain.MaxBaseFee),
-			)
-			return nil, errInvalidMaxBaseFee
-		}
-	}
-
-	var maxPriorityFeePerGas *big.Int
-	if len(destinationBlockchain.MaxPriorityFeePerGas) > 0 {
-		var ok bool
-		maxPriorityFeePerGas, ok = new(big.Int).SetString(destinationBlockchain.MaxPriorityFeePerGas, 10)
-		if !ok || maxPriorityFeePerGas.Cmp(big.NewInt(0)) <= 0 {
-			logger.Error(
-				"Invalid max priority fee per gas",
-				zap.String("maxPriorityFeePerGas", destinationBlockchain.MaxPriorityFeePerGas),
-			)
-			return nil, errInvalidMaxPriorityFeePerGas
-		}
-	} else {
-		maxPriorityFeePerGas = big.NewInt(defaultMaxPriorityFeePerGas)
-	}
-
 	return &destinationClient{
 		client:                  client,
 		lock:                    new(sync.Mutex),
@@ -155,8 +119,8 @@ func NewDestinationClient(
 		currentNonce:            nonce,
 		logger:                  logger,
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
-		maxBaseFee:              maxBaseFee,
-		maxPriorityFeePerGas:    maxPriorityFeePerGas,
+		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
+		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
 	}, nil
 }
 
@@ -170,10 +134,10 @@ func (c *destinationClient) SendTx(
 	// current base fee estimate and multiply it by `BaseFeeFactor` to allow for
 	// an increase prior to the transaction being included in a block.
 	var maxBaseFee *big.Int
-	if c.maxBaseFee != nil {
+	if c.maxBaseFee.Cmp(big.NewInt(0)) > 0 {
 		maxBaseFee = c.maxBaseFee
 	} else {
-		// Get the current base fee estimation, which is based on the previous blocks gas usage.
+		// Get the current base fee estimation for the chain.
 		baseFeeCtx, baseFeeCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer baseFeeCtxCancel()
 		baseFee, err := c.client.EstimateBaseFee(baseFeeCtx)
