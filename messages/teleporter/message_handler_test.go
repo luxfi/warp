@@ -71,6 +71,7 @@ func init() {
 }
 
 func TestShouldSendMessage(t *testing.T) {
+	// Define test constants
 	validMessageBytes, err := validTeleporterMessage.Pack()
 	require.NoError(t, err)
 
@@ -206,6 +207,7 @@ func TestShouldSendMessage(t *testing.T) {
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
+			// Set up mocks and the object under test
 			ctrl := gomock.NewController(t)
 			logger := logging.NoLog{}
 
@@ -227,10 +229,10 @@ func TestShouldSendMessage(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			ethClient := mock_evm.NewMockClient(ctrl)
+			mockEthClient := mock_evm.NewMockClient(ctrl)
 			mockClient.EXPECT().
 				Client().
-				Return(ethClient).
+				Return(mockEthClient).
 				Times(test.clientTimes)
 			mockClient.EXPECT().
 				SenderAddress().
@@ -243,12 +245,13 @@ func TestShouldSendMessage(t *testing.T) {
 					To:   &messageProtocolAddress,
 					Data: test.messageReceivedCall.input,
 				}
-				ethClient.EXPECT().
+				mockEthClient.EXPECT().
 					CallContract(gomock.Any(), gomock.Eq(messageReceivedInput), gomock.Any()).
 					Return(test.messageReceivedCall.expectedResult, nil).
 					Times(test.messageReceivedCall.times)
 			}
 
+			// Call the method under test
 			result, err := messageHandler.ShouldSendMessage()
 			require.NoError(t, err)
 			require.Equal(t, test.expectedResult, result)
@@ -257,6 +260,7 @@ func TestShouldSendMessage(t *testing.T) {
 }
 
 func TestSendMessageAlreadyDelivered(t *testing.T) {
+	// Set up test constants
 	ctrl := gomock.NewController(t)
 	logger := logging.NoLog{}
 
@@ -288,9 +292,22 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 	messageReceivedCallData, err := teleportermessenger.PackMessageReceived(messageID)
 	require.NoError(t, err)
 
+	messageReceivedInput := interfaces.CallMsg{
+		From: bind.CallOpts{}.From,
+		To:   &messageProtocolAddress,
+		Data: messageReceivedCallData,
+	}
+
 	messageDeliveredResult, err := teleportermessenger.PackMessageReceivedOutput(true)
 	require.NoError(t, err)
 
+	signedMessage, err := warp.NewMessage(
+		warpUnsignedMessage,
+		&warp.BitSetSignature{},
+	)
+	require.NoError(t, err)
+
+	// Set up mocks and the object under test
 	mockClient := mock_vms.NewMockDestinationClient(ctrl)
 
 	factory, err := NewMessageHandlerFactory(
@@ -304,23 +321,17 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 	messageHandler, err := factory.NewMessageHandler(warpUnsignedMessage, mockClient)
 	require.NoError(t, err)
 
-	signedMessage, err := warp.NewMessage(
-		warpUnsignedMessage,
-		&warp.BitSetSignature{},
-	)
-	require.NoError(t, err)
-
-	ethClient := mock_evm.NewMockClient(ctrl)
+	mockEthClient := mock_evm.NewMockClient(ctrl)
 	mockClient.EXPECT().
 		Client().
-		Return(ethClient).
+		Return(mockEthClient).
 		Times(2)
 
 	mockClient.EXPECT().
 		SendTx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 
-	ethClient.EXPECT().
+	mockEthClient.EXPECT().
 		TransactionReceipt(gomock.Any(), gomock.Any()).
 		Return(
 			&types.Receipt{
@@ -329,16 +340,12 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 			nil,
 		).Times(1)
 
-	messageReceivedInput := interfaces.CallMsg{
-		From: bind.CallOpts{}.From,
-		To:   &messageProtocolAddress,
-		Data: messageReceivedCallData,
-	}
-	ethClient.EXPECT().
+	mockEthClient.EXPECT().
 		CallContract(gomock.Any(), gomock.Eq(messageReceivedInput), gomock.Any()).
 		Return(messageDeliveredResult, nil).
 		Times(1)
 
+	// Call the method under test
 	_, err = messageHandler.SendMessage(signedMessage)
 	require.NoError(t, err)
 }
