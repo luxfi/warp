@@ -309,6 +309,10 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The AWS region in which the KMS key is located. Required if `kms-key-id` is provided.
 
+  `"block-acceptance-timeout-seconds": uint64`
+
+  - The time in seconds to wait for a sent transaction to be included in a block when verifying transaction receipts before erroring out. If omitted, defaults to 30 seconds.
+
 `"decider-url": string`
 
 - The URL of a service implementing the gRPC service defined by `proto/decider`, which will be queried for each message to determine whether that message should be relayed.

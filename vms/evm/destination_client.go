@@ -9,11 +9,11 @@ import (
 	"context"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	predicateutils "github.com/ava-labs/subnet-evm/predicate"
+	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -28,8 +29,9 @@ import (
 const (
 	// Set the max fee to twice the estimated base fee.
 	// TODO: Revisit this constant factor when we add profit determination, or make it configurable
-	BaseFeeFactor        = 2
-	MaxPriorityFeePerGas = 2500000000 // 2.5 gwei
+	BaseFeeFactor                 = 2
+	MaxPriorityFeePerGas          = 2500000000 // 2.5 gwei
+	DefaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
 // Client interface wraps the ethclient.Client interface for mocking purposes.
@@ -47,6 +49,7 @@ type destinationClient struct {
 	currentNonce            uint64
 	blockGasLimit           uint64
 	logger                  logging.Logger
+	blockAcceptanceTimeout  time.Duration
 }
 
 func NewDestinationClient(
@@ -105,6 +108,13 @@ func NewDestinationClient(
 		return nil, err
 	}
 
+	var blockAcceptanceTimeout time.Duration
+	if destinationBlockchain.BlockAcceptanceTimeoutSeconds > 0 {
+		blockAcceptanceTimeout = time.Duration(destinationBlockchain.BlockAcceptanceTimeoutSeconds) * time.Second
+	} else {
+		blockAcceptanceTimeout = DefaultBlockAcceptanceTimeout
+	}
+
 	logger.Info(
 		"Initialized destination client",
 		zap.String("blockchainID", destinationID.String()),
@@ -121,6 +131,7 @@ func NewDestinationClient(
 		currentNonce:            nonce,
 		logger:                  logger,
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
+		blockAcceptanceTimeout:  blockAcceptanceTimeout,
 	}, nil
 }
 
@@ -223,4 +234,8 @@ func (c *destinationClient) DestinationBlockchainID() ids.ID {
 
 func (c *destinationClient) BlockGasLimit() uint64 {
 	return c.blockGasLimit
+}
+
+func (c *destinationClient) BlockAcceptanceTimeout() time.Duration {
+	return c.blockAcceptanceTimeout
 }
