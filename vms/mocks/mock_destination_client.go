@@ -11,6 +11,7 @@ package mocks
 
 import (
 	reflect "reflect"
+	time "time"
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -40,6 +41,20 @@ func NewMockDestinationClient(ctrl *gomock.Controller) *MockDestinationClient {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockDestinationClient) EXPECT() *MockDestinationClientMockRecorder {
 	return m.recorder
+}
+
+// BlockAcceptanceTimeout mocks base method.
+func (m *MockDestinationClient) BlockAcceptanceTimeout() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockAcceptanceTimeout")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// BlockAcceptanceTimeout indicates an expected call of BlockAcceptanceTimeout.
+func (mr *MockDestinationClientMockRecorder) BlockAcceptanceTimeout() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockAcceptanceTimeout", reflect.TypeOf((*MockDestinationClient)(nil).BlockAcceptanceTimeout))
 }
 
 // BlockGasLimit mocks base method.
