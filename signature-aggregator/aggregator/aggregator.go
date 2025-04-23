@@ -62,15 +62,17 @@ var (
 
 type SignatureAggregator struct {
 	network peers.AppRequestNetwork
-	// protected by subnetsMapLock
+	// protected by subnetMapsLock
 	subnetIDsByBlockchainID map[ids.ID]ids.ID
-	messageCreator          message.Creator
-	currentRequestID        atomic.Uint32
-	subnetsMapLock          sync.Mutex
-	metrics                 *metrics.SignatureAggregatorMetrics
-	cache                   *cache.Cache
-	pChainClient            platformvm.Client
-	pChainClientOptions     []rpc.Option
+	// protected by subnetMapsLock
+	subnetIDIsL1        map[ids.ID]bool
+	messageCreator      message.Creator
+	currentRequestID    atomic.Uint32
+	subnetMapsLock      sync.Mutex
+	metrics             *metrics.SignatureAggregatorMetrics
+	cache               *cache.Cache
+	pChainClient        platformvm.Client
+	pChainClientOptions []rpc.Option
 }
 
 func NewSignatureAggregator(
@@ -91,6 +93,7 @@ func NewSignatureAggregator(
 	sa := SignatureAggregator{
 		network:                 network,
 		subnetIDsByBlockchainID: map[ids.ID]ids.ID{},
+		subnetIDIsL1:            map[ids.ID]bool{},
 		metrics:                 metrics,
 		currentRequestID:        atomic.Uint32{},
 		cache:                   cache,
@@ -206,16 +209,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 	isL1 := false
 	if signingSubnet != constants.PrimaryNetworkID {
-		subnet, err := s.pChainClient.GetSubnet(ctx, signingSubnet, s.pChainClientOptions...)
+		isL1, err = s.isSubnetL1(ctx, log, signingSubnet)
 		if err != nil {
-			log.Error(
-				"Failed to get subnet",
-				zap.String("signingSubnetID", signingSubnet.String()),
-				zap.Error(err),
-			)
-			return nil, err
+			return nil, fmt.Errorf("failed to check if signing subnet is L1: %w", err)
 		}
-		isL1 = subnet.ConversionID != ids.Empty
 	}
 
 	// Tracks all collected signatures.
@@ -504,8 +501,8 @@ func (s *SignatureAggregator) getSubnetID(
 	log logging.Logger,
 	blockchainID ids.ID,
 ) (ids.ID, error) {
-	s.subnetsMapLock.Lock()
-	defer s.subnetsMapLock.Unlock()
+	s.subnetMapsLock.Lock()
+	defer s.subnetMapsLock.Unlock()
 
 	subnetID, ok := s.subnetIDsByBlockchainID[blockchainID]
 	if ok {
@@ -520,6 +517,28 @@ func (s *SignatureAggregator) getSubnetID(
 	}
 	s.subnetIDsByBlockchainID[blockchainID] = subnetID
 	return subnetID, nil
+}
+
+// Looks up whether a subnet is an L1 and caches the result in the map for the lifetime of the application.
+// since this value can change only once in the lifetime of the subnet.
+func (s *SignatureAggregator) isSubnetL1(ctx context.Context, log logging.Logger, subnetID ids.ID) (bool, error) {
+	s.subnetMapsLock.Lock()
+	defer s.subnetMapsLock.Unlock()
+	isL1, ok := s.subnetIDIsL1[subnetID]
+	if !ok {
+		subnet, err := s.pChainClient.GetSubnet(ctx, subnetID, s.pChainClientOptions...)
+		if err != nil {
+			log.Error(
+				"Failed to check if subnet is L1",
+				zap.Stringer("subnetID", subnetID),
+				zap.Error(err),
+			)
+			return false, err
+		}
+		isL1 = subnet.ConversionID != ids.Empty
+		s.subnetIDIsL1[subnetID] = isL1
+	}
+	return isL1, nil
 }
 
 // Attempts to create a signed Warp message from the accumulated responses.
