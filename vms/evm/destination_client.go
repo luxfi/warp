@@ -124,6 +124,12 @@ func NewDestinationClient(
 	}, nil
 }
 
+// SendTx constructs, signs, and broadcast a transaction to deliver the given {signedMessage}
+// to this chain with the provided {callData}. If the maximum base fee value is not configured, the
+// maximum base is calculated as the current base fee multiplied by the default base fee factor.
+// The maximum priority fee per gas is set the minimum of the suggested gas tip cap and the configured
+// maximum priority fee per gas. The max fee per gas is set to the sum of the max base fee and the
+// max priority fee per gas.
 func (c *destinationClient) SendTx(
 	signedMessage *avalancheWarp.Message,
 	toAddress string,
