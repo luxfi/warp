@@ -186,11 +186,11 @@ func cleanup() {
 var _ = ginkgo.AfterSuite(cleanup)
 
 var _ = ginkgo.Describe("[ICM Relayer Integration Tests", func() {
-	ginkgo.It("Manually Provided Message", func() {
-		ManualMessage(localNetworkInstance, teleporterInfo)
-	})
 	ginkgo.It("Basic Relay", func() {
 		BasicRelay(localNetworkInstance, teleporterInfo)
+	})
+	ginkgo.It("Manually Provided Message", func() {
+		ManualMessage(localNetworkInstance, teleporterInfo)
 	})
 	ginkgo.It("Shared Database", func() {
 		SharedDatabaseAccess(localNetworkInstance, teleporterInfo)
