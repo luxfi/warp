@@ -30,6 +30,8 @@ type DestinationBlockchain struct {
 	KMSAWSRegion      string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
 	AccountPrivateKey string            `mapstructure:"account-private-key" json:"account-private-key"`
 	BlockGasLimit     uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	//nolint:lll
+	BlockAcceptanceTimeoutSeconds uint64 `mapstructure:"block-acceptance-timeout-seconds" json:"block-acceptance-timeout-seconds"`
 
 	// Fetched from the chain after startup
 	warpConfig WarpConfig
