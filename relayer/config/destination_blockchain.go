@@ -16,20 +16,23 @@ import (
 const (
 	// The block gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-	defaultBlockGasLimit = 12_000_000
+	defaultBlockGasLimit        = 12_000_000
+	defaultMaxPriorityFeePerGas = 2500000000 // 2.5 gwei
 )
 
 // Destination blockchain configuration. Specifies how to connect to and issue
 // transactions on the destination blockchain.
 type DestinationBlockchain struct {
-	SubnetID          string            `mapstructure:"subnet-id" json:"subnet-id"`
-	BlockchainID      string            `mapstructure:"blockchain-id" json:"blockchain-id"`
-	VM                string            `mapstructure:"vm" json:"vm"`
-	RPCEndpoint       basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
-	KMSKeyID          string            `mapstructure:"kms-key-id" json:"kms-key-id"`
-	KMSAWSRegion      string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
-	AccountPrivateKey string            `mapstructure:"account-private-key" json:"account-private-key"`
-	BlockGasLimit     uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	SubnetID             string            `mapstructure:"subnet-id" json:"subnet-id"`
+	BlockchainID         string            `mapstructure:"blockchain-id" json:"blockchain-id"`
+	VM                   string            `mapstructure:"vm" json:"vm"`
+	RPCEndpoint          basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
+	KMSKeyID             string            `mapstructure:"kms-key-id" json:"kms-key-id"`
+	KMSAWSRegion         string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
+	AccountPrivateKey    string            `mapstructure:"account-private-key" json:"account-private-key"`
+	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	MaxBaseFee           uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
+	MaxPriorityFeePerGas uint64            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
 	//nolint:lll
 	BlockAcceptanceTimeoutSeconds uint64 `mapstructure:"block-acceptance-timeout-seconds" json:"block-acceptance-timeout-seconds"`
 
@@ -83,6 +86,13 @@ func (s *DestinationBlockchain) Validate() error {
 	if s.subnetID == constants.PrimaryNetworkID &&
 		s.BlockGasLimit > defaultBlockGasLimit {
 		return fmt.Errorf("C-Chain block-gas-limit '%d' exceeded", s.BlockGasLimit)
+	}
+
+	// If not set, use the default value for the maximum priority fee per gas.
+	// We do not set any default for the max base fee. Instead, if unset, we
+	// will use the current base fee from the chain at the time of the transaction.
+	if s.MaxPriorityFeePerGas == 0 {
+		s.MaxPriorityFeePerGas = defaultMaxPriorityFeePerGas
 	}
 
 	return nil
