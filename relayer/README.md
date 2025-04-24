@@ -437,13 +437,13 @@ E2E tests are ran as part of CI, but can also be ran locally with the `--local` 
 Next, provide the path to the `subnet-evm` repository and the path to a writeable data directory (this example uses `~/subnet-evm` and `~/tmp/e2e-test`) to use for the tests:
 
 ```bash
-./scripts/e2e_test.sh --local --subnet-evm ~/subnet-evm --data-dir ~/tmp/e2e-test
+./scripts/e2e_test.sh
 ```
 
 To run a specific E2E test, specify the environment variable `GINKGO_FOCUS`, which will then look for [test descriptions](./tests/e2e_test.go#L68) that match the provided input. For example, to run the `Basic Relay` test:
 
 ```bash
-GINKGO_FOCUS="Basic" ./scripts/e2e_test.sh --local --subnet-evm ~/subnet-evm --data-dir ~/tmp/e2e-test
+GINKGO_FOCUS="Basic" ./scripts/e2e_test.sh
 ```
 
 The E2E tests use the `TeleporterMessenger` contract deployment transaction specified in the following files:
