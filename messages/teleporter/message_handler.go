@@ -311,30 +311,30 @@ func (m *messageHandler) SendMessage(
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		// Check if the message has already been delivered to the destination chain
-		teleporterMessenger := m.getTeleporterMessenger()
-		delivered, err := teleporterMessenger.MessageReceived(&bind.CallOpts{}, m.teleporterMessageID)
+		delivered, err := m.getTeleporterMessenger().MessageReceived(&bind.CallOpts{}, m.teleporterMessageID)
 		if err != nil {
 			m.logger.Error(
 				"Failed to check if message has been delivered to destination chain.",
 				zap.Error(err),
+				zap.String("txID", txHash.String()),
 			)
 			return common.Hash{}, fmt.Errorf("failed to check if message has been delivered: %w", err)
 		}
 		if delivered {
-			m.logger.Info("Execution reverted: message already delivered to destination.")
+			m.logger.Info("Execution reverted: message already delivered to destination.", zap.String("txID", txHash.String()))
 			return txHash, nil
 		}
 
 		m.logger.Error(
 			"Transaction failed",
-			zap.String("txHash", txHash.String()),
+			zap.String("txID", txHash.String()),
 		)
 		return common.Hash{}, fmt.Errorf("transaction failed with status: %d", receipt.Status)
 	}
 
 	m.logger.Info(
 		"Delivered message to destination chain",
-		zap.String("txHash", txHash.String()),
+		zap.String("txID", txHash.String()),
 	)
 	return txHash, nil
 }
