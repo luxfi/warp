@@ -61,18 +61,19 @@ var (
 )
 
 type SignatureAggregator struct {
-	network peers.AppRequestNetwork
-	// protected by subnetMapsLock
-	subnetIDsByBlockchainID map[ids.ID]ids.ID
-	// protected by subnetMapsLock
-	subnetIDIsL1        map[ids.ID]bool
+	network             peers.AppRequestNetwork
 	messageCreator      message.Creator
 	currentRequestID    atomic.Uint32
-	subnetMapsLock      sync.Mutex
 	metrics             *metrics.SignatureAggregatorMetrics
 	cache               *cache.Cache
 	pChainClient        platformvm.Client
 	pChainClientOptions []rpc.Option
+
+	subnetMapsLock sync.Mutex
+
+	// following block of fields is protected by the subnetMapsLock
+	subnetIDsByBlockchainID map[ids.ID]ids.ID
+	subnetIDIsL1            map[ids.ID]bool
 }
 
 func NewSignatureAggregator(
