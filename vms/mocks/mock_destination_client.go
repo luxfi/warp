@@ -14,6 +14,7 @@ import (
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	types "github.com/ava-labs/subnet-evm/core/types"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -85,10 +86,10 @@ func (mr *MockDestinationClientMockRecorder) DestinationBlockchainID() *gomock.C
 }
 
 // SendTx mocks base method.
-func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (common.Hash, error) {
+func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendTx", signedMessage, toAddress, gasLimit, callData)
-	ret0, _ := ret[0].(common.Hash)
+	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
