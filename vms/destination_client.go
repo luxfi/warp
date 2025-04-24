@@ -7,6 +7,7 @@ package vms
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -37,6 +38,9 @@ type DestinationClient interface {
 
 	// BlockGasLimit returns destination blockchain block gas limit
 	BlockGasLimit() uint64
+
+	// TxInclusionTimeout returns the timeout for waiting for a transaction to be included on the destination chain
+	TxInclusionTimeout() time.Duration
 }
 
 func NewDestinationClient(

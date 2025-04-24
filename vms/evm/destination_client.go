@@ -9,11 +9,11 @@ import (
 	"context"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	predicateutils "github.com/ava-labs/subnet-evm/predicate"
+	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -47,6 +48,7 @@ type destinationClient struct {
 	maxBaseFee              *big.Int
 	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
+	txInclusionTimeout      time.Duration
 }
 
 func NewDestinationClient(
@@ -123,6 +125,7 @@ func NewDestinationClient(
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
 		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
+		txInclusionTimeout:      time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
 	}, nil
 }
 
@@ -241,4 +244,8 @@ func (c *destinationClient) DestinationBlockchainID() ids.ID {
 
 func (c *destinationClient) BlockGasLimit() uint64 {
 	return c.blockGasLimit
+}
+
+func (c *destinationClient) TxInclusionTimeout() time.Duration {
+	return c.txInclusionTimeout
 }
