@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/icm-services/messages"
 	pbDecider "github.com/ava-labs/icm-services/proto/pb/decider"
 	"github.com/ava-labs/icm-services/relayer/config"
-	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/subnet-evm/accounts/abi/bind"
 	"github.com/ava-labs/subnet-evm/core/types"
@@ -27,10 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-)
-
-const (
-	defaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
 type factory struct {
@@ -293,7 +288,7 @@ func (m *messageHandler) SendMessage(
 		return common.Hash{}, err
 	}
 
-	txHash, err := m.destinationClient.SendTx(
+	receipt, err := m.destinationClient.SendTx(
 		signedMessage,
 		m.protocolAddress.Hex(),
 		gasLimit,
@@ -304,11 +299,8 @@ func (m *messageHandler) SendMessage(
 		return common.Hash{}, err
 	}
 
-	// Wait for the message to be included in a block before returning
-	receipt, err := m.waitForReceipt(signedMessage, m.destinationClient, txHash, m.teleporterMessageID)
-	if err != nil {
-		return common.Hash{}, err
-	}
+	txHash := receipt.TxHash
+
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		// Check if the message has already been delivered to the destination chain
 		delivered, err := m.getTeleporterMessenger().MessageReceived(&bind.CallOpts{}, m.teleporterMessageID)
@@ -316,55 +308,31 @@ func (m *messageHandler) SendMessage(
 			m.logger.Error(
 				"Failed to check if message has been delivered to destination chain.",
 				zap.Error(err),
-				zap.String("txID", txHash.String()),
+				zap.Stringer("txID", txHash),
 			)
 			return common.Hash{}, fmt.Errorf("failed to check if message has been delivered: %w", err)
 		}
 		if delivered {
-			m.logger.Info("Execution reverted: message already delivered to destination.", zap.String("txID", txHash.String()))
+			m.logger.Info("Execution reverted: message already delivered to destination.", zap.Stringer("txID", txHash))
 			return txHash, nil
 		}
 
 		m.logger.Error(
 			"Transaction failed",
-			zap.String("txID", txHash.String()),
+			zap.Stringer("txID", txHash),
 		)
 		return common.Hash{}, fmt.Errorf("transaction failed with status: %d", receipt.Status)
 	}
 
 	m.logger.Info(
 		"Delivered message to destination chain",
-		zap.String("txID", txHash.String()),
+		zap.Stringer("txID", txHash),
 	)
 	return txHash, nil
 }
 
 func (m *messageHandler) LoggerWithContext(logger logging.Logger) logging.Logger {
 	return logger.With(m.logFields...)
-}
-
-func (m *messageHandler) waitForReceipt(
-	signedMessage *warp.Message,
-	destinationClient vms.DestinationClient,
-	txHash common.Hash,
-	teleporterMessageID ids.ID,
-) (*types.Receipt, error) {
-	var receipt *types.Receipt
-	operation := func() (err error) {
-		callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
-		defer callCtxCancel()
-		receipt, err = destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
-		return err
-	}
-	err := utils.WithRetriesTimeout(m.logger, operation, defaultBlockAcceptanceTimeout, "waitForReceipt")
-	if err != nil {
-		m.logger.Error(
-			"Failed to get transaction receipt",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-	return receipt, nil
 }
 
 // parseTeleporterMessage returns the Warp message's corresponding Teleporter message from the cache if it exists.

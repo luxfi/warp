@@ -9,6 +9,7 @@ import (
 	"context"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -27,7 +28,9 @@ import (
 
 const (
 	// If the max base fee is not explicitly set, use 3x the current base fee estimate
-	defaultBaseFeeFactor = 3
+	defaultBaseFeeFactor          = 3
+	poolTxsPerAccount             = 16
+	defaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
 // Client interface wraps the ethclient.Client interface for mocking purposes.
@@ -47,6 +50,7 @@ type destinationClient struct {
 	maxBaseFee              *big.Int
 	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
+	poolTxsSemaphore        chan struct{}
 }
 
 func NewDestinationClient(
@@ -86,15 +90,56 @@ func NewDestinationClient(
 		return nil, err
 	}
 
-	// Fetch the pending nonce for the relayer's address to account for restarts due to long-pending txs in the mempool
-	nonce, err := client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
+	// Construct txs using the pending nonce to account for restarts due to long-pending txs in the mempool
+	pendingNonce, err := client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
 	if err != nil {
 		logger.Error(
-			"Failed to get nonce",
+			"Failed to get pending nonce",
 			zap.Error(err),
 		)
 		return nil, err
 	}
+
+	// Calculate the number of pending transactions in the mempool using the current nonce.
+	// This is used to acquire the correct number of semaphores on startup.
+	currentNonce, err := client.NonceAt(context.Background(), sgnr.Address(), nil)
+	if err != nil {
+		logger.Error(
+			"Failed to get current nonce",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	numPendingTxs := max(currentNonce-pendingNonce, 0)
+
+	poolTxsSemaphore := make(chan struct{}, poolTxsPerAccount)
+	for i := uint64(0); i < numPendingTxs; i++ {
+		poolTxsSemaphore <- struct{}{}
+	}
+
+	// Start a goroutine to release the numPendingTxs semaphores once the pending txs are accepted
+	go func() {
+		initialCurrentNonce := currentNonce
+		for range time.Tick(2 * time.Second) {
+			currentNonce, err := client.NonceAt(context.Background(), sgnr.Address(), nil)
+			if err != nil {
+				logger.Error(
+					"Failed to get current nonce",
+					zap.Error(err),
+				)
+				continue
+			}
+			processedPendingTxs := currentNonce - initialCurrentNonce
+			for i := uint64(0); i < processedPendingTxs; i++ {
+				<-poolTxsSemaphore
+				numPendingTxs--
+				if numPendingTxs == 0 {
+					return
+				}
+			}
+		}
+	}()
 
 	evmChainID, err := client.ChainID(context.Background())
 	if err != nil {
@@ -109,7 +154,7 @@ func NewDestinationClient(
 		"Initialized destination client",
 		zap.String("blockchainID", destinationID.String()),
 		zap.String("evmChainID", evmChainID.String()),
-		zap.Uint64("nonce", nonce),
+		zap.Uint64("nonce", pendingNonce),
 	)
 
 	return &destinationClient{
@@ -118,11 +163,12 @@ func NewDestinationClient(
 		destinationBlockchainID: destinationID,
 		signer:                  sgnr,
 		evmChainID:              evmChainID,
-		currentNonce:            nonce,
+		currentNonce:            pendingNonce,
 		logger:                  logger,
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
 		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
+		poolTxsSemaphore:        poolTxsSemaphore,
 	}, nil
 }
 
@@ -137,7 +183,7 @@ func (c *destinationClient) SendTx(
 	toAddress string,
 	gasLimit uint64,
 	callData []byte,
-) (common.Hash, error) {
+) (*types.Receipt, error) {
 	// If the max base fee isn't explicitly set, then default to fetching the
 	// current base fee estimate and multiply it by `BaseFeeFactor` to allow for
 	// an increase prior to the transaction being included in a block.
@@ -154,7 +200,7 @@ func (c *destinationClient) SendTx(
 				"Failed to get base fee",
 				zap.Error(err),
 			)
-			return common.Hash{}, err
+			return nil, err
 		}
 		maxBaseFee = new(big.Int).Mul(baseFee, big.NewInt(defaultBaseFeeFactor))
 	}
@@ -168,7 +214,7 @@ func (c *destinationClient) SendTx(
 			"Failed to get gas tip cap",
 			zap.Error(err),
 		)
-		return common.Hash{}, err
+		return nil, err
 	}
 	if gasTipCap.Cmp(c.maxPriorityFeePerGas) > 0 {
 		gasTipCap = c.maxPriorityFeePerGas
@@ -205,17 +251,19 @@ func (c *destinationClient) SendTx(
 			"Failed to sign transaction",
 			zap.Error(err),
 		)
-		return common.Hash{}, err
+		return nil, err
 	}
 
 	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 	defer sendTxCtxCancel()
+
+	c.poolTxsSemaphore <- struct{}{}
 	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
 		c.logger.Error(
 			"Failed to send transaction",
 			zap.Error(err),
 		)
-		return common.Hash{}, err
+		return nil, err
 	}
 	c.logger.Info(
 		"Sent transaction",
@@ -224,7 +272,40 @@ func (c *destinationClient) SendTx(
 	)
 	c.currentNonce++
 
-	return signedTx.Hash(), nil
+	// Release the semaphore once the tx has been accepted
+	receipt, err := c.waitForReceipt(signedTx.Hash())
+	if err != nil {
+		c.logger.Error(
+			"Failed to get transaction receipt",
+			zap.String("txID", signedTx.Hash().String()),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	<-c.poolTxsSemaphore
+
+	return receipt, nil
+}
+
+func (c *destinationClient) waitForReceipt(
+	txHash common.Hash,
+) (*types.Receipt, error) {
+	var receipt *types.Receipt
+	operation := func() (err error) {
+		callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
+		defer callCtxCancel()
+		receipt, err = c.client.TransactionReceipt(callCtx, txHash)
+		return err
+	}
+	err := utils.WithRetriesTimeout(c.logger, operation, defaultBlockAcceptanceTimeout, "waitForReceipt")
+	if err != nil {
+		c.logger.Error(
+			"Failed to get transaction receipt",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	return receipt, nil
 }
 
 func (c *destinationClient) Client() interface{} {
