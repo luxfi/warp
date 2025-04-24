@@ -29,10 +29,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	defaultBlockAcceptanceTimeout = 30 * time.Second
-)
-
 type factory struct {
 	messageConfig   *Config
 	protocolAddress common.Address
@@ -351,12 +347,12 @@ func (m *messageHandler) waitForReceipt(
 ) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	operation := func() (err error) {
-		callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
+		callCtx, callCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer callCtxCancel()
 		receipt, err = destinationClient.Client().(ethclient.Client).TransactionReceipt(callCtx, txHash)
 		return err
 	}
-	err := utils.WithRetriesTimeout(m.logger, operation, defaultBlockAcceptanceTimeout, "waitForReceipt")
+	err := utils.WithRetriesTimeout(m.logger, operation, destinationClient.TxInclusionTimeout(), "waitForReceipt")
 	if err != nil {
 		m.logger.Error(
 			"Failed to get transaction receipt",
