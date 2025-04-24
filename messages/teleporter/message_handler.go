@@ -301,14 +301,36 @@ func (m *messageHandler) SendMessage(
 	}
 
 	// Wait for the message to be included in a block before returning
-	err = m.waitForReceipt(signedMessage, m.destinationClient, txHash, m.teleporterMessageID)
+	receipt, err := m.waitForReceipt(signedMessage, m.destinationClient, txHash, m.teleporterMessageID)
 	if err != nil {
 		return common.Hash{}, err
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		// Check if the message has already been delivered to the destination chain
+		delivered, err := m.getTeleporterMessenger().MessageReceived(&bind.CallOpts{}, m.teleporterMessageID)
+		if err != nil {
+			m.logger.Error(
+				"Failed to check if message has been delivered to destination chain.",
+				zap.Error(err),
+				zap.String("txID", txHash.String()),
+			)
+			return common.Hash{}, fmt.Errorf("failed to check if message has been delivered: %w", err)
+		}
+		if delivered {
+			m.logger.Info("Execution reverted: message already delivered to destination.", zap.String("txID", txHash.String()))
+			return txHash, nil
+		}
+
+		m.logger.Error(
+			"Transaction failed",
+			zap.String("txID", txHash.String()),
+		)
+		return common.Hash{}, fmt.Errorf("transaction failed with status: %d", receipt.Status)
 	}
 
 	m.logger.Info(
 		"Delivered message to destination chain",
-		zap.String("txHash", txHash.String()),
+		zap.String("txID", txHash.String()),
 	)
 	return txHash, nil
 }
@@ -322,7 +344,7 @@ func (m *messageHandler) waitForReceipt(
 	destinationClient vms.DestinationClient,
 	txHash common.Hash,
 	teleporterMessageID ids.ID,
-) error {
+) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	operation := func() (err error) {
 		callCtx, callCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
@@ -336,16 +358,9 @@ func (m *messageHandler) waitForReceipt(
 			"Failed to get transaction receipt",
 			zap.Error(err),
 		)
-		return err
+		return nil, err
 	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		m.logger.Error(
-			"Transaction failed",
-			zap.String("txHash", txHash.String()),
-		)
-		return fmt.Errorf("transaction failed with status: %d", receipt.Status)
-	}
-	return nil
+	return receipt, nil
 }
 
 // parseTeleporterMessage returns the Warp message's corresponding Teleporter message from the cache if it exists.

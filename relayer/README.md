@@ -309,6 +309,18 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The AWS region in which the KMS key is located. Required if `kms-key-id` is provided.
 
+  `"block-gas-limit": unsigned integer`
+
+  - The maximum amount of gas that can be used in a single block on this blockchain. The relayer will not attempt to deliver messages that require more gas than this limit to the given chain. Defaults to 12,000,000 if not set for a given chain.
+
+  `"max-base-fee": unsigned integer`
+
+  - The maximum base fee gas price (in WEI) the relayer is willing to pay on this blockchain. If zero or left unset, the relayer will use a multiple of the current base fee estimation, and not have an explicit maximum.
+
+  `"max-priority-fee-per-gas": unsigned interger`
+
+  - The maximum priority fee per gas (in WEI) that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Defaults to 2.5 GWEI.
+
   `"block-acceptance-timeout-seconds": uint64`
 
   - The time in seconds to wait for a sent transaction to be included in a block when verifying transaction receipts before erroring out. If omitted, defaults to 30 seconds.

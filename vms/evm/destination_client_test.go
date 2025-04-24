@@ -38,6 +38,7 @@ func TestSendTx(t *testing.T) {
 		name                  string
 		chainIDErr            error
 		chainIDTimes          int
+		maxBaseFee            *big.Int
 		estimateBaseFeeErr    error
 		estimateBaseFeeTimes  int
 		suggestGasTipCapErr   error
@@ -47,20 +48,31 @@ func TestSendTx(t *testing.T) {
 		expectError           bool
 	}{
 		{
-			name:                  "valid",
+			name:                  "valid - use base fee estimate",
 			chainIDTimes:          1,
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapTimes: 1,
 			sendTransactionTimes:  1,
 		},
 		{
+			name:                  "valid - max base fee",
+			chainIDTimes:          1,
+			maxBaseFee:            big.NewInt(100),
+			estimateBaseFeeTimes:  0,
+			suggestGasTipCapTimes: 1,
+			sendTransactionTimes:  1,
+		},
+		{
 			name:                 "invalid estimateBaseFee",
+			maxBaseFee:           big.NewInt(0),
 			estimateBaseFeeErr:   testError,
 			estimateBaseFeeTimes: 1,
 			expectError:          true,
 		},
 		{
 			name:                  "invalid suggestGasTipCap",
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapErr:   testError,
 			suggestGasTipCapTimes: 1,
@@ -69,6 +81,7 @@ func TestSendTx(t *testing.T) {
 		{
 			name:                  "invalid sendTransaction",
 			chainIDTimes:          1,
+			maxBaseFee:            big.NewInt(0),
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapTimes: 1,
 			sendTransactionErr:    testError,
@@ -82,22 +95,24 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destinationClient := &destinationClient{
-				lock:       &sync.Mutex{},
-				logger:     logging.NoLog{},
-				client:     mockClient,
-				evmChainID: big.NewInt(5),
-				signer:     txSigner,
+				lock:                 &sync.Mutex{},
+				logger:               logging.NoLog{},
+				client:               mockClient,
+				evmChainID:           big.NewInt(5),
+				signer:               txSigner,
+				maxBaseFee:           test.maxBaseFee,
+				maxPriorityFeePerGas: big.NewInt(0),
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
 
 			gomock.InOrder(
 				mockClient.EXPECT().EstimateBaseFee(gomock.Any()).Return(
-					new(big.Int),
+					big.NewInt(100_000),
 					test.estimateBaseFeeErr,
 				).Times(test.estimateBaseFeeTimes),
 				mockClient.EXPECT().SuggestGasTipCap(gomock.Any()).Return(
-					new(big.Int),
+					big.NewInt(0),
 					test.suggestGasTipCapErr,
 				).Times(test.suggestGasTipCapTimes),
 				mockClient.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(

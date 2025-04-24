@@ -107,6 +107,9 @@ func BasicRelay(network *network.LocalNetwork, teleporter utils.TeleporterTestIn
 	// Try Relaying Already Delivered Message
 	//
 	log.Info("Test Relaying Already Delivered Message")
+	relayerConfig.ProcessMissedBlocks = true
+	relayerConfigPath = testUtils.WriteRelayerConfig(relayerConfig, testUtils.DefaultRelayerCfgFname)
+
 	logger := logging.NewLogger(
 		"icm-relayer",
 		logging.NewWrappedCore(

@@ -276,7 +276,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 		"Finished relaying message to destination chain",
 		zap.Stringer("relayerID", r.relayerID.ID),
 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
-		zap.Stringer("txHash", txHash),
+		zap.Stringer("txID", txHash),
 	)
 	r.incSuccessfulRelayMessageCount()
 
