@@ -29,7 +29,6 @@ import (
 const (
 	// If the max base fee is not explicitly set, use 3x the current base fee estimate
 	defaultBaseFeeFactor = 3
-	DefaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
 // Client interface wraps the ethclient.Client interface for mocking purposes.
@@ -49,7 +48,7 @@ type destinationClient struct {
 	maxBaseFee              *big.Int
 	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
-	blockAcceptanceTimeout  time.Duration
+	txInclusionTimeout      time.Duration
 }
 
 func NewDestinationClient(
@@ -108,13 +107,6 @@ func NewDestinationClient(
 		return nil, err
 	}
 
-	var blockAcceptanceTimeout time.Duration
-	if destinationBlockchain.BlockAcceptanceTimeoutSeconds > 0 {
-		blockAcceptanceTimeout = time.Duration(destinationBlockchain.BlockAcceptanceTimeoutSeconds) * time.Second
-	} else {
-		blockAcceptanceTimeout = DefaultBlockAcceptanceTimeout
-	}
-
 	logger.Info(
 		"Initialized destination client",
 		zap.String("blockchainID", destinationID.String()),
@@ -133,7 +125,7 @@ func NewDestinationClient(
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
 		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
-		blockAcceptanceTimeout:  blockAcceptanceTimeout,
+		txInclusionTimeout:      time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
 	}, nil
 }
 
@@ -254,6 +246,6 @@ func (c *destinationClient) BlockGasLimit() uint64 {
 	return c.blockGasLimit
 }
 
-func (c *destinationClient) BlockAcceptanceTimeout() time.Duration {
-	return c.blockAcceptanceTimeout
+func (c *destinationClient) TxInclusionTimeout() time.Duration {
+	return c.txInclusionTimeout
 }

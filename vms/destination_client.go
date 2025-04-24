@@ -39,8 +39,8 @@ type DestinationClient interface {
 	// BlockGasLimit returns destination blockchain block gas limit
 	BlockGasLimit() uint64
 
-	// BlockAcceptanceTimeout returns the timeout for waiting for a block to be accepted on the destination chain
-	BlockAcceptanceTimeout() time.Duration
+	// TxInclusionTimeout returns the timeout for waiting for a transaction to be included on the destination chain
+	TxInclusionTimeout() time.Duration
 }
 
 func NewDestinationClient(

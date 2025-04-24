@@ -43,20 +43,6 @@ func (m *MockDestinationClient) EXPECT() *MockDestinationClientMockRecorder {
 	return m.recorder
 }
 
-// BlockAcceptanceTimeout mocks base method.
-func (m *MockDestinationClient) BlockAcceptanceTimeout() time.Duration {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BlockAcceptanceTimeout")
-	ret0, _ := ret[0].(time.Duration)
-	return ret0
-}
-
-// BlockAcceptanceTimeout indicates an expected call of BlockAcceptanceTimeout.
-func (mr *MockDestinationClientMockRecorder) BlockAcceptanceTimeout() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockAcceptanceTimeout", reflect.TypeOf((*MockDestinationClient)(nil).BlockAcceptanceTimeout))
-}
-
 // BlockGasLimit mocks base method.
 func (m *MockDestinationClient) BlockGasLimit() uint64 {
 	m.ctrl.T.Helper()
@@ -126,4 +112,18 @@ func (m *MockDestinationClient) SenderAddress() common.Address {
 func (mr *MockDestinationClientMockRecorder) SenderAddress() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddress", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddress))
+}
+
+// TxInclusionTimeout mocks base method.
+func (m *MockDestinationClient) TxInclusionTimeout() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxInclusionTimeout")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// TxInclusionTimeout indicates an expected call of TxInclusionTimeout.
+func (mr *MockDestinationClientMockRecorder) TxInclusionTimeout() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxInclusionTimeout", reflect.TypeOf((*MockDestinationClient)(nil).TxInclusionTimeout))
 }
