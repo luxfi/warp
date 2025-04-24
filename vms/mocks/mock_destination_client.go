@@ -11,6 +11,7 @@ package mocks
 
 import (
 	reflect "reflect"
+	time "time"
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -111,4 +112,18 @@ func (m *MockDestinationClient) SenderAddress() common.Address {
 func (mr *MockDestinationClientMockRecorder) SenderAddress() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddress", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddress))
+}
+
+// TxInclusionTimeout mocks base method.
+func (m *MockDestinationClient) TxInclusionTimeout() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxInclusionTimeout")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// TxInclusionTimeout indicates an expected call of TxInclusionTimeout.
+func (mr *MockDestinationClientMockRecorder) TxInclusionTimeout() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxInclusionTimeout", reflect.TypeOf((*MockDestinationClient)(nil).TxInclusionTimeout))
 }

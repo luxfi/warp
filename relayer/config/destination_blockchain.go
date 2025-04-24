@@ -16,8 +16,9 @@ import (
 const (
 	// The block gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
-	defaultBlockGasLimit        = 12_000_000
-	defaultMaxPriorityFeePerGas = 2500000000 // 2.5 gwei
+	defaultBlockGasLimit             = 12_000_000
+	defaultMaxPriorityFeePerGas      = 2500000000 // 2.5 gwei
+	defaultTxInclusionTimeoutSeconds = 30
 )
 
 // Destination blockchain configuration. Specifies how to connect to and issue
@@ -33,6 +34,8 @@ type DestinationBlockchain struct {
 	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
 	MaxBaseFee           uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
 	MaxPriorityFeePerGas uint64            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
+
+	TxInclusionTimeoutSeconds uint64 `mapstructure:"tx-inclusion-timeout-seconds" json:"tx-inclusion-timeout-seconds"`
 
 	// Fetched from the chain after startup
 	warpConfig WarpConfig
@@ -91,6 +94,10 @@ func (s *DestinationBlockchain) Validate() error {
 	// will use the current base fee from the chain at the time of the transaction.
 	if s.MaxPriorityFeePerGas == 0 {
 		s.MaxPriorityFeePerGas = defaultMaxPriorityFeePerGas
+	}
+
+	if s.TxInclusionTimeoutSeconds == 0 {
+		s.TxInclusionTimeoutSeconds = defaultTxInclusionTimeoutSeconds
 	}
 
 	return nil
