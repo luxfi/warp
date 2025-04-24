@@ -192,7 +192,7 @@ func (m *messageHandler) SendMessage(
 		return common.Hash{}, err
 	}
 
-	txHash, err := m.destinationClient.SendTx(
+	receipt, err := m.destinationClient.SendTx(
 		signedMessage,
 		m.registryAddress.Hex(),
 		addProtocolVersionGasLimit,
@@ -206,7 +206,7 @@ func (m *messageHandler) SendMessage(
 		return common.Hash{}, err
 	}
 	m.logger.Info("Sent message to destination chain")
-	return txHash, nil
+	return receipt.TxHash, nil
 }
 
 func (m *messageHandler) LoggerWithContext(logger logging.Logger) logging.Logger {
