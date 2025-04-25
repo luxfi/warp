@@ -238,7 +238,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		fetchL1Validators := func(subnetID ids.ID) ([]platformvm.APIL1Validator, error) {
 			return s.pChainClient.GetCurrentL1Validators(ctx, subnetID, nil, s.pChainClientOptions...)
 		}
-		l1Validators, err := s.currentL1ValidatorsCache.Get(signingSubnet, fetchL1Validators, false)
+		l1Validators, err := s.currentL1ValidatorsCache.Get(signingSubnet, fetchL1Validators, skipCache)
 		if err != nil {
 			log.Error(
 				"Failed to get L1 validators",
