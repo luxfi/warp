@@ -113,7 +113,7 @@ func NewDestinationClient(
 	}
 
 	numPendingTxs := max(currentNonce-pendingNonce, 0)
-	overrunPendingTxs := max(numPendingTxs-poolTxsPerAccount, 0) // Number of pending txs that exceed the pool size
+	overrunPendingTxs := uint64(max(int(numPendingTxs)-int(poolTxsPerAccount), 0)) // Number of pending txs that exceed the pool size
 
 	// Create a semaphore to limit the number of transactions in the pool to poolTxsPerAccount.
 	// Once in steady state, the number of pending txs should never exceed poolTxsPerAccount,
