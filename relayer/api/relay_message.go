@@ -67,7 +67,11 @@ func relayMessageAPIHandler(logger logging.Logger, messageCoordinator *relayer.M
 			SourceAddress:   common.HexToAddress(req.SourceAddress),
 			UnsignedMessage: unsignedMessage,
 		}
-
+		logger.Info(
+			"Processing manual warp message",
+			zap.String("sourceAddress", req.SourceAddress),
+			zap.String("messageID", unsignedMessage.ID().String()),
+		)
 		txHash, err := messageCoordinator.ProcessWarpMessage(warpMessageInfo)
 		if err != nil {
 			logger.Error("Error processing message", zap.Error(err))
