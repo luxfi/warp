@@ -237,6 +237,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 			r.signingSubnetID,
 			r.warpConfig.QuorumNumerator,
 			quorumPercentageBuffer,
+			false,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {

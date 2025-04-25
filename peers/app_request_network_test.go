@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	"github.com/ava-labs/icm-services/cache"
 	"github.com/ava-labs/icm-services/peers/avago_mocks"
 	validator_mocks "github.com/ava-labs/icm-services/peers/validators/mocks"
 	"github.com/prometheus/client_golang/prometheus"
@@ -133,10 +134,12 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockNetwork := avago_mocks.NewMockNetwork(ctrl)
 			mockValidatorClient := validator_mocks.NewMockCanonicalValidatorState(ctrl)
+			vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 			arNetwork := appRequestNetwork{
-				network:         mockNetwork,
-				validatorClient: mockValidatorClient,
-				metrics:         metrics,
+				network:                    mockNetwork,
+				validatorClient:            mockValidatorClient,
+				metrics:                    metrics,
+				canonicalValidatorSetCache: vdrsCache,
 			}
 			var totalWeight uint64
 			for _, vdr := range testCase.validators {
@@ -158,7 +161,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 			}
 			mockNetwork.EXPECT().PeerInfo(gomock.Any()).Return(peerInfo).Times(1)
 
-			ret, err := arNetwork.GetConnectedCanonicalValidators(subnetID)
+			ret, err := arNetwork.GetConnectedCanonicalValidators(subnetID, false)
 			require.Equal(t, testCase.expectedConnectedWeight, ret.ConnectedWeight)
 			require.Equal(t, testCase.expectedTotalWeight, ret.ValidatorSet.TotalWeight)
 			require.NoError(t, err)
