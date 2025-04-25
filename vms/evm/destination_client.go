@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
@@ -22,6 +21,7 @@ import (
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	predicateutils "github.com/ava-labs/subnet-evm/predicate"
+	"github.com/ava-labs/subnet-evm/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -51,6 +51,7 @@ type destinationClient struct {
 	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
 	poolTxsSemaphore        chan struct{}
+	txInclusionTimeout      time.Duration
 }
 
 func NewDestinationClient(
@@ -169,6 +170,7 @@ func NewDestinationClient(
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
 		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
 		poolTxsSemaphore:        poolTxsSemaphore,
+		txInclusionTimeout:      time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
 	}, nil
 }
 
@@ -292,12 +294,12 @@ func (c *destinationClient) waitForReceipt(
 ) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	operation := func() (err error) {
-		callCtx, callCtxCancel := context.WithTimeout(context.Background(), defaultBlockAcceptanceTimeout)
+		callCtx, callCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer callCtxCancel()
 		receipt, err = c.client.TransactionReceipt(callCtx, txHash)
 		return err
 	}
-	err := utils.WithRetriesTimeout(c.logger, operation, defaultBlockAcceptanceTimeout, "waitForReceipt")
+	err := utils.WithRetriesTimeout(c.logger, operation, c.txInclusionTimeout, "waitForReceipt")
 	if err != nil {
 		c.logger.Error(
 			"Failed to get transaction receipt",
