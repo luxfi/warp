@@ -122,6 +122,12 @@ func NewDestinationClient(
 	poolTxsSemaphore := make(chan struct{}, poolTxsPerAccount)
 
 	// Grab at most poolTxsPerAccount semaphores
+	logger.Info(
+		"Handling pending transactions on startup",
+		zap.Uint64("numPendingTxs", numPendingTxs),
+		zap.Uint64("overrunPendingTxs", overrunPendingTxs),
+		zap.Uint64("numSemaphores", numPendingTxs-overrunPendingTxs),
+	)
 	for i := uint64(0); i < numPendingTxs-overrunPendingTxs; i++ {
 		poolTxsSemaphore <- struct{}{}
 	}
@@ -275,6 +281,12 @@ func (c *destinationClient) SendTx(
 	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 	defer sendTxCtxCancel()
 
+	c.logger.Info(
+		"Sending transaction",
+		zap.String("txID", signedTx.Hash().String()),
+		zap.Uint64("nonce", c.currentNonce),
+		zap.Int("poolTxSlotsAvailable", cap(c.poolTxsSemaphore)-len(c.poolTxsSemaphore)),
+	)
 	c.poolTxsSemaphore <- struct{}{}
 	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
 		c.logger.Error(
