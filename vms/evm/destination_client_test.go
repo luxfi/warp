@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/icm-services/relayer/config"
 	mock_ethclient "github.com/ava-labs/icm-services/vms/evm/mocks"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
+	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -45,6 +46,7 @@ func TestSendTx(t *testing.T) {
 		suggestGasTipCapTimes int
 		sendTransactionErr    error
 		sendTransactionTimes  int
+		txReceiptTimes        int
 		expectError           bool
 	}{
 		{
@@ -54,6 +56,7 @@ func TestSendTx(t *testing.T) {
 			estimateBaseFeeTimes:  1,
 			suggestGasTipCapTimes: 1,
 			sendTransactionTimes:  1,
+			txReceiptTimes:        1,
 		},
 		{
 			name:                  "valid - max base fee",
@@ -62,6 +65,7 @@ func TestSendTx(t *testing.T) {
 			estimateBaseFeeTimes:  0,
 			suggestGasTipCapTimes: 1,
 			sendTransactionTimes:  1,
+			txReceiptTimes:        1,
 		},
 		{
 			name:                 "invalid estimateBaseFee",
@@ -102,6 +106,7 @@ func TestSendTx(t *testing.T) {
 				signer:               txSigner,
 				maxBaseFee:           test.maxBaseFee,
 				maxPriorityFeePerGas: big.NewInt(0),
+				poolTxsSemaphore:     make(chan struct{}, poolTxsPerAccount),
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
@@ -118,6 +123,14 @@ func TestSendTx(t *testing.T) {
 				mockClient.EXPECT().SendTransaction(gomock.Any(), gomock.Any()).Return(
 					test.sendTransactionErr,
 				).Times(test.sendTransactionTimes),
+				mockClient.EXPECT().
+					TransactionReceipt(gomock.Any(), gomock.Any()).
+					Return(
+						&types.Receipt{
+							Status: types.ReceiptStatusSuccessful,
+						},
+						nil,
+					).Times(test.txReceiptTimes),
 			)
 
 			_, err := destinationClient.SendTx(warpMsg, toAddress, 0, []byte{})
