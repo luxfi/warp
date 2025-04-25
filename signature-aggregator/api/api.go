@@ -207,6 +207,7 @@ func signatureAggregationAPIHandler(
 			signingSubnetID,
 			quorumPercentage,
 			req.QuorumPercentageBuffer,
+			false,
 		)
 		if err != nil {
 			logger.Warn("Failed to aggregate signatures", zap.Error(err))
