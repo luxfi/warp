@@ -170,7 +170,8 @@ func NewDestinationClient(
 		"Initialized destination client",
 		zap.String("blockchainID", destinationID.String()),
 		zap.String("evmChainID", evmChainID.String()),
-		zap.Uint64("nonce", pendingNonce),
+		zap.Uint64("pendingNonce", pendingNonce),
+		zap.Uint64("currentNonce", currentNonce),
 	)
 
 	return &destinationClient{
