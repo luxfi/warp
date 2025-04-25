@@ -113,9 +113,16 @@ func NewDestinationClient(
 	}
 
 	numPendingTxs := max(currentNonce-pendingNonce, 0)
+	overrunPendingTxs := max(numPendingTxs-poolTxsPerAccount, 0) // Number of pending txs that exceed the pool size
 
+	// Create a semaphore to limit the number of transactions in the pool to poolTxsPerAccount.
+	// Once in steady state, the number of pending txs should never exceed poolTxsPerAccount,
+	// but on startup, we may have more pending txs than the pool size. Therefore, on startup,
+	// we grab at most poolTxsPerAccount semaphores, and then release them once the pending txs are accepted.
 	poolTxsSemaphore := make(chan struct{}, poolTxsPerAccount)
-	for i := uint64(0); i < numPendingTxs; i++ {
+
+	// Grab at most poolTxsPerAccount semaphores
+	for i := uint64(0); i < numPendingTxs-overrunPendingTxs; i++ {
 		poolTxsSemaphore <- struct{}{}
 	}
 
@@ -133,6 +140,14 @@ func NewDestinationClient(
 			}
 			processedPendingTxs := currentNonce - initialCurrentNonce
 			for i := uint64(0); i < processedPendingTxs; i++ {
+				// If there are more than poolTxsPerAccount pending txs, first decrement overrunPendingTxs
+				// before releasing any semaphores to be acquired by message relayers
+				if overrunPendingTxs > 0 {
+					overrunPendingTxs--
+					numPendingTxs--
+					continue
+				}
+
 				<-poolTxsSemaphore
 				numPendingTxs--
 				if numPendingTxs == 0 {
