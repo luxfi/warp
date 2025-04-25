@@ -6,6 +6,7 @@ package teleporter
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -326,6 +327,11 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 		Client().
 		Return(mockEthClient).
 		Times(2)
+
+	mockClient.EXPECT().
+		TxInclusionTimeout().
+		Return(time.Second * 1).
+		Times(1)
 
 	mockClient.EXPECT().
 		SendTx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
