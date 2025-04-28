@@ -56,7 +56,7 @@ const (
 	maxNumSubnets = 16
 
 	// The amount of time to cache canonical validator sets in seconds
-	canonicalValidatorSetCacheTTL = uint64(2)
+	canonicalValidatorSetCacheTTLSeconds = uint64(2)
 )
 
 var (
@@ -276,7 +276,7 @@ func NewNetwork(
 	for _, subnetID := range trackedSubnets.List() {
 		lruSubnets.Put(subnetID, nil)
 	}
-	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
+	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTLSeconds)
 
 	arNetwork := &appRequestNetwork{
 		network:                    testNetwork,
