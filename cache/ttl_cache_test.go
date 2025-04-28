@@ -41,7 +41,7 @@ func TestTTLCacheSingleKey(t *testing.T) {
 			expectedCount:  3,
 		},
 	}
-	cache := NewTTLCache[string, int](1)
+	cache := NewTTLCache[string, int](1 * time.Second)
 	fetchCount := 0
 	fetchFunc := func(_ string) (int, error) {
 		fetchCount++
