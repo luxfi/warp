@@ -20,10 +20,10 @@ type TTLCache[K comparable, V any] struct {
 	lock sync.Mutex
 }
 
-func NewTTLCache[K comparable, V any](ttlSeconds uint64) *TTLCache[K, V] {
+func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
 	return &TTLCache[K, V]{
 		data: make(map[K]TTLCacheItem[V]),
-		ttl:  time.Duration(ttlSeconds) * time.Second,
+		ttl:  ttl,
 	}
 }
 
