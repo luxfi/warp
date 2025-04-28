@@ -41,7 +41,7 @@ type Client interface {
 // Implements DestinationClient
 type destinationClient struct {
 	client                  ethclient.Client
-	lock                    *sync.Mutex
+	nonceLock               *sync.Mutex
 	destinationBlockchainID ids.ID
 	signer                  signer.Signer
 	evmChainID              *big.Int
@@ -67,6 +67,8 @@ func NewDestinationClient(
 		return nil, err
 	}
 
+	logger = logger.With(zap.String("blockchainID", destinationBlockchain.BlockchainID))
+
 	sgnr, err := signer.NewSigner(destinationBlockchain)
 	if err != nil {
 		logger.Error(
@@ -91,6 +93,21 @@ func NewDestinationClient(
 		return nil, err
 	}
 
+	evmChainID, err := client.ChainID(context.Background())
+	if err != nil {
+		logger.Error(
+			"Failed to get chain ID from destination chain endpoint",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	// Create a semaphore to limit the number of transactions in the pool to poolTxsPerAccount.
+	// Once in steady state, the number of pending txs should never exceed poolTxsPerAccount,
+	// but on startup, we may have more pending txs than the pool size. Therefore, on startup,
+	// we grab at most poolTxsPerAccount semaphores, and then release them once the pending txs are accepted.
+	poolTxsSemaphore := make(chan struct{}, poolTxsPerAccount)
+
 	// Construct txs using the pending nonce to account for restarts due to long-pending txs in the mempool
 	pendingNonce, err := client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
 	if err != nil {
@@ -113,68 +130,57 @@ func NewDestinationClient(
 	}
 
 	numPendingTxs := max(currentNonce-pendingNonce, 0)
-	overrunPendingTxs := uint64(max(int(numPendingTxs)-int(poolTxsPerAccount), 0)) // Number of pending txs that exceed the pool size
+	if numPendingTxs > 0 {
+		// Defensively account for the case where the number of pending txs is greater than poolTxsPerAccount
+		overrunPendingTxs := uint64(max(int(numPendingTxs)-int(poolTxsPerAccount), 0))
 
-	// Create a semaphore to limit the number of transactions in the pool to poolTxsPerAccount.
-	// Once in steady state, the number of pending txs should never exceed poolTxsPerAccount,
-	// but on startup, we may have more pending txs than the pool size. Therefore, on startup,
-	// we grab at most poolTxsPerAccount semaphores, and then release them once the pending txs are accepted.
-	poolTxsSemaphore := make(chan struct{}, poolTxsPerAccount)
+		// Grab at most poolTxsPerAccount semaphores
+		logger.Info(
+			"Handling pending transactions on startup",
+			zap.Uint64("numPendingTxs", numPendingTxs),
+			zap.Uint64("overrunPendingTxs", overrunPendingTxs),
+		)
+		for i := uint64(0); i < numPendingTxs-overrunPendingTxs; i++ {
+			poolTxsSemaphore <- struct{}{}
+		}
 
-	// Grab at most poolTxsPerAccount semaphores
-	logger.Info(
-		"Handling pending transactions on startup",
-		zap.Uint64("numPendingTxs", numPendingTxs),
-		zap.Uint64("overrunPendingTxs", overrunPendingTxs),
-		zap.Uint64("numSemaphores", numPendingTxs-overrunPendingTxs),
-	)
-	for i := uint64(0); i < numPendingTxs-overrunPendingTxs; i++ {
-		poolTxsSemaphore <- struct{}{}
-	}
-
-	// Start a goroutine to release the numPendingTxs semaphores once the pending txs are accepted
-	go func() {
-		initialCurrentNonce := currentNonce
-		for range time.Tick(2 * time.Second) {
-			currentNonce, err := client.NonceAt(context.Background(), sgnr.Address(), nil)
-			if err != nil {
-				logger.Error(
-					"Failed to get current nonce",
-					zap.Error(err),
-				)
-				continue
-			}
-			processedPendingTxs := currentNonce - initialCurrentNonce
-			for i := uint64(0); i < processedPendingTxs; i++ {
-				// If there are more than poolTxsPerAccount pending txs, first decrement overrunPendingTxs
-				// before releasing any semaphores to be acquired by message relayers
-				if overrunPendingTxs > 0 {
-					overrunPendingTxs--
-					numPendingTxs--
+		// Asynchronously release the numPendingTxs semaphores once the pending txs are accepted
+		go func() {
+			initialCurrentNonce := currentNonce
+			for range time.Tick(2 * time.Second) {
+				currentNonce, err := client.NonceAt(context.Background(), sgnr.Address(), nil)
+				if err != nil {
+					logger.Error(
+						"Failed to get current nonce",
+						zap.Error(err),
+					)
 					continue
 				}
-
-				<-poolTxsSemaphore
-				numPendingTxs--
-				if numPendingTxs == 0 {
-					return
+				processedPendingTxs := currentNonce - initialCurrentNonce
+				logger.Info(
+					"Processed pending transactions on startup",
+					zap.Uint64("processedPendingTxs", processedPendingTxs),
+				)
+				for i := uint64(0); i < processedPendingTxs; i++ {
+					// If there are more than poolTxsPerAccount pending txs, first decrement overrunPendingTxs
+					// before releasing any semaphores to be acquired by message relayers
+					if overrunPendingTxs > 0 {
+						overrunPendingTxs--
+						numPendingTxs--
+						continue
+					}
+					<-poolTxsSemaphore
+					numPendingTxs--
+					if numPendingTxs == 0 {
+						return
+					}
 				}
 			}
-		}
-	}()
-
-	evmChainID, err := client.ChainID(context.Background())
-	if err != nil {
-		logger.Error(
-			"Failed to get chain ID from destination chain endpoint",
-			zap.Error(err),
-		)
-		return nil, err
+		}()
 	}
 
 	logger.Info(
 		"Initialized destination client",
-		zap.String("blockchainID", destinationID.String()),
 		zap.String("evmChainID", evmChainID.String()),
 		zap.Uint64("pendingNonce", pendingNonce),
 		zap.Uint64("currentNonce", currentNonce),
@@ -182,7 +188,7 @@ func NewDestinationClient(
 
 	return &destinationClient{
 		client:                  client,
-		lock:                    new(sync.Mutex),
+		nonceLock:               new(sync.Mutex),
 		destinationBlockchainID: destinationID,
 		signer:                  sgnr,
 		evmChainID:              evmChainID,
@@ -248,10 +254,9 @@ func (c *destinationClient) SendTx(
 	gasFeeCap := new(big.Int).Add(maxBaseFee, gasTipCap)
 
 	// Synchronize nonce access so that we send transactions in nonce order.
-	// Hold the lock until the transaction is sent to minimize the chance of
-	// an out-of-order transaction being dropped from the mempool.
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	// Hold the lock until the transaction is sent, otherwise we may deadlock
+	// on poolTxsSemaphore if there is a nonce gap in the mempool.
+	c.nonceLock.Lock()
 
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
@@ -287,6 +292,8 @@ func (c *destinationClient) SendTx(
 		zap.Uint64("nonce", c.currentNonce),
 		zap.Int("poolTxSlotsAvailable", cap(c.poolTxsSemaphore)-len(c.poolTxsSemaphore)),
 	)
+
+	// Acquire a semaphore to limit the number of transactions in the mempool
 	c.poolTxsSemaphore <- struct{}{}
 	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
 		c.logger.Error(
@@ -299,10 +306,11 @@ func (c *destinationClient) SendTx(
 		"Sent transaction",
 		zap.String("txID", signedTx.Hash().String()),
 		zap.Uint64("nonce", c.currentNonce),
+		zap.Int("poolTxSlotsAvailable", cap(c.poolTxsSemaphore)-len(c.poolTxsSemaphore)),
 	)
 	c.currentNonce++
+	c.nonceLock.Unlock()
 
-	// Release the semaphore once the tx has been accepted
 	receipt, err := c.waitForReceipt(signedTx.Hash())
 	if err != nil {
 		c.logger.Error(
@@ -312,6 +320,12 @@ func (c *destinationClient) SendTx(
 		)
 		return nil, err
 	}
+	c.logger.Debug(
+		"Sent transaction",
+		zap.Int("poolTxSlotsAvailable", cap(c.poolTxsSemaphore)-len(c.poolTxsSemaphore)),
+	)
+
+	// Release the semaphore once the tx has been accepted
 	<-c.poolTxsSemaphore
 
 	return receipt, nil
