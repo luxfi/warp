@@ -99,7 +99,7 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destinationClient := &destinationClient{
-				lock:                 &sync.Mutex{},
+				nonceLock:            &sync.Mutex{},
 				logger:               logging.NoLog{},
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
