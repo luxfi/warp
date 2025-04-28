@@ -64,8 +64,8 @@ func relayMessageAPIHandler(logger logging.Logger, messageCoordinator *relayer.M
 		}
 
 		if !common.IsHexAddress(req.SourceAddress) {
-			logger.Warn("Invalid source address", zap.String("sourceAddress", req.SourceAddress))
-			http.Error(w, "invalid source address: "+req.SourceAddress, http.StatusBadRequest)
+			logger.Warn("Invalid source address")
+			http.Error(w, "invalid source address", http.StatusBadRequest)
 			return
 		}
 		address := common.HexToAddress(req.SourceAddress)
