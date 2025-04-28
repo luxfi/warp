@@ -63,14 +63,21 @@ func relayMessageAPIHandler(logger logging.Logger, messageCoordinator *relayer.M
 			return
 		}
 
+		if !common.IsHexAddress(req.SourceAddress) {
+			logger.Warn("Invalid source address", zap.String("sourceAddress", req.SourceAddress))
+			http.Error(w, "invalid source address: "+req.SourceAddress, http.StatusBadRequest)
+			return
+		}
+		address := common.HexToAddress(req.SourceAddress)
+
 		warpMessageInfo := &types.WarpMessageInfo{
-			SourceAddress:   common.HexToAddress(req.SourceAddress),
+			SourceAddress:   address,
 			UnsignedMessage: unsignedMessage,
 		}
 		logger.Info(
 			"Processing manual warp message",
-			zap.String("sourceAddress", req.SourceAddress),
-			zap.String("messageID", unsignedMessage.ID().String()),
+			zap.Stringer("sourceAddress", address),
+			zap.Stringer("messageID", unsignedMessage.ID()),
 		)
 		txHash, err := messageCoordinator.ProcessWarpMessage(warpMessageInfo)
 		if err != nil {
