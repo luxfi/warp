@@ -134,7 +134,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockNetwork := avago_mocks.NewMockNetwork(ctrl)
 			mockValidatorClient := validator_mocks.NewMockCanonicalValidatorState(ctrl)
-			vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTLSeconds)
+			vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 			arNetwork := appRequestNetwork{
 				network:                    mockNetwork,
 				validatorClient:            mockValidatorClient,

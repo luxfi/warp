@@ -52,8 +52,8 @@ const (
 	// in the aggregate signature.
 	minimumL1ValidatorBalance = 2048 * units.NanoAvax
 
-	// The amount of time to cache L1 validator balances in seconds
-	l1ValidatorBalanceTTLSeconds = uint64(2)
+	// The amount of time to cache L1 validator balances
+	l1ValidatorBalanceTTL = 2 * time.Second
 )
 
 var (
@@ -105,7 +105,7 @@ func NewSignatureAggregator(
 		messageCreator:           messageCreator,
 		pChainClient:             pChainClient,
 		pChainClientOptions:      pChainClientOptions,
-		currentL1ValidatorsCache: cache.NewTTLCache[ids.ID, []platformvm.APIL1Validator](l1ValidatorBalanceTTLSeconds),
+		currentL1ValidatorsCache: cache.NewTTLCache[ids.ID, []platformvm.APIL1Validator](l1ValidatorBalanceTTL),
 	}
 	sa.currentRequestID.Store(rand.Uint32())
 	return &sa, nil
