@@ -99,14 +99,13 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destinationClient := &destinationClient{
-				nonceLock:            &sync.Mutex{},
+				nonceCond:            sync.NewCond(&sync.Mutex{}),
 				logger:               logging.NoLog{},
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
 				signer:               txSigner,
 				maxBaseFee:           test.maxBaseFee,
 				maxPriorityFeePerGas: big.NewInt(0),
-				poolTxsSemaphore:     make(chan struct{}, poolTxsPerAccount),
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
