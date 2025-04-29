@@ -4,8 +4,11 @@
 package cache
 
 import (
+	"fmt"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type TTLCacheItem[V any] struct {
@@ -13,11 +16,12 @@ type TTLCacheItem[V any] struct {
 	timestamp time.Time
 }
 
-// Cache with per-key TTL tracking
+// Cache with per-key TTL tracking and single-flight fetch
 type TTLCache[K comparable, V any] struct {
-	data map[K]TTLCacheItem[V]
-	ttl  time.Duration
-	lock sync.Mutex
+	data    map[K]TTLCacheItem[V]
+	ttl     time.Duration
+	lock    sync.Mutex
+	sfGroup singleflight.Group
 }
 
 func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
@@ -27,31 +31,50 @@ func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
 	}
 }
 
-// GetValue checks if the cached value is fresh for a given key, otherwise fetches
-// the value from the fetchFunc and caches it.
-// If skipCache is true, the value will be fetched from the fetchFunc regardless of
-// whether it is fresh or not and stored in the cache.
+// Get checks if the cached value is fresh for a given key, otherwise fetches
+// the value using fetchFunc. Concurrent fetches for the same key are deduplicated.
+// If skipCache is true, the value will be fetched regardless of cache state,
+// but concurrent fetches for the same key during skipCache are still deduplicated.
 func (c *TTLCache[K, V]) Get(key K, fetchFunc func(K) (V, error), skipCache bool) (V, error) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
 	if !skipCache {
+		c.lock.Lock()
 		item, exists := c.data[key]
 		if exists && time.Since(item.timestamp) < c.ttl {
+			c.lock.Unlock()
 			return item.value, nil
 		}
+		c.lock.Unlock()
 	}
 
-	newValue, err := fetchFunc(key)
+	keyStr := keyToString(key)
+
+	v, err, _ := c.sfGroup.Do(keyStr, func() (interface{}, error) {
+		newValue, fetchErr := fetchFunc(key)
+		if fetchErr != nil {
+			return *new(V), fetchErr
+		}
+
+		c.lock.Lock()
+		c.data[key] = TTLCacheItem[V]{
+			value:     newValue,
+			timestamp: time.Now(),
+		}
+		c.lock.Unlock()
+
+		return newValue, nil
+	})
+
 	if err != nil {
-		// Return a zero value of the type V in case of error
 		return *new(V), err
 	}
 
-	c.data[key] = TTLCacheItem[V]{
-		value:     newValue,
-		timestamp: time.Now(),
-	}
+	return v.(V), nil
+}
 
-	return newValue, nil
+// keyToString is defined to allow for both fmt.Stringer and primitive string types.
+func keyToString[K comparable](key K) string {
+	if s, ok := any(key).(fmt.Stringer); ok {
+		return s.String()
+	}
+	return fmt.Sprintf("%v", key)
 }
