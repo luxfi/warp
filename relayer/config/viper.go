@@ -107,8 +107,7 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 			accountPrivateKeyEnvVarName,
 			subnet.BlockchainID,
 		)); privateKeyFromEnv != "" {
-			// TODO: Support multiple keys here
-			privateKeys = []string{privateKeyFromEnv}
+			privateKeys = strings.Split(privateKeyFromEnv, ",")
 			cfg.overwrittenOptions = append(cfg.overwrittenOptions, fmt.Sprintf(
 				"destination-blockchain(%s).account-private-keys",
 				subnet.blockchainID),
