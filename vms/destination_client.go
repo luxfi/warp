@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/vms/evm"
@@ -25,7 +26,7 @@ type DestinationClient interface {
 	// SendTx constructs the transaction from warp primitives, and sends to the configured destination chain endpoint.
 	// Returns the hash of the sent transaction.
 	// TODO: Make generic for any VM.
-	SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error)
+	SendTx(signedMessage *warp.Message, deliverers set.Set[common.Address], toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error)
 
 	// Client returns the underlying client for the destination chain
 	Client() interface{}
