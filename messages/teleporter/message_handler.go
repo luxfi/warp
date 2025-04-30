@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
@@ -298,6 +299,7 @@ func (m *messageHandler) SendMessage(
 
 	receipt, err := m.destinationClient.SendTx(
 		signedMessage,
+		set.Of(m.teleporterMessage.AllowedRelayerAddresses...),
 		m.protocolAddress.Hex(),
 		gasLimit,
 		callData,

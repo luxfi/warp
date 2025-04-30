@@ -13,6 +13,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
@@ -40,18 +41,28 @@ type Client interface {
 
 // Implements DestinationClient
 type destinationClient struct {
-	client                  ethclient.Client
-	nonceCond               *sync.Cond
+	client ethclient.Client
+
+	// Protects access to [keys], [keysInUse], and [nextKeyIndex]
+	keySelectionCond *sync.Cond
+	keys             []accountSigner
+	// Provides non-blocking mutual exclusion for elements in [keys]
+	keysInUse    map[int]bool
+	nextKeyIndex int
+
 	destinationBlockchainID ids.ID
-	signer                  signer.Signer
 	evmChainID              *big.Int
-	currentNonce            uint64
 	blockGasLimit           uint64
 	maxBaseFee              *big.Int
 	maxPriorityFeePerGas    *big.Int
 	logger                  logging.Logger
 	txInclusionTimeout      time.Duration
-	numPendingTxs           int
+}
+
+type accountSigner struct {
+	signer        signer.Signer
+	currentNonce  uint64
+	numPendingTxs int
 }
 
 func NewDestinationClient(
@@ -102,39 +113,50 @@ func NewDestinationClient(
 		return nil, err
 	}
 
+	var (
+		pendingNonce, currentNonce uint64
+		accountSigners             = make([]accountSigner, len(signers))
+	)
+
 	// Block until all pending txs are accepted
-	var pendingNonce, currentNonce uint64
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
-	for {
-		// TODO: Iterate over all signers
-		pendingNonce, err = client.NonceAt(context.Background(), signers[0].Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
-		if err != nil {
-			logger.Error(
-				"Failed to get pending nonce",
-				zap.Error(err),
-			)
-			return nil, err
-		}
+	for i, signer := range signers {
+		for {
+			// TODO: Iterate over all signers
+			pendingNonce, err = client.NonceAt(context.Background(), signer.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
+			if err != nil {
+				logger.Error(
+					"Failed to get pending nonce",
+					zap.Error(err),
+				)
+				return nil, err
+			}
 
-		currentNonce, err = client.NonceAt(context.Background(), signers[0].Address(), nil)
-		if err != nil {
-			logger.Error(
-				"Failed to get current nonce",
-				zap.Error(err),
+			currentNonce, err = client.NonceAt(context.Background(), signer.Address(), nil)
+			if err != nil {
+				logger.Error(
+					"Failed to get current nonce",
+					zap.Error(err),
+				)
+				return nil, err
+			}
+			if pendingNonce == currentNonce {
+				accountSigners[i] = accountSigner{
+					signer:        signer,
+					currentNonce:  currentNonce,
+					numPendingTxs: 0,
+				}
+				break
+			}
+			logger.Info(
+				"Waiting for pending txs to be accepted",
+				zap.Uint64("pendingNonce", pendingNonce),
+				zap.Uint64("currentNonce", currentNonce),
+				zap.Stringer("address", signers[0].Address()),
 			)
-			return nil, err
+			<-ticker.C
 		}
-		if pendingNonce == currentNonce {
-			break
-		}
-		logger.Info(
-			"Waiting for pending txs to be accepted",
-			zap.Uint64("pendingNonce", pendingNonce),
-			zap.Uint64("currentNonce", currentNonce),
-			zap.Stringer("address", signers[0].Address()),
-		)
-		<-ticker.C
 	}
 
 	logger.Info(
@@ -145,11 +167,12 @@ func NewDestinationClient(
 
 	return &destinationClient{
 		client:                  client,
-		nonceCond:               sync.NewCond(&sync.Mutex{}),
+		keySelectionCond:        sync.NewCond(&sync.Mutex{}),
+		keys:                    accountSigners,
+		keysInUse:               make(map[int]bool),
+		nextKeyIndex:            0,
 		destinationBlockchainID: destinationID,
-		signer:                  signers[0],
 		evmChainID:              evmChainID,
-		currentNonce:            currentNonce,
 		logger:                  logger,
 		blockGasLimit:           destinationBlockchain.BlockGasLimit,
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
@@ -166,6 +189,7 @@ func NewDestinationClient(
 // max priority fee per gas.
 func (c *destinationClient) SendTx(
 	signedMessage *avalancheWarp.Message,
+	deliverers set.Set[common.Address],
 	toAddress string,
 	gasLimit uint64,
 	callData []byte,
@@ -209,7 +233,8 @@ func (c *destinationClient) SendTx(
 	to := common.HexToAddress(toAddress)
 	gasFeeCap := new(big.Int).Add(maxBaseFee, gasTipCap)
 
-	signedTx, err := c.issueTransaction(
+	signedTx, signerIdx, err := c.issueTransaction(
+		deliverers,
 		to,
 		gasLimit,
 		gasFeeCap,
@@ -226,7 +251,7 @@ func (c *destinationClient) SendTx(
 		return nil, err
 	}
 
-	receipt, err := c.waitForReceipt(signedTx.Hash())
+	receipt, err := c.waitForReceipt(signedTx.Hash(), signerIdx)
 	if err != nil {
 		c.logger.Error(
 			"Failed to get transaction receipt",
@@ -242,25 +267,56 @@ func (c *destinationClient) SendTx(
 	return receipt, nil
 }
 
+// Blocks until a key is available to use for signing.
+func (c *destinationClient) acquireKey(deliverers set.Set[common.Address]) int {
+	c.keySelectionCond.L.Lock()
+	defer c.keySelectionCond.L.Unlock()
+
+	// Round-robin through the keys until we find one that is
+	// 1) not in use AND
+	// 2) has less than poolTxsPerAccount pending txs AND
+	// 3) is in the deliverers set (if deliverers is not empty)
+	for {
+		n := len(c.keys)
+		for i := 0; i < n; i++ {
+			idx := (c.nextKeyIndex + i) % n
+			if (deliverers.Len() == 0 || deliverers.Contains(c.keys[idx].signer.Address())) &&
+				!c.keysInUse[idx] &&
+				c.keys[idx].numPendingTxs < poolTxsPerAccount {
+				c.keysInUse[idx] = true
+				c.nextKeyIndex = (idx + 1) % n
+				return idx
+			}
+		}
+		// No keys available, wait
+		c.keySelectionCond.Wait()
+	}
+}
+
+func (c *destinationClient) releaseKey(keyIndex int) {
+	c.keySelectionCond.L.Lock()
+	defer c.keySelectionCond.L.Unlock()
+
+	c.keysInUse[keyIndex] = false
+	c.keySelectionCond.Signal()
+}
+
 func (c *destinationClient) issueTransaction(
+	deliverers set.Set[common.Address],
 	to common.Address,
 	gasLimit uint64,
 	gasFeeCap *big.Int,
 	gasTipCap *big.Int,
 	callData []byte,
 	signedMessage *avalancheWarp.Message,
-) (*types.Transaction, error) {
-	c.nonceCond.L.Lock()
-	defer c.nonceCond.L.Unlock()
-
-	for c.numPendingTxs >= poolTxsPerAccount {
-		c.nonceCond.Wait()
-	}
+) (*types.Transaction, int, error) {
+	idx := c.acquireKey(deliverers)
+	defer c.releaseKey(idx)
 
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
 		c.evmChainID,
-		c.currentNonce,
+		c.keys[idx].currentNonce,
 		&to,
 		gasLimit,
 		gasFeeCap,
@@ -273,13 +329,13 @@ func (c *destinationClient) issueTransaction(
 	)
 
 	// Sign and send the transaction on the destination chain
-	signedTx, err := c.signer.SignTx(tx, c.evmChainID)
+	signedTx, err := c.keys[idx].signer.SignTx(tx, c.evmChainID)
 	if err != nil {
 		c.logger.Error(
 			"Failed to sign transaction",
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, 0, err
 	}
 
 	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
@@ -288,7 +344,7 @@ func (c *destinationClient) issueTransaction(
 	c.logger.Info(
 		"Sending transaction",
 		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.currentNonce),
+		zap.Uint64("nonce", c.keys[idx].currentNonce),
 	)
 
 	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
@@ -296,21 +352,25 @@ func (c *destinationClient) issueTransaction(
 			"Failed to send transaction",
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, 0, err
 	}
 	c.logger.Info(
 		"Sent transaction",
 		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.currentNonce),
+		zap.Uint64("nonce", c.keys[idx].currentNonce),
 	)
-	c.currentNonce++
-	c.numPendingTxs++
 
-	return signedTx, nil
+	c.keySelectionCond.L.Lock()
+	defer c.keySelectionCond.L.Unlock()
+	c.keys[idx].currentNonce++
+	c.keys[idx].numPendingTxs++
+
+	return signedTx, idx, nil
 }
 
 func (c *destinationClient) waitForReceipt(
 	txHash common.Hash,
+	signerIdx int,
 ) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	operation := func() (err error) {
@@ -328,10 +388,11 @@ func (c *destinationClient) waitForReceipt(
 		return nil, err
 	}
 
-	c.nonceCond.L.Lock()
-	defer c.nonceCond.L.Unlock()
-	c.numPendingTxs--
-	c.nonceCond.Signal()
+	c.keySelectionCond.L.Lock()
+	defer c.keySelectionCond.L.Unlock()
+	c.keys[signerIdx].numPendingTxs--
+	// Signal here, since a key may be waiting for a mempool slot to free up
+	c.keySelectionCond.Signal()
 
 	return receipt, nil
 }
@@ -341,8 +402,14 @@ func (c *destinationClient) Client() interface{} {
 }
 
 func (c *destinationClient) SenderAddresses() []common.Address {
-	// TODO
-	return []common.Address{c.signer.Address()}
+	c.keySelectionCond.L.Lock()
+	defer c.keySelectionCond.L.Unlock()
+
+	addresses := make([]common.Address, len(c.keys))
+	for i, signer := range c.keys {
+		addresses[i] = signer.signer.Address()
+	}
+	return addresses
 }
 
 func (c *destinationClient) DestinationBlockchainID() ids.ID {
