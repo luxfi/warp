@@ -158,73 +158,6 @@ func NewDestinationClient(
 	}, nil
 }
 
-func (c *destinationClient) issueTransaction(
-	to common.Address,
-	gasLimit uint64,
-	gasFeeCap *big.Int,
-	gasTipCap *big.Int,
-	callData []byte,
-	signedMessage *avalancheWarp.Message,
-) (*types.Transaction, error) {
-	c.nonceCond.L.Lock()
-	defer c.nonceCond.L.Unlock()
-
-	for c.numPendingTxs >= poolTxsPerAccount {
-		c.nonceCond.Wait()
-	}
-
-	// Construct the actual transaction to broadcast on the destination chain
-	tx := predicateutils.NewPredicateTx(
-		c.evmChainID,
-		c.currentNonce,
-		&to,
-		gasLimit,
-		gasFeeCap,
-		gasTipCap,
-		big.NewInt(0),
-		callData,
-		types.AccessList{},
-		warp.ContractAddress,
-		signedMessage.Bytes(),
-	)
-
-	// Sign and send the transaction on the destination chain
-	signedTx, err := c.signer.SignTx(tx, c.evmChainID)
-	if err != nil {
-		c.logger.Error(
-			"Failed to sign transaction",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
-	defer sendTxCtxCancel()
-
-	c.logger.Info(
-		"Sending transaction",
-		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.currentNonce),
-	)
-
-	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
-		c.logger.Error(
-			"Failed to send transaction",
-			zap.Error(err),
-		)
-		return nil, err
-	}
-	c.logger.Info(
-		"Sent transaction",
-		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.currentNonce),
-	)
-	c.currentNonce++
-	c.numPendingTxs++
-
-	return signedTx, nil
-}
-
 // SendTx constructs, signs, and broadcast a transaction to deliver the given {signedMessage}
 // to this chain with the provided {callData}. If the maximum base fee value is not configured, the
 // maximum base is calculated as the current base fee multiplied by the default base fee factor.
@@ -307,6 +240,73 @@ func (c *destinationClient) SendTx(
 	)
 
 	return receipt, nil
+}
+
+func (c *destinationClient) issueTransaction(
+	to common.Address,
+	gasLimit uint64,
+	gasFeeCap *big.Int,
+	gasTipCap *big.Int,
+	callData []byte,
+	signedMessage *avalancheWarp.Message,
+) (*types.Transaction, error) {
+	c.nonceCond.L.Lock()
+	defer c.nonceCond.L.Unlock()
+
+	for c.numPendingTxs >= poolTxsPerAccount {
+		c.nonceCond.Wait()
+	}
+
+	// Construct the actual transaction to broadcast on the destination chain
+	tx := predicateutils.NewPredicateTx(
+		c.evmChainID,
+		c.currentNonce,
+		&to,
+		gasLimit,
+		gasFeeCap,
+		gasTipCap,
+		big.NewInt(0),
+		callData,
+		types.AccessList{},
+		warp.ContractAddress,
+		signedMessage.Bytes(),
+	)
+
+	// Sign and send the transaction on the destination chain
+	signedTx, err := c.signer.SignTx(tx, c.evmChainID)
+	if err != nil {
+		c.logger.Error(
+			"Failed to sign transaction",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
+	defer sendTxCtxCancel()
+
+	c.logger.Info(
+		"Sending transaction",
+		zap.String("txID", signedTx.Hash().String()),
+		zap.Uint64("nonce", c.currentNonce),
+	)
+
+	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
+		c.logger.Error(
+			"Failed to send transaction",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	c.logger.Info(
+		"Sent transaction",
+		zap.String("txID", signedTx.Hash().String()),
+		zap.Uint64("nonce", c.currentNonce),
+	)
+	c.currentNonce++
+	c.numPendingTxs++
+
+	return signedTx, nil
 }
 
 func (c *destinationClient) waitForReceipt(
