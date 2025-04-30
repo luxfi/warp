@@ -69,7 +69,7 @@ func NewDestinationClient(
 
 	logger = logger.With(zap.String("blockchainID", destinationBlockchain.BlockchainID))
 
-	sgnr, err := signer.NewSigner(destinationBlockchain)
+	signers, err := signer.NewSigners(destinationBlockchain)
 	if err != nil {
 		logger.Error(
 			"Failed to create signer",
@@ -107,7 +107,8 @@ func NewDestinationClient(
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
-		pendingNonce, err = client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
+		// TODO: Iterate over all signers
+		pendingNonce, err = client.NonceAt(context.Background(), signers[0].Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
 		if err != nil {
 			logger.Error(
 				"Failed to get pending nonce",
@@ -116,7 +117,7 @@ func NewDestinationClient(
 			return nil, err
 		}
 
-		currentNonce, err = client.NonceAt(context.Background(), sgnr.Address(), nil)
+		currentNonce, err = client.NonceAt(context.Background(), signers[0].Address(), nil)
 		if err != nil {
 			logger.Error(
 				"Failed to get current nonce",
@@ -131,7 +132,7 @@ func NewDestinationClient(
 			"Waiting for pending txs to be accepted",
 			zap.Uint64("pendingNonce", pendingNonce),
 			zap.Uint64("currentNonce", currentNonce),
-			zap.Stringer("address", sgnr.Address()),
+			zap.Stringer("address", signers[0].Address()),
 		)
 		<-ticker.C
 	}
@@ -146,7 +147,7 @@ func NewDestinationClient(
 		client:                  client,
 		nonceCond:               sync.NewCond(&sync.Mutex{}),
 		destinationBlockchainID: destinationID,
-		signer:                  sgnr,
+		signer:                  signers[0],
 		evmChainID:              evmChainID,
 		currentNonce:            currentNonce,
 		logger:                  logger,
@@ -339,8 +340,9 @@ func (c *destinationClient) Client() interface{} {
 	return c.client
 }
 
-func (c *destinationClient) SenderAddress() common.Address {
-	return c.signer.Address()
+func (c *destinationClient) SenderAddresses() []common.Address {
+	// TODO
+	return []common.Address{c.signer.Address()}
 }
 
 func (c *destinationClient) DestinationBlockchainID() ids.ID {

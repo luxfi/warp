@@ -30,8 +30,8 @@ type DestinationClient interface {
 	// Client returns the underlying client for the destination chain
 	Client() interface{}
 
-	// SenderAddress returns the address of the relayer on the destination chain
-	SenderAddress() common.Address
+	// SenderAddresses returns the addresses of the relayer on the destination chain
+	SenderAddresses() []common.Address
 
 	// DestinationBlockchainID returns the ID of the destination chain
 	DestinationBlockchainID() ids.ID
