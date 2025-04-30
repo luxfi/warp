@@ -162,6 +162,15 @@ func isAllowedRelayer(allowedRelayers []common.Address, eoa common.Address) bool
 	return slices.Contains(allowedRelayers, eoa)
 }
 
+func containsAllowedRelayer(allowedRelayers []common.Address, eoas []common.Address) bool {
+	for _, eoa := range eoas {
+		if isAllowedRelayer(allowedRelayers, eoa) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *messageHandler) GetUnsignedMessage() *warp.UnsignedMessage {
 	return m.unsignedMessage
 }
@@ -195,8 +204,7 @@ func (m *messageHandler) ShouldSendMessage() (bool, error) {
 	}
 
 	// Check if the relayer is allowed to deliver this message
-	senderAddress := m.destinationClient.SenderAddress()
-	if !isAllowedRelayer(m.teleporterMessage.AllowedRelayerAddresses, senderAddress) {
+	if !containsAllowedRelayer(m.teleporterMessage.AllowedRelayerAddresses, m.destinationClient.SenderAddresses()) {
 		m.logger.Info("Relayer EOA not allowed to deliver this message.")
 		return false, nil
 	}
@@ -354,6 +362,7 @@ func (f *factory) parseTeleporterMessage(
 		f.logger.Error(
 			"Failed unpacking teleporter message.",
 			zap.String("warpMessageID", unsignedMessage.ID().String()),
+			zap.Error(err),
 		)
 		return nil, err
 	}

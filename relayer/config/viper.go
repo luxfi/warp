@@ -71,8 +71,8 @@ func SetDefaultConfigValues(v *viper.Viper) {
 // The following precedence order is used. Each item takes precedence over the item below it:
 //  1. Flags
 //  2. Environment variables
-//     a. Global account-private-key
-//     b. Chain-specific account-private-key
+//     a. Global account-private-keys
+//     b. Chain-specific account-private-keys
 //  3. Config file
 //
 // Returns the Config
@@ -91,14 +91,14 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 	// If account-private-key is set as a flag or environment variable,
 	// overwrite all destination subnet configurations to use that key
 	// In all cases, sanitize the key before setting it in the config
-	accountPrivateKey := v.GetString(AccountPrivateKeyKey)
+	accountPrivateKeys := v.GetStringSlice(AccountPrivateKeysKey)
 	for i, subnet := range cfg.DestinationBlockchains {
-		privateKey := subnet.AccountPrivateKey
-		if accountPrivateKey != "" {
-			privateKey = accountPrivateKey
+		privateKeys := subnet.AccountPrivateKeys
+		if len(accountPrivateKeys) != 0 {
+			privateKeys = accountPrivateKeys
 			cfg.overwrittenOptions = append(
 				cfg.overwrittenOptions,
-				fmt.Sprintf("destination-blockchain(%s).account-private-key", subnet.blockchainID),
+				fmt.Sprintf("destination-blockchain(%s).account-private-keys", subnet.blockchainID),
 			)
 			// Otherwise, check for private keys suffixed with the chain ID and set it for that subnet
 			// Since the key is dynamic, this is only possible through environment variables
@@ -107,13 +107,18 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 			accountPrivateKeyEnvVarName,
 			subnet.BlockchainID,
 		)); privateKeyFromEnv != "" {
-			privateKey = privateKeyFromEnv
+			// TODO: Support multiple keys here
+			privateKeys = []string{privateKeyFromEnv}
 			cfg.overwrittenOptions = append(cfg.overwrittenOptions, fmt.Sprintf(
-				"destination-blockchain(%s).account-private-key",
+				"destination-blockchain(%s).account-private-keys",
 				subnet.blockchainID),
 			)
 		}
-		cfg.DestinationBlockchains[i].AccountPrivateKey = utils.SanitizeHexString(privateKey)
+		for i, privateKey := range privateKeys {
+			privateKeys[i] = utils.SanitizeHexString(privateKey)
+		}
+
+		cfg.DestinationBlockchains[i].AccountPrivateKeys = privateKeys
 	}
 
 	if v.IsSet(commonConfig.TLSKeyPathKey) || v.IsSet(commonConfig.TLSCertPathKey) {

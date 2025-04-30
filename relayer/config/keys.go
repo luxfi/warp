@@ -17,7 +17,7 @@ const (
 	MetricsPortKey                     = "metrics-port"
 	SourceBlockchainsKey               = "source-blockchains"
 	DestinationBlockchainsKey          = "destination-blockchains"
-	AccountPrivateKeyKey               = "account-private-key"
+	AccountPrivateKeysKey              = "account-private-keys"
 	StorageLocationKey                 = "storage-location"
 	RedisURLKey                        = "redis-url"
 	ProcessMissedBlocksKey             = "process-missed-blocks"
