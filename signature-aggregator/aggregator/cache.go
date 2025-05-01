@@ -1,4 +1,7 @@
-package cache
+// Copyright (C) 2024, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
+package aggregator
 
 import (
 	"math"
@@ -9,7 +12,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-type Cache struct {
+type SignatureCache struct {
 	// map of warp message ID to a map of public keys to signatures
 	signatures *lru.Cache[ids.ID, map[PublicKeyBytes]SignatureBytes]
 }
@@ -17,7 +20,7 @@ type Cache struct {
 type PublicKeyBytes [bls.PublicKeyLen]byte
 type SignatureBytes [bls.SignatureLen]byte
 
-func NewCache(size uint64) (*Cache, error) {
+func NewSignatureCache(size uint64) (*SignatureCache, error) {
 	if size > math.MaxInt {
 		return nil, errors.New("cache size too big")
 	}
@@ -27,16 +30,16 @@ func NewCache(size uint64) (*Cache, error) {
 		return nil, err
 	}
 
-	return &Cache{
+	return &SignatureCache{
 		signatures: signatureCache,
 	}, nil
 }
 
-func (c *Cache) Get(msgID ids.ID) (map[PublicKeyBytes]SignatureBytes, bool) {
+func (c *SignatureCache) Get(msgID ids.ID) (map[PublicKeyBytes]SignatureBytes, bool) {
 	return c.signatures.Get(msgID)
 }
 
-func (c *Cache) Add(
+func (c *SignatureCache) Add(
 	msgID ids.ID,
 	pubKey PublicKeyBytes,
 	signature SignatureBytes,
