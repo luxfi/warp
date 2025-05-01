@@ -11,9 +11,6 @@ main.log
 server.log
 *.test
 
-# Foundry outputs
-cache/
-out/
 
 # Release build outputs
 osxcross/
