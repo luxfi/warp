@@ -436,9 +436,7 @@ If your temporary directory is not writable, the unit tests may fail with messag
 
 ### E2E Tests
 
-E2E tests are ran as part of CI, but can also be ran locally with the `--local` flag. To run the E2E tests locally, you'll need to install Gingko following the instructions [here](https://onsi.github.io/ginkgo/#installing-ginkgo)
-
-Next, provide the path to the `subnet-evm` repository and the path to a writeable data directory (this example uses `~/subnet-evm` and `~/tmp/e2e-test`) to use for the tests:
+To run the E2E tests locally, you'll need to install Gingko following the instructions [here](https://onsi.github.io/ginkgo/#installing-ginkgo). Run the tests using the dedicated script:
 
 ```bash
 ./scripts/e2e_test.sh
