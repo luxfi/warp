@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	accountPrivateKeyEnvVarName = "ACCOUNT_PRIVATE_KEY"
-	cChainIdentifierString      = "C"
-	warpConfigKey               = "warpConfig"
-	suppliedSubnetsLimit        = 16
+	accountPrivateKeysEnvVarName = "ACCOUNT_PRIVATE_KEYS"
+	cChainIdentifierString       = "C"
+	warpConfigKey                = "warpConfig"
+	suppliedSubnetsLimit         = 16
 )
 
 const (
