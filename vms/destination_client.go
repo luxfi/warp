@@ -26,7 +26,13 @@ type DestinationClient interface {
 	// SendTx constructs the transaction from warp primitives, and sends to the configured destination chain endpoint.
 	// Returns the hash of the sent transaction.
 	// TODO: Make generic for any VM.
-	SendTx(signedMessage *warp.Message, deliverers set.Set[common.Address], toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error)
+	SendTx(
+		signedMessage *warp.Message,
+		deliverers set.Set[common.Address],
+		toAddress string,
+		gasLimit uint64,
+		callData []byte,
+	) (*types.Receipt, error)
 
 	// Client returns the underlying client for the destination chain
 	Client() interface{}

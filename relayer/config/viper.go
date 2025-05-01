@@ -104,7 +104,7 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 			// Since the key is dynamic, this is only possible through environment variables
 		} else if privateKeyFromEnv := os.Getenv(fmt.Sprintf(
 			"%s_%s",
-			accountPrivateKeyEnvVarName,
+			accountPrivateKeysEnvVarName,
 			subnet.BlockchainID,
 		)); privateKeyFromEnv != "" {
 			privateKeys = strings.Split(privateKeyFromEnv, ",")
