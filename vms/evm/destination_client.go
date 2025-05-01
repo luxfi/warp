@@ -30,6 +30,7 @@ const (
 	// If the max base fee is not explicitly set, use 3x the current base fee estimate
 	defaultBaseFeeFactor          = 3
 	poolTxsPerAccount             = 16
+	pendingTxRefreshInterval      = 2 * time.Second
 	defaultBlockAcceptanceTimeout = 30 * time.Second
 )
 
@@ -104,7 +105,7 @@ func NewDestinationClient(
 
 	// Block until all pending txs are accepted
 	var pendingNonce, currentNonce uint64
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(pendingTxRefreshInterval)
 	defer ticker.Stop()
 	for {
 		pendingNonce, err = client.NonceAt(context.Background(), sgnr.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
