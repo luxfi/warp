@@ -196,7 +196,7 @@ func (r *ApplicationRelayer) ProcessHeight(
 
 // Relays a message to the destination chain. Does not checkpoint the height.
 // returns the transaction hash if the message is successfully relayed.
-func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (common.Hash, error) {
+func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler, skipCache bool) (common.Hash, error) {
 	r.logger.Info(
 		"Relaying message",
 		zap.Stringer("relayerID", r.relayerID.ID),
@@ -237,6 +237,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler) (co
 			r.signingSubnetID,
 			r.warpConfig.QuorumNumerator,
 			quorumPercentageBuffer,
+			skipCache,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
@@ -293,7 +294,8 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 	for i := 0; i < maxRetryCount; i++ {
 		var txHash common.Hash
 		startProcessMessageTime := time.Now()
-		txHash, err = r.processMessage(handler)
+		// Skip the cache if this is not the first attempt
+		txHash, err = r.processMessage(handler, i > 0)
 		if err == nil {
 			return txHash, nil
 		}

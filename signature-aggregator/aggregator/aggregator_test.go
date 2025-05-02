@@ -155,6 +155,7 @@ func TestCreateSignedMessageFailsInvalidQuorumPercentage(t *testing.T) {
 				ids.Empty,
 				tc.requiredQuorumPercentage,
 				tc.quorumPercentageBuffer,
+				false,
 			)
 			require.Nil(t, signedMsg)
 			require.ErrorIs(t, err, errInvalidQuorumPercentage)
@@ -168,7 +169,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
 	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty, false).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: warp.CanonicalValidatorSet{
@@ -178,7 +179,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 		},
 		nil,
 	)
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false)
 	require.ErrorContains(t, err, "no signatures")
 }
 
@@ -188,7 +189,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
 	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty, false).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: warp.CanonicalValidatorSet{
@@ -198,7 +199,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 		},
 		nil,
 	).AnyTimes()
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false)
 	require.ErrorContains(
 		t,
 		err,
@@ -250,7 +251,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 	)
 
 	mockNetwork.EXPECT().TrackSubnet(subnetID)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID, false).Return(
 		connectedValidators,
 		nil,
 	)
@@ -283,7 +284,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	).Times(1)
 
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0, false)
 	require.ErrorIs(
 		t,
 		err,
@@ -336,7 +337,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 			)
 
 			mockNetwork.EXPECT().TrackSubnet(subnetID)
-			mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID).Return(
+			mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID, false).Return(
 				connectedValidators,
 				nil,
 			)
@@ -407,6 +408,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 				subnetID,
 				tc.requiredQuorumPercentage,
 				tc.quorumPercentageBuffer,
+				false,
 			)
 			require.NoError(t, err)
 
