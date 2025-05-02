@@ -11,10 +11,10 @@ package mocks
 
 import (
 	reflect "reflect"
-	time "time"
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	types "github.com/ava-labs/subnet-evm/core/types"
 	common "github.com/ethereum/go-ethereum/common"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -86,10 +86,10 @@ func (mr *MockDestinationClientMockRecorder) DestinationBlockchainID() *gomock.C
 }
 
 // SendTx mocks base method.
-func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (common.Hash, error) {
+func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendTx", signedMessage, toAddress, gasLimit, callData)
-	ret0, _ := ret[0].(common.Hash)
+	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -112,18 +112,4 @@ func (m *MockDestinationClient) SenderAddress() common.Address {
 func (mr *MockDestinationClientMockRecorder) SenderAddress() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddress", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddress))
-}
-
-// TxInclusionTimeout mocks base method.
-func (m *MockDestinationClient) TxInclusionTimeout() time.Duration {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TxInclusionTimeout")
-	ret0, _ := ret[0].(time.Duration)
-	return ret0
-}
-
-// TxInclusionTimeout indicates an expected call of TxInclusionTimeout.
-func (mr *MockDestinationClientMockRecorder) TxInclusionTimeout() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxInclusionTimeout", reflect.TypeOf((*MockDestinationClient)(nil).TxInclusionTimeout))
 }
