@@ -4,7 +4,6 @@
 package signer
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/icm-services/relayer/config"
@@ -22,7 +21,7 @@ func NewSigners(destinationBlockchain *config.DestinationBlockchain) ([]Signer, 
 	if err != nil {
 		return nil, err
 	}
-	kmsSigners, err := NewKMSSigners(destinationBlockchain.KMSAWSRegions, destinationBlockchain.KMSKeyIDs)
+	kmsSigners, err := NewKMSSigners(destinationBlockchain.KMSKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -41,14 +40,10 @@ func NewTxSigners(pks []string) ([]Signer, error) {
 	return signers, nil
 }
 
-func NewKMSSigners(awsRegions []string, keyIDs []string) ([]Signer, error) {
-	if len(keyIDs) != len(awsRegions) {
-		return nil, fmt.Errorf("length of key IDs %d not equal to length of awsRegions %d", len(keyIDs), len(awsRegions))
-	}
-
+func NewKMSSigners(kmsKeys []config.KMSKey) ([]Signer, error) {
 	var signers []Signer
-	for i := range keyIDs {
-		signer, err := NewKMSSigner(awsRegions[i], keyIDs[i])
+	for i := range kmsKeys {
+		signer, err := NewKMSSigner(kmsKeys[i].AWSRegion, kmsKeys[i].KeyID)
 		if err != nil {
 			return signers, err
 		}

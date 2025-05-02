@@ -7,6 +7,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/set"
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
@@ -21,6 +22,11 @@ const (
 	defaultTxInclusionTimeoutSeconds = 30
 )
 
+type KMSKey struct {
+	KeyID     string `mapstructure:"key-id" json:"key-id"`
+	AWSRegion string `mapstructure:"aws-region" json:"aws-region"`
+}
+
 // Destination blockchain configuration. Specifies how to connect to and issue
 // transactions on the destination blockchain.
 type DestinationBlockchain struct {
@@ -28,8 +34,10 @@ type DestinationBlockchain struct {
 	BlockchainID         string            `mapstructure:"blockchain-id" json:"blockchain-id"`
 	VM                   string            `mapstructure:"vm" json:"vm"`
 	RPCEndpoint          basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
-	KMSKeyIDs            []string          `mapstructure:"kms-key-ids" json:"kms-key-ids"`
-	KMSAWSRegions        []string          `mapstructure:"kms-aws-regions" json:"kms-aws-regions"`
+	KMSKeyID             string            `mapstructure:"kms-key-id" json:"kms-key-id"`
+	KMSAWSRegion         string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
+	AccountPrivateKey    string            `mapstructure:"account-private-key" json:"account-private-key"`
+	KMSKeys              []KMSKey          `mapstructure:"kms-keys" json:"kms-keys"`
 	AccountPrivateKeys   []string          `mapstructure:"account-private-keys" json:"account-private-keys"`
 	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
 	MaxBaseFee           uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
@@ -53,23 +61,50 @@ func (s *DestinationBlockchain) Validate() error {
 	if err := s.RPCEndpoint.Validate(); err != nil {
 		return fmt.Errorf("invalid rpc-endpoint in destination subnet configuration: %w", err)
 	}
-	if len(s.KMSKeyIDs) != 0 {
-		if len(s.KMSAWSRegions) != len(s.KMSKeyIDs) {
-			return errors.New("KMS key IDs provided without an AWS regions")
-		}
-		if len(s.AccountPrivateKeys) != 0 {
-			return errors.New("only one of account private keys or KMS key IDs can be provided")
-		}
-	} else {
-		if len(s.AccountPrivateKeys) == 0 {
-			return errors.New("No keys provided")
-		}
-		for _, pkey := range s.AccountPrivateKeys {
-			if _, err := crypto.HexToECDSA(utils.SanitizeHexString(pkey)); err != nil {
-				return utils.ErrInvalidPrivateKeyHex
-			}
+	if s.KMSKeyID != "" {
+		if s.KMSAWSRegion == "" {
+			return errors.New("KMS key ID provided without an AWS region")
 		}
 	}
+	for _, id := range s.KMSKeys {
+		if id.KeyID == "" {
+			return errors.New("KMS key ID provided without an AWS region")
+		}
+		if id.AWSRegion == "" {
+			return errors.New("KMS AWS region provided without a key ID")
+		}
+	}
+
+	// Collect and deduplicate the account private keys
+	privateKeys := s.AccountPrivateKeys
+	if s.AccountPrivateKey != "" {
+		privateKeys = append(privateKeys, s.AccountPrivateKey)
+	}
+
+	for i, pkey := range privateKeys {
+		if _, err := crypto.HexToECDSA(utils.SanitizeHexString(pkey)); err != nil {
+			return utils.ErrInvalidPrivateKeyHex
+		}
+		privateKeys[i] = utils.SanitizeHexString(pkey)
+	}
+	uniquePks := set.Of(privateKeys...)
+
+	// Deduplicate the KMS key IDs and AWS regions
+	kmsKeys := s.KMSKeys
+	if s.KMSKeyID != "" {
+		kmsKeys = append(kmsKeys, KMSKey{
+			KeyID:     s.KMSKeyID,
+			AWSRegion: s.KMSAWSRegion,
+		})
+	}
+	uniqueKmsKeys := set.Of(kmsKeys...)
+
+	if len(uniqueKmsKeys) == 0 && len(uniquePks) == 0 {
+		return errors.New("no account private keys or KMS keys provided")
+	}
+
+	s.AccountPrivateKeys = uniquePks.List()
+	s.KMSKeys = uniqueKmsKeys.List()
 
 	// Validate the VM specific settings
 	vm := ParseVM(s.VM)

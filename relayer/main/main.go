@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -109,11 +108,6 @@ func main() {
 	)
 
 	logger.Info("Initializing icm-relayer")
-	overwrittenLog := ""
-	if cfg.HasOverwrittenOptions() {
-		overwrittenLog = fmt.Sprintf(" Some options were overwritten: %s", strings.Join(cfg.GetOverwrittenOptions(), ", "))
-	}
-	logger.Info(fmt.Sprintf("Set config options.%s", overwrittenLog))
 
 	// Initialize all destination clients
 	logger.Info("Initializing destination clients")
