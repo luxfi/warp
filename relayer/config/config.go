@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	accountPrivateKeyEnvVarName  = "ACCOUNT_PRIVATE_KEY"
 	accountPrivateKeysEnvVarName = "ACCOUNT_PRIVATE_KEYS"
 	cChainIdentifierString       = "C"
 	warpConfigKey                = "warpConfig"
@@ -76,7 +77,6 @@ type Config struct {
 	// convenience field to fetch a blockchain's subnet ID
 	tlsCert                *tls.Certificate
 	blockchainIDToSubnetID map[ids.ID]ids.ID
-	overwrittenOptions     []string
 	trackedSubnets         set.Set[ids.ID]
 }
 
@@ -270,14 +270,6 @@ func (c *Config) Initialize() error {
 		return err
 	}
 	return c.initializeTrackedSubnets()
-}
-
-func (c *Config) HasOverwrittenOptions() bool {
-	return len(c.overwrittenOptions) > 0
-}
-
-func (c *Config) GetOverwrittenOptions() []string {
-	return c.overwrittenOptions
 }
 
 //

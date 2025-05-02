@@ -13,8 +13,9 @@ var (
 	testBlockchainID  string = "S4mMqUXe7vHsGiRAma6bv3CKnyaLssyAxmQ2KvFpX1KEvfFCD"
 	testBlockchainID2 string = "291etJW5EpagFY94v1JraFy8vLFYXcCnWKJ6Yz9vrjfPjCF4QL"
 	testAddress       string = "0xd81545385803bCD83bd59f58Ba2d2c0562387F83"
-	testPk1           string = "0xabc89e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8abc"
+	testPk1           string = "0xcc844efbcc9ff87e17518d93a4ba5735df3a45317321850d960783ff47901957"
 	testPk2           string = "0x12389e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8123"
+	testPk3           string = "0x7844d43879fb78027457215e368ebe9284bd7512d661e65b0b56218e0aef15bb"
 	queryParamKey1    string = "key1"
 	queryParamVal1    string = "val1"
 	httpHeaderKey1    string = "keyheader1"
@@ -61,10 +62,10 @@ var (
 				RPCEndpoint: basecfg.APIConfig{
 					BaseURL: fmt.Sprintf("http://test.avax.network/ext/bc/%s/rpc", testBlockchainID),
 				},
-				BlockchainID:       testBlockchainID,
-				SubnetID:           testSubnetID,
-				VM:                 "evm",
-				AccountPrivateKeys: []string{"0x56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"},
+				BlockchainID:      testBlockchainID,
+				SubnetID:          testSubnetID,
+				VM:                "evm",
+				AccountPrivateKey: "0x56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027",
 			},
 		},
 		InitialConnectionTimeoutSeconds: 300,
@@ -93,6 +94,6 @@ var (
 		RPCEndpoint: basecfg.APIConfig{
 			BaseURL: "http://test.avax.network/ext/bc/C/rpc",
 		},
-		AccountPrivateKeys: []string{"1234567890123456789012345678901234567890123456789012345678901234"},
+		AccountPrivateKey: "1234567890123456789012345678901234567890123456789012345678901234",
 	}
 )
