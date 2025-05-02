@@ -77,7 +77,7 @@ func checkSufficientConnectedStake(
 	}
 
 	checkConns := func() error {
-		connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID)
+		connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID, false)
 		if err != nil {
 			logger.Error(
 				"Failed to retrieve currently connected validators",
