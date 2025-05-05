@@ -124,7 +124,6 @@ func NewDestinationClient(
 	defer ticker.Stop()
 	for i, signer := range signers {
 		for {
-			// TODO: Iterate over all signers
 			pendingNonce, err = client.NonceAt(context.Background(), signer.Address(), big.NewInt(int64(rpc.PendingBlockNumber)))
 			if err != nil {
 				logger.Error(
@@ -299,7 +298,7 @@ func (c *destinationClient) releaseKey(keyIndex int) {
 	defer c.keySelectionCond.L.Unlock()
 
 	c.keysInUse[keyIndex] = false
-	c.keySelectionCond.Signal()
+	c.keySelectionCond.Broadcast()
 }
 
 func (c *destinationClient) issueTransaction(
@@ -393,7 +392,7 @@ func (c *destinationClient) waitForReceipt(
 	defer c.keySelectionCond.L.Unlock()
 	c.keys[signerIdx].numPendingTxs--
 	// Signal here, since a key may be waiting for a mempool slot to free up
-	c.keySelectionCond.Signal()
+	c.keySelectionCond.Broadcast()
 
 	return receipt, nil
 }
