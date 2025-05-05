@@ -153,7 +153,7 @@ func NewDestinationClient(
 				"Waiting for pending txs to be accepted",
 				zap.Uint64("pendingNonce", pendingNonce),
 				zap.Uint64("currentNonce", currentNonce),
-				zap.Stringer("address", signers[0].Address()),
+				zap.Stringer("address", signer.Address()),
 			)
 			<-ticker.C
 		}
