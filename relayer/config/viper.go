@@ -71,8 +71,6 @@ func SetDefaultConfigValues(v *viper.Viper) {
 // The following precedence order is used. Each item takes precedence over the item below it:
 //  1. Flags
 //  2. Environment variables
-//     a. Global account-private-keys
-//     b. Chain-specific account-private-keys
 //  3. Config file
 //
 // Returns the Config
