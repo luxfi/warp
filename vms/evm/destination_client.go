@@ -360,8 +360,7 @@ func (c *destinationClient) issueTransaction(
 		zap.Uint64("nonce", c.keys[idx].currentNonce),
 	)
 
-	c.keySelectionCond.L.Lock()
-	defer c.keySelectionCond.L.Unlock()
+	// The key is in use, so this is the only goroutine that can modify these values
 	c.keys[idx].currentNonce++
 	c.keys[idx].numPendingTxs++
 
@@ -402,9 +401,6 @@ func (c *destinationClient) Client() interface{} {
 }
 
 func (c *destinationClient) SenderAddresses() []common.Address {
-	c.keySelectionCond.L.Lock()
-	defer c.keySelectionCond.L.Unlock()
-
 	addresses := make([]common.Address, len(c.keys))
 	for i, signer := range c.keys {
 		addresses[i] = signer.signer.Address()
