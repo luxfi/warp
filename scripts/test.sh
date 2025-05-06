@@ -35,6 +35,6 @@ source "$root"/scripts/constants.sh
 
 go build -o tests/cmd/decider/decider ./tests/cmd/decider/
 
-"$root"/scripts/generate.sh
+go generate "$root"/...
 
 go test -tags testing -timeout 30s $VERBOSE ./...

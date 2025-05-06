@@ -3,7 +3,7 @@
 
 package validators
 
-//go:generate mockgen -source=$GOFILE -destination=./mocks/mock_canonical_validator_client.go -package=mocks
+//go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -destination=./mocks/mock_canonical_validator_client.go -package=mocks
 
 import (
 	"context"
