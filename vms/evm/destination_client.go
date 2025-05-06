@@ -283,11 +283,13 @@ func (c *destinationClient) issueTransaction(
 	signedMessage *avalancheWarp.Message,
 ) (*types.Transaction, int, error) {
 	var cases []reflect.SelectCase
+	idxs := make(map[int]int) // map of index in cases to index in c.keys
 	if deliverers.Len() != 0 {
 		// Only select from the signers that are in the deliverers set
 		var addresses []common.Address
 		for i, signer := range c.keys {
 			if deliverers.Contains(signer.signer.Address()) {
+				idxs[len(cases)] = i
 				cases = append(cases, c.selectCases[i])
 				addresses = append(addresses, signer.signer.Address())
 			}
@@ -305,18 +307,20 @@ func (c *destinationClient) issueTransaction(
 
 	// Select an available, eligible signer and acquire a txQueue slot
 	idx, _, _ := reflect.Select(cases)
-	signer := c.keys[idx]
+	if deliverers.Len() != 0 {
+		idx = idxs[idx]
+	}
 
 	c.logger.Debug(
 		"Selected signer",
-		zap.Stringer("address", signer.signer.Address()),
+		zap.Stringer("address", c.keys[idx].signer.Address()),
 	)
 
 	// Synchronize nonce access so that we send transactions in nonce order.
 	// Hold the lock until the transaction is sent to minimize the chance of
 	// an out-of-order transaction being dropped from the mempool.
-	signer.lock.Lock()
-	defer signer.lock.Unlock()
+	c.keys[idx].lock.Lock()
+	defer c.keys[idx].lock.Unlock()
 
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
