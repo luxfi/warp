@@ -8,6 +8,7 @@ package evm
 import (
 	"context"
 	"math/big"
+	"reflect"
 	"sync"
 	"time"
 
@@ -44,12 +45,8 @@ type Client interface {
 type destinationClient struct {
 	client ethclient.Client
 
-	// Protects access to [keys], [keysInUse], and [nextKeyIndex]
-	keySelectionCond *sync.Cond
-	keys             []accountSigner
-	// Provides non-blocking mutual exclusion for elements in [keys]
-	keysInUse    map[int]bool
-	nextKeyIndex int
+	keys        []accountSigner
+	selectCases []reflect.SelectCase
 
 	destinationBlockchainID ids.ID
 	evmChainID              *big.Int
@@ -61,9 +58,10 @@ type destinationClient struct {
 }
 
 type accountSigner struct {
-	signer        signer.Signer
-	currentNonce  uint64
-	numPendingTxs int
+	signer       signer.Signer
+	currentNonce uint64
+	lock         *sync.Mutex
+	txQueue      chan struct{} // TODO determine the type
 }
 
 func NewDestinationClient(
@@ -117,6 +115,7 @@ func NewDestinationClient(
 	var (
 		pendingNonce, currentNonce uint64
 		accountSigners             = make([]accountSigner, len(signers))
+		selectCases                = make([]reflect.SelectCase, len(signers))
 	)
 
 	// Block until all pending txs are accepted
@@ -142,10 +141,19 @@ func NewDestinationClient(
 				return nil, err
 			}
 			if pendingNonce == currentNonce {
+				// Limit the number of transactions in the mempool for each account,
+				// otherwise they may be dropped.
+				txQueue := make(chan struct{}, poolTxsPerAccount)
 				accountSigners[i] = accountSigner{
-					signer:        signer,
-					currentNonce:  currentNonce,
-					numPendingTxs: 0,
+					signer:       signer,
+					currentNonce: currentNonce,
+					lock:         &sync.Mutex{},
+					txQueue:      txQueue,
+				}
+				selectCases[i] = reflect.SelectCase{
+					Dir:  reflect.SelectSend,
+					Chan: reflect.ValueOf(txQueue),
+					Send: reflect.ValueOf(struct{}{}),
 				}
 				break
 			}
@@ -167,10 +175,8 @@ func NewDestinationClient(
 
 	return &destinationClient{
 		client:                  client,
-		keySelectionCond:        sync.NewCond(&sync.Mutex{}),
 		keys:                    accountSigners,
-		keysInUse:               make(map[int]bool),
-		nextKeyIndex:            0,
+		selectCases:             selectCases,
 		destinationBlockchainID: destinationID,
 		evmChainID:              evmChainID,
 		logger:                  logger,
@@ -267,40 +273,6 @@ func (c *destinationClient) SendTx(
 	return receipt, nil
 }
 
-// Blocks until a key is available to use for signing.
-func (c *destinationClient) acquireKey(deliverers set.Set[common.Address]) int {
-	c.keySelectionCond.L.Lock()
-	defer c.keySelectionCond.L.Unlock()
-
-	// Round-robin through the keys until we find one that is
-	// 1) not in use AND
-	// 2) has less than poolTxsPerAccount pending txs AND
-	// 3) is in the deliverers set (if deliverers is not empty)
-	for {
-		n := len(c.keys)
-		for i := 0; i < n; i++ {
-			idx := (c.nextKeyIndex + i) % n
-			if (deliverers.Len() == 0 || deliverers.Contains(c.keys[idx].signer.Address())) &&
-				!c.keysInUse[idx] &&
-				c.keys[idx].numPendingTxs < poolTxsPerAccount {
-				c.keysInUse[idx] = true
-				c.nextKeyIndex = (idx + 1) % n
-				return idx
-			}
-		}
-		// No keys available, wait
-		c.keySelectionCond.Wait()
-	}
-}
-
-func (c *destinationClient) releaseKey(keyIndex int) {
-	c.keySelectionCond.L.Lock()
-	defer c.keySelectionCond.L.Unlock()
-
-	c.keysInUse[keyIndex] = false
-	c.keySelectionCond.Broadcast()
-}
-
 func (c *destinationClient) issueTransaction(
 	deliverers set.Set[common.Address],
 	to common.Address,
@@ -310,8 +282,41 @@ func (c *destinationClient) issueTransaction(
 	callData []byte,
 	signedMessage *avalancheWarp.Message,
 ) (*types.Transaction, int, error) {
-	idx := c.acquireKey(deliverers)
-	defer c.releaseKey(idx)
+	var cases []reflect.SelectCase
+	if deliverers.Len() != 0 {
+		// Only select from the signers that are in the deliverers set
+		var addresses []common.Address
+		for i, signer := range c.keys {
+			if deliverers.Contains(signer.signer.Address()) {
+				cases = append(cases, c.selectCases[i])
+				addresses = append(addresses, signer.signer.Address())
+			}
+		}
+		c.logger.Debug(
+			"Selecting from signers",
+			zap.Any("addresses", addresses),
+		)
+	} else {
+		cases = c.selectCases
+		c.logger.Debug(
+			"Selecting from all signers",
+		)
+	}
+
+	// Select an available, eligible signer and acquire a txQueue slot
+	idx, _, _ := reflect.Select(cases)
+	signer := c.keys[idx]
+
+	c.logger.Debug(
+		"Selected signer",
+		zap.Stringer("address", signer.signer.Address()),
+	)
+
+	// Synchronize nonce access so that we send transactions in nonce order.
+	// Hold the lock until the transaction is sent to minimize the chance of
+	// an out-of-order transaction being dropped from the mempool.
+	signer.lock.Lock()
+	defer signer.lock.Unlock()
 
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
@@ -360,9 +365,7 @@ func (c *destinationClient) issueTransaction(
 		zap.Uint64("nonce", c.keys[idx].currentNonce),
 	)
 
-	// The key is in use, so this is the only goroutine that can modify these values
 	c.keys[idx].currentNonce++
-	c.keys[idx].numPendingTxs++
 
 	return signedTx, idx, nil
 }
@@ -387,11 +390,8 @@ func (c *destinationClient) waitForReceipt(
 		return nil, err
 	}
 
-	c.keySelectionCond.L.Lock()
-	defer c.keySelectionCond.L.Unlock()
-	c.keys[signerIdx].numPendingTxs--
-	// Signal here, since a key may be waiting for a mempool slot to free up
-	c.keySelectionCond.Broadcast()
+	// Release the txQueue slot once we have the receipt
+	<-c.keys[signerIdx].txQueue
 
 	return receipt, nil
 }
