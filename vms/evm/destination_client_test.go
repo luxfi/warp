@@ -6,6 +6,7 @@ package evm
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -34,11 +35,20 @@ func TestSendTx(t *testing.T) {
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
 
+	txQueue := make(chan struct{}, poolTxsPerAccount)
 	keys := []accountSigner{
 		{
-			signer:        txSigners[0],
-			currentNonce:  0,
-			numPendingTxs: 0,
+			signer:       txSigners[0],
+			currentNonce: 0,
+			lock:         &sync.Mutex{},
+			txQueue:      txQueue,
+		},
+	}
+	selectCases := []reflect.SelectCase{
+		{
+			Dir:  reflect.SelectSend,
+			Chan: reflect.ValueOf(txQueue),
+			Send: reflect.ValueOf(struct{}{}),
 		},
 	}
 
@@ -107,9 +117,8 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destinationClient := &destinationClient{
-				keySelectionCond:     sync.NewCond(&sync.Mutex{}),
-				keysInUse:            make(map[int]bool),
 				keys:                 keys,
+				selectCases:          selectCases,
 				logger:               logging.NoLog{},
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
