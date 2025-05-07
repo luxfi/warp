@@ -9,7 +9,6 @@ import (
 	"context"
 	"math/big"
 	"reflect"
-	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -45,8 +44,8 @@ type Client interface {
 type destinationClient struct {
 	client ethclient.Client
 
-	keys        []accountSigner
-	selectCases []reflect.SelectCase
+	messageChans    []chan MessageData
+	signerAddresses []common.Address
 
 	destinationBlockchainID ids.ID
 	evmChainID              *big.Int
@@ -58,16 +57,34 @@ type destinationClient struct {
 }
 
 type accountSigner struct {
-	signer       signer.Signer
-	currentNonce uint64
-	lock         *sync.Mutex
-	txQueue      chan struct{} // TODO determine the type
+	signer            signer.Signer
+	currentNonce      uint64
+	messageChan       chan MessageData
+	txQueue           chan struct{}
+	destinationClient *destinationClient
+}
+
+type MessageData struct {
+	to            common.Address
+	gasLimit      uint64
+	gasFeeCap     *big.Int
+	gasTipCap     *big.Int
+	callData      []byte
+	signedMessage *avalancheWarp.Message
+	resultChan    chan messageResult
+}
+
+type messageResult struct {
+	receipt *types.Receipt
+	err   error
 }
 
 func NewDestinationClient(
 	logger logging.Logger,
 	destinationBlockchain *config.DestinationBlockchain,
 ) (*destinationClient, error) {
+	var dc *destinationClient
+
 	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
 	if err != nil {
 		logger.Error(
@@ -115,7 +132,8 @@ func NewDestinationClient(
 	var (
 		pendingNonce, currentNonce uint64
 		accountSigners             = make([]accountSigner, len(signers))
-		selectCases                = make([]reflect.SelectCase, len(signers))
+		messageChans               = make([]chan MessageData, len(signers))
+		signerAddresses            = make([]common.Address, len(signers))
 	)
 
 	// Block until all pending txs are accepted
@@ -144,17 +162,17 @@ func NewDestinationClient(
 				// Limit the number of transactions in the mempool for each account,
 				// otherwise they may be dropped.
 				txQueue := make(chan struct{}, poolTxsPerAccount)
+				messageChan := make(chan MessageData, 0)
+				messageChans[i] = messageChan
 				accountSigners[i] = accountSigner{
-					signer:       signer,
-					currentNonce: currentNonce,
-					lock:         &sync.Mutex{},
-					txQueue:      txQueue,
+					signer:            signer,
+					currentNonce:      currentNonce,
+					messageChan:       messageChan,
+					txQueue:           txQueue,
+					destinationClient: dc,
 				}
-				selectCases[i] = reflect.SelectCase{
-					Dir:  reflect.SelectSend,
-					Chan: reflect.ValueOf(txQueue),
-					Send: reflect.ValueOf(struct{}{}),
-				}
+				signerAddresses[i] = signer.Address()
+				go accountSigners[i].processIncomingTransactions()
 				break
 			}
 			logger.Info(
@@ -173,10 +191,10 @@ func NewDestinationClient(
 		zap.Uint64("nonce", pendingNonce),
 	)
 
-	return &destinationClient{
+	dc = &destinationClient{
 		client:                  client,
-		keys:                    accountSigners,
-		selectCases:             selectCases,
+		messageChans:            messageChans,
+		signerAddresses:         signerAddresses,
 		destinationBlockchainID: destinationID,
 		evmChainID:              evmChainID,
 		logger:                  logger,
@@ -184,7 +202,9 @@ func NewDestinationClient(
 		maxBaseFee:              new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
 		maxPriorityFeePerGas:    new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
 		txInclusionTimeout:      time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
-	}, nil
+	}
+
+	return dc, nil
 }
 
 // SendTx constructs, signs, and broadcast a transaction to deliver the given {signedMessage}
@@ -239,29 +259,41 @@ func (c *destinationClient) SendTx(
 	to := common.HexToAddress(toAddress)
 	gasFeeCap := new(big.Int).Add(maxBaseFee, gasTipCap)
 
-	signedTx, signerIdx, err := c.issueTransaction(
-		deliverers,
-		to,
-		gasLimit,
-		gasFeeCap,
-		gasTipCap,
-		callData,
-		signedMessage,
-	)
-	if err != nil {
-		c.logger.Error(
-			"Failed to issue transaction",
-			zap.Stringer("messageID", signedMessage.ID()),
-			zap.Error(err),
-		)
-		return nil, err
+	resultChan := make(chan messageResult)
+	defer close(resultChan)
+
+	messageData := MessageData{
+		to:            to,
+		gasLimit:      gasLimit,
+		gasFeeCap:     gasFeeCap,
+		gasTipCap:     gasTipCap,
+		callData:      callData,
+		signedMessage: signedMessage,
+		resultChan:    resultChan,
 	}
 
-	receipt, err := c.waitForReceipt(signedTx.Hash(), signerIdx)
-	if err != nil {
+	var cases []reflect.SelectCase
+	for i, signerAddress := range c.signerAddresses {
+		if deliverers.Len() != 0 {
+			if deliverers.Contains(signerAddress) {
+				continue
+			}
+		}
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectSend,
+			Chan: reflect.ValueOf(c.messageChans[i]),
+			Send: reflect.ValueOf(messageData),
+		})
+	}
+
+	// Select an available, eligible signer and acquire a txQueue slot
+	reflect.Select(cases)
+
+	// Wait for the receipt to be returned
+	result := <-resultChan
+	if result.err != nil {
 		c.logger.Error(
 			"Failed to get transaction receipt",
-			zap.String("txID", signedTx.Hash().String()),
 			zap.Error(err),
 		)
 		return nil, err
@@ -270,134 +302,106 @@ func (c *destinationClient) SendTx(
 		"Sent transaction",
 	)
 
-	return receipt, nil
+	return result.receipt, nil
 }
 
-func (c *destinationClient) issueTransaction(
-	deliverers set.Set[common.Address],
-	to common.Address,
-	gasLimit uint64,
-	gasFeeCap *big.Int,
-	gasTipCap *big.Int,
-	callData []byte,
-	signedMessage *avalancheWarp.Message,
-) (*types.Transaction, int, error) {
-	var cases []reflect.SelectCase
-	idxs := make(map[int]int) // map of index in cases to index in c.keys
-	if deliverers.Len() != 0 {
-		// Only select from the signers that are in the deliverers set
-		var addresses []common.Address
-		for i, signer := range c.keys {
-			if deliverers.Contains(signer.signer.Address()) {
-				idxs[len(cases)] = i
-				cases = append(cases, c.selectCases[i])
-				addresses = append(addresses, signer.signer.Address())
-			}
-		}
-		c.logger.Debug(
-			"Selecting from signers",
-			zap.Any("addresses", addresses),
-		)
-	} else {
-		cases = c.selectCases
-		c.logger.Debug(
-			"Selecting from all signers",
-		)
+func (s *accountSigner) processIncomingTransactions() {
+	for {
+		// We can only only get to listen to readyChan if there is an open pending tx slot
+		s.txQueue <- struct{}{}
+		// TODO handle error
+		s.issueTransaction(<-s.messageChan)
 	}
+}
 
-	// Select an available, eligible signer and acquire a txQueue slot
-	idx, _, _ := reflect.Select(cases)
-	if deliverers.Len() != 0 {
-		idx = idxs[idx]
-	}
-
-	c.logger.Debug(
-		"Selected signer",
-		zap.Stringer("address", c.keys[idx].signer.Address()),
-	)
-
-	// Synchronize nonce access so that we send transactions in nonce order.
-	// Hold the lock until the transaction is sent to minimize the chance of
-	// an out-of-order transaction being dropped from the mempool.
-	c.keys[idx].lock.Lock()
-	defer c.keys[idx].lock.Unlock()
-
+func (s *accountSigner) issueTransaction(
+	data MessageData,
+) error {
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
-		c.evmChainID,
-		c.keys[idx].currentNonce,
-		&to,
-		gasLimit,
-		gasFeeCap,
-		gasTipCap,
+		s.destinationClient.evmChainID,
+		s.currentNonce,
+		&data.to,
+		data.gasLimit,
+		data.gasFeeCap,
+		data.gasTipCap,
 		big.NewInt(0),
-		callData,
+		data.callData,
 		types.AccessList{},
 		warp.ContractAddress,
-		signedMessage.Bytes(),
+		data.signedMessage.Bytes(),
 	)
 
 	// Sign and send the transaction on the destination chain
-	signedTx, err := c.keys[idx].signer.SignTx(tx, c.evmChainID)
+	signedTx, err := s.signer.SignTx(tx, s.destinationClient.evmChainID)
 	if err != nil {
-		c.logger.Error(
+		s.destinationClient.logger.Error(
 			"Failed to sign transaction",
 			zap.Error(err),
 		)
-		return nil, 0, err
+		return err
 	}
 
 	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 	defer sendTxCtxCancel()
 
-	c.logger.Info(
+	s.destinationClient.logger.Info(
 		"Sending transaction",
 		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.keys[idx].currentNonce),
+		zap.Uint64("nonce", s.currentNonce),
 	)
 
-	if err := c.client.SendTransaction(sendTxCtx, signedTx); err != nil {
-		c.logger.Error(
+	if err := s.destinationClient.client.SendTransaction(sendTxCtx, signedTx); err != nil {
+		s.destinationClient.logger.Error(
 			"Failed to send transaction",
 			zap.Error(err),
 		)
-		return nil, 0, err
+		return err
 	}
-	c.logger.Info(
+	s.destinationClient.logger.Info(
 		"Sent transaction",
 		zap.String("txID", signedTx.Hash().String()),
-		zap.Uint64("nonce", c.keys[idx].currentNonce),
+		zap.Uint64("nonce", s.currentNonce),
 	)
 
-	c.keys[idx].currentNonce++
+	s.currentNonce++
 
-	return signedTx, idx, nil
+	go s.waitForReceipt(signedTx.Hash(), data.resultChan)
+
+	return nil
 }
 
-func (c *destinationClient) waitForReceipt(
+func (s *accountSigner) waitForReceipt(
 	txHash common.Hash,
-	signerIdx int,
-) (*types.Receipt, error) {
+	resultChan chan messageResult,
+) {
+	// Release the txQueue slot once this function returns
+	defer func() { <-s.txQueue }()
+
 	var receipt *types.Receipt
 	operation := func() (err error) {
 		callCtx, callCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer callCtxCancel()
-		receipt, err = c.client.TransactionReceipt(callCtx, txHash)
+		receipt, err = s.destinationClient.client.TransactionReceipt(callCtx, txHash)
 		return err
 	}
-	err := utils.WithRetriesTimeout(c.logger, operation, c.txInclusionTimeout, "waitForReceipt")
+	err := utils.WithRetriesTimeout(s.destinationClient.logger, operation, s.destinationClient.txInclusionTimeout, "waitForReceipt")
 	if err != nil {
-		c.logger.Error(
+		s.destinationClient.logger.Error(
 			"Failed to get transaction receipt",
 			zap.Error(err),
 		)
-		return nil, err
+		resultChan <- messageResult{
+			receipt: nil,
+			err:   err,
+		}
+		return
 	}
 
-	// Release the txQueue slot once we have the receipt
-	<-c.keys[signerIdx].txQueue
-
-	return receipt, nil
+	resultChan <- messageResult{
+		receipt: receipt,
+		err:   nil,
+	}
 }
 
 func (c *destinationClient) Client() interface{} {
@@ -405,11 +409,7 @@ func (c *destinationClient) Client() interface{} {
 }
 
 func (c *destinationClient) SenderAddresses() []common.Address {
-	addresses := make([]common.Address, len(c.keys))
-	for i, signer := range c.keys {
-		addresses[i] = signer.signer.Address()
-	}
-	return addresses
+	return c.signerAddresses
 }
 
 func (c *destinationClient) DestinationBlockchainID() ids.ID {
