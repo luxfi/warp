@@ -166,7 +166,7 @@ func NewDestinationClient(
 				messageChan := make(chan MessageData)
 				messageChans[i] = messageChan
 				accountSigners[i] = accountSigner{
-					logger:            logger.With(zap.Stringer("address", signer.Address())),
+					logger:            logger.With(zap.Stringer("senderAddress", signer.Address())),
 					signer:            signer,
 					currentNonce:      currentNonce,
 					messageChan:       messageChan,
