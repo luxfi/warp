@@ -163,7 +163,7 @@ func NewDestinationClient(
 				// Limit the number of transactions in the mempool for each account,
 				// otherwise they may be dropped.
 				txQueue := make(chan struct{}, poolTxsPerAccount)
-				messageChan := make(chan MessageData, 0)
+				messageChan := make(chan MessageData)
 				messageChans[i] = messageChan
 				accountSigners[i] = accountSigner{
 					logger:            logger.With(zap.Stringer("address", signer.Address())),
