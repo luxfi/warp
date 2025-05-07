@@ -6,8 +6,6 @@ package evm
 import (
 	"fmt"
 	"math/big"
-	"reflect"
-	"sync"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -17,6 +15,7 @@ import (
 	mock_ethclient "github.com/ava-labs/icm-services/vms/evm/mocks"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
 	"github.com/ava-labs/subnet-evm/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -32,25 +31,21 @@ var destinationSubnet = config.DestinationBlockchain{
 }
 
 func TestSendTx(t *testing.T) {
+	var destClient destinationClient
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
 
 	txQueue := make(chan struct{}, poolTxsPerAccount)
-	keys := []accountSigner{
-		{
-			signer:       txSigners[0],
-			currentNonce: 0,
-			lock:         &sync.Mutex{},
-			txQueue:      txQueue,
-		},
+	messageChan := make(chan MessageData)
+	signer := accountSigner{
+		logger:			   logging.NoLog{},
+		signer:            txSigners[0],
+		currentNonce:      0,
+		messageChan:       messageChan,
+		txQueue:           txQueue,
+		destinationClient: &destClient,
 	}
-	selectCases := []reflect.SelectCase{
-		{
-			Dir:  reflect.SelectSend,
-			Chan: reflect.ValueOf(txQueue),
-			Send: reflect.ValueOf(struct{}{}),
-		},
-	}
+	signer.processIncomingTransactions()
 
 	testError := fmt.Errorf("call errored")
 	testCases := []struct {
@@ -116,14 +111,16 @@ func TestSendTx(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
-			destinationClient := &destinationClient{
-				keys:                 keys,
-				selectCases:          selectCases,
-				logger:               logging.NoLog{},
-				client:               mockClient,
-				evmChainID:           big.NewInt(5),
-				maxBaseFee:           test.maxBaseFee,
-				maxPriorityFeePerGas: big.NewInt(0),
+			destClient = destinationClient{
+				signerAddresses:         []common.Address{signer.signer.Address()},
+				messageChans:            []chan MessageData{messageChan},
+				logger:                  logging.NoLog{},
+				client:                  mockClient,
+				evmChainID:              big.NewInt(5),
+				maxBaseFee:              test.maxBaseFee,
+				maxPriorityFeePerGas:    big.NewInt(0),
+				blockGasLimit:           0,
+				txInclusionTimeout:      30,
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
@@ -150,7 +147,7 @@ func TestSendTx(t *testing.T) {
 					).Times(test.txReceiptTimes),
 			)
 
-			_, err := destinationClient.SendTx(warpMsg, nil, toAddress, 0, []byte{})
+			_, err := destClient.SendTx(warpMsg, nil, toAddress, 0, []byte{})
 			if test.expectError {
 				require.Error(t, err)
 			} else {

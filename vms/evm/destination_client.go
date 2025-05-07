@@ -57,6 +57,7 @@ type destinationClient struct {
 }
 
 type accountSigner struct {
+	logger            logging.Logger
 	signer            signer.Signer
 	currentNonce      uint64
 	messageChan       chan MessageData
@@ -76,14 +77,14 @@ type MessageData struct {
 
 type messageResult struct {
 	receipt *types.Receipt
-	err   error
+	err     error
 }
 
 func NewDestinationClient(
 	logger logging.Logger,
 	destinationBlockchain *config.DestinationBlockchain,
 ) (*destinationClient, error) {
-	var dc *destinationClient
+	var destClient destinationClient
 
 	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
 	if err != nil {
@@ -165,14 +166,19 @@ func NewDestinationClient(
 				messageChan := make(chan MessageData, 0)
 				messageChans[i] = messageChan
 				accountSigners[i] = accountSigner{
+					logger:            logger.With(zap.Stringer("address", signer.Address())),
 					signer:            signer,
 					currentNonce:      currentNonce,
 					messageChan:       messageChan,
 					txQueue:           txQueue,
-					destinationClient: dc,
+					destinationClient: &destClient,
 				}
 				signerAddresses[i] = signer.Address()
 				go accountSigners[i].processIncomingTransactions()
+				logger.Debug(
+					"Pending txs accepted",
+					zap.Stringer("address", signer.Address()),
+				)
 				break
 			}
 			logger.Info(
@@ -191,7 +197,7 @@ func NewDestinationClient(
 		zap.Uint64("nonce", pendingNonce),
 	)
 
-	dc = &destinationClient{
+	destClient = destinationClient{
 		client:                  client,
 		messageChans:            messageChans,
 		signerAddresses:         signerAddresses,
@@ -204,7 +210,7 @@ func NewDestinationClient(
 		txInclusionTimeout:      time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
 	}
 
-	return dc, nil
+	return &destClient, nil
 }
 
 // SendTx constructs, signs, and broadcast a transaction to deliver the given {signedMessage}
@@ -309,6 +315,7 @@ func (s *accountSigner) processIncomingTransactions() {
 	for {
 		// We can only only get to listen to readyChan if there is an open pending tx slot
 		s.txQueue <- struct{}{}
+		s.logger.Debug("Waiting for incoming transaction")
 		// TODO handle error
 		s.issueTransaction(<-s.messageChan)
 	}
@@ -317,6 +324,11 @@ func (s *accountSigner) processIncomingTransactions() {
 func (s *accountSigner) issueTransaction(
 	data MessageData,
 ) error {
+	s.logger.Debug(
+		"Processing transaction",
+		zap.String("to", data.to.String()),
+	)
+
 	// Construct the actual transaction to broadcast on the destination chain
 	tx := predicateutils.NewPredicateTx(
 		s.destinationClient.evmChainID,
@@ -335,7 +347,7 @@ func (s *accountSigner) issueTransaction(
 	// Sign and send the transaction on the destination chain
 	signedTx, err := s.signer.SignTx(tx, s.destinationClient.evmChainID)
 	if err != nil {
-		s.destinationClient.logger.Error(
+		s.logger.Error(
 			"Failed to sign transaction",
 			zap.Error(err),
 		)
@@ -345,20 +357,20 @@ func (s *accountSigner) issueTransaction(
 	sendTxCtx, sendTxCtxCancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 	defer sendTxCtxCancel()
 
-	s.destinationClient.logger.Info(
+	s.logger.Info(
 		"Sending transaction",
 		zap.String("txID", signedTx.Hash().String()),
 		zap.Uint64("nonce", s.currentNonce),
 	)
 
 	if err := s.destinationClient.client.SendTransaction(sendTxCtx, signedTx); err != nil {
-		s.destinationClient.logger.Error(
+		s.logger.Error(
 			"Failed to send transaction",
 			zap.Error(err),
 		)
 		return err
 	}
-	s.destinationClient.logger.Info(
+	s.logger.Info(
 		"Sent transaction",
 		zap.String("txID", signedTx.Hash().String()),
 		zap.Uint64("nonce", s.currentNonce),
@@ -385,22 +397,22 @@ func (s *accountSigner) waitForReceipt(
 		receipt, err = s.destinationClient.client.TransactionReceipt(callCtx, txHash)
 		return err
 	}
-	err := utils.WithRetriesTimeout(s.destinationClient.logger, operation, s.destinationClient.txInclusionTimeout, "waitForReceipt")
+	err := utils.WithRetriesTimeout(s.logger, operation, s.destinationClient.txInclusionTimeout, "waitForReceipt")
 	if err != nil {
-		s.destinationClient.logger.Error(
+		s.logger.Error(
 			"Failed to get transaction receipt",
 			zap.Error(err),
 		)
 		resultChan <- messageResult{
 			receipt: nil,
-			err:   err,
+			err:     err,
 		}
 		return
 	}
 
 	resultChan <- messageResult{
 		receipt: receipt,
-		err:   nil,
+		err:     nil,
 	}
 }
 
