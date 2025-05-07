@@ -34,9 +34,9 @@ func TestSendTx(t *testing.T) {
 	var destClient destinationClient
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
-
+	
 	txQueue := make(chan struct{}, poolTxsPerAccount)
-	messageChan := make(chan MessageData)
+	messageChan := make(chan MessageData, 0)
 	signer := accountSigner{
 		logger:            logging.NoLog{},
 		signer:            txSigners[0],
@@ -45,7 +45,7 @@ func TestSendTx(t *testing.T) {
 		txQueue:           txQueue,
 		destinationClient: &destClient,
 	}
-	signer.processIncomingTransactions()
+	go signer.processIncomingTransactions()
 
 	testError := fmt.Errorf("call errored")
 	testCases := []struct {
