@@ -34,9 +34,9 @@ func TestSendTx(t *testing.T) {
 	var destClient destinationClient
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
-	
+
 	txQueue := make(chan struct{}, poolTxsPerAccount)
-	messageChan := make(chan MessageData, 0)
+	messageChan := make(chan MessageData)
 	signer := accountSigner{
 		logger:            logging.NoLog{},
 		signer:            txSigners[0],
