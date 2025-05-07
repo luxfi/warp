@@ -266,7 +266,6 @@ func (c *destinationClient) SendTx(
 	gasFeeCap := new(big.Int).Add(maxBaseFee, gasTipCap)
 
 	resultChan := make(chan messageResult)
-	defer close(resultChan)
 
 	messageData := MessageData{
 		to:            to,
@@ -281,8 +280,16 @@ func (c *destinationClient) SendTx(
 	var cases []reflect.SelectCase
 	for i, signerAddress := range c.signerAddresses {
 		if deliverers.Len() != 0 && !deliverers.Contains(signerAddress) {
+			c.logger.Debug(
+				"Signer not eligible to deliver message",
+				zap.Any("address", signerAddress),
+			)
 			continue
 		}
+		c.logger.Debug(
+			"Signer eligible to deliver message",
+			zap.Any("address", signerAddress),
+		)
 		cases = append(cases, reflect.SelectCase{
 			Dir:  reflect.SelectSend,
 			Chan: reflect.ValueOf(c.messageChans[i]),
@@ -314,8 +321,22 @@ func (s *accountSigner) processIncomingTransactions() {
 		// We can only only get to listen to readyChan if there is an open pending tx slot
 		s.txQueue <- struct{}{}
 		s.logger.Debug("Waiting for incoming transaction")
-		// TODO handle error
-		s.issueTransaction(<-s.messageChan)
+
+		messageData := <-s.messageChan
+
+		err := s.issueTransaction(messageData)
+		if err != nil {
+			s.logger.Error(
+				"Failed to issue transaction",
+				zap.Error(err),
+			)
+			// If issueTransaction fails, we have not passed the resultChan to waitForReceipt
+			messageData.resultChan <- messageResult{
+				receipt: nil,
+				err:     err,
+			}
+			close(messageData.resultChan)
+		}
 	}
 }
 
@@ -385,8 +406,7 @@ func (s *accountSigner) waitForReceipt(
 	txHash common.Hash,
 	resultChan chan messageResult,
 ) {
-	// Release the txQueue slot once this function returns
-	defer func() { <-s.txQueue }()
+	defer close(resultChan)
 
 	var receipt *types.Receipt
 	operation := func() (err error) {
@@ -407,6 +427,9 @@ func (s *accountSigner) waitForReceipt(
 		}
 		return
 	}
+
+	// Release the txQueue slot
+	<-s.txQueue
 
 	resultChan <- messageResult{
 		receipt: receipt,
