@@ -38,7 +38,7 @@ func TestSendTx(t *testing.T) {
 	txQueue := make(chan struct{}, poolTxsPerAccount)
 	messageChan := make(chan MessageData)
 	signer := accountSigner{
-		logger:			   logging.NoLog{},
+		logger:            logging.NoLog{},
 		signer:            txSigners[0],
 		currentNonce:      0,
 		messageChan:       messageChan,
@@ -112,15 +112,15 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destClient = destinationClient{
-				signerAddresses:         []common.Address{signer.signer.Address()},
-				messageChans:            []chan MessageData{messageChan},
-				logger:                  logging.NoLog{},
-				client:                  mockClient,
-				evmChainID:              big.NewInt(5),
-				maxBaseFee:              test.maxBaseFee,
-				maxPriorityFeePerGas:    big.NewInt(0),
-				blockGasLimit:           0,
-				txInclusionTimeout:      30,
+				signerAddresses:      []common.Address{signer.signer.Address()},
+				messageChans:         []chan MessageData{messageChan},
+				logger:               logging.NoLog{},
+				client:               mockClient,
+				evmChainID:           big.NewInt(5),
+				maxBaseFee:           test.maxBaseFee,
+				maxPriorityFeePerGas: big.NewInt(0),
+				blockGasLimit:        0,
+				txInclusionTimeout:   30,
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"

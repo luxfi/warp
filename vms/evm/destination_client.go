@@ -281,7 +281,7 @@ func (c *destinationClient) SendTx(
 	var cases []reflect.SelectCase
 	for i, signerAddress := range c.signerAddresses {
 		if deliverers.Len() != 0 {
-			if deliverers.Contains(signerAddress) {
+			if !deliverers.Contains(signerAddress) {
 				continue
 			}
 		}
