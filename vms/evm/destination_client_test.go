@@ -35,14 +35,14 @@ func TestSendTx(t *testing.T) {
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
 
-	txQueue := make(chan struct{}, poolTxsPerAccount)
+	queuedTxSemaphore := make(chan struct{}, poolTxsPerAccount)
 	messageChan := make(chan MessageData)
-	signer := accountSigner{
+	signer := concurrentSigner{
 		logger:            logging.NoLog{},
 		signer:            txSigners[0],
 		currentNonce:      0,
 		messageChan:       messageChan,
-		txQueue:           txQueue,
+		queuedTxSemaphore: queuedTxSemaphore,
 		destinationClient: &destClient,
 	}
 	go signer.processIncomingTransactions()
