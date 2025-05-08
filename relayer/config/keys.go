@@ -18,7 +18,7 @@ const (
 	SourceBlockchainsKey               = "source-blockchains"
 	DestinationBlockchainsKey          = "destination-blockchains"
 	AccountPrivateKeyKey               = "account-private-key"
-	AccountPrivateKeysKey              = "account-private-keys"
+	AccountPrivateKeysKey              = "account-private-keys-list"
 	StorageLocationKey                 = "storage-location"
 	RedisURLKey                        = "redis-url"
 	ProcessMissedBlocksKey             = "process-missed-blocks"
