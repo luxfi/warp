@@ -300,10 +300,10 @@ func (c *destinationClient) SendTx(
 		})
 	}
 
-	// Select an available, eligible signer and acquire a txQueue slot
+	// Select an available, eligible signer
 	reflect.Select(cases)
 
-	// Wait for the receipt to be returned
+	// Wait for the receipt or error to be returned
 	result := <-resultChan
 	if result.err != nil {
 		c.logger.Error(
@@ -321,7 +321,7 @@ func (c *destinationClient) SendTx(
 
 func (s *concurrentSigner) processIncomingTransactions() {
 	for {
-		// We can only only get to listen to readyChan if there is an open pending tx slot
+		// We can only get to listen to messageChan if there is an open queued tx slot
 		s.queuedTxSemaphore <- struct{}{}
 		s.logger.Debug("Waiting for incoming transaction")
 
@@ -431,7 +431,7 @@ func (s *concurrentSigner) waitForReceipt(
 		return
 	}
 
-	// Release the txQueue slot
+	// Release the queued tx slot
 	<-s.queuedTxSemaphore
 
 	resultChan <- messageResult{
