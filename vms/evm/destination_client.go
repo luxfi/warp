@@ -56,12 +56,14 @@ type destinationClient struct {
 	txInclusionTimeout      time.Duration
 }
 
-type accountSigner struct {
-	logger            logging.Logger
-	signer            signer.Signer
-	currentNonce      uint64
-	messageChan       chan MessageData
-	txQueue           chan struct{}
+type concurrentSigner struct {
+	logger       logging.Logger
+	signer       signer.Signer
+	currentNonce uint64
+	// Unbuffered channel to receive messages to be processed
+	messageChan chan MessageData
+	// Semaphore to limit the number of concurrent transactions in the mempool
+	queuedTxSemaphore chan struct{}
 	destinationClient *destinationClient
 }
 
@@ -84,7 +86,7 @@ func NewDestinationClient(
 	logger logging.Logger,
 	destinationBlockchain *config.DestinationBlockchain,
 ) (*destinationClient, error) {
-	var destClient destinationClient
+	logger = logger.With(zap.String("blockchainID", destinationBlockchain.BlockchainID))
 
 	destinationID, err := ids.FromString(destinationBlockchain.BlockchainID)
 	if err != nil {
@@ -94,8 +96,6 @@ func NewDestinationClient(
 		)
 		return nil, err
 	}
-
-	logger = logger.With(zap.String("blockchainID", destinationBlockchain.BlockchainID))
 
 	signers, err := signer.NewSigners(destinationBlockchain)
 	if err != nil {
@@ -131,8 +131,9 @@ func NewDestinationClient(
 	}
 
 	var (
+		destClient                 destinationClient
 		pendingNonce, currentNonce uint64
-		accountSigners             = make([]accountSigner, len(signers))
+		accountSigners             = make([]concurrentSigner, len(signers))
 		messageChans               = make([]chan MessageData, len(signers))
 		signerAddresses            = make([]common.Address, len(signers))
 	)
@@ -160,25 +161,27 @@ func NewDestinationClient(
 				return nil, err
 			}
 			if pendingNonce == currentNonce {
-				// Limit the number of transactions in the mempool for each account,
-				// otherwise they may be dropped.
-				txQueue := make(chan struct{}, poolTxsPerAccount)
-				messageChan := make(chan MessageData)
-				messageChans[i] = messageChan
-				accountSigners[i] = accountSigner{
-					logger:            logger.With(zap.Stringer("senderAddress", signer.Address())),
-					signer:            signer,
-					currentNonce:      currentNonce,
-					messageChan:       messageChan,
-					txQueue:           txQueue,
-					destinationClient: &destClient,
-				}
-				signerAddresses[i] = signer.Address()
-				go accountSigners[i].processIncomingTransactions()
 				logger.Debug(
 					"Pending txs accepted",
 					zap.Stringer("address", signer.Address()),
 				)
+
+				// Limit the number of transactions in the mempool for each account,
+				// otherwise they may be dropped.
+				queuedTxSemaphore := make(chan struct{}, poolTxsPerAccount)
+				messageChan := make(chan MessageData)
+				messageChans[i] = messageChan
+				signerAddresses[i] = signer.Address()
+				accountSigners[i] = concurrentSigner{
+					logger:            logger.With(zap.Stringer("senderAddress", signer.Address())),
+					signer:            signer,
+					currentNonce:      currentNonce,
+					messageChan:       messageChan,
+					queuedTxSemaphore: queuedTxSemaphore,
+					destinationClient: &destClient,
+				}
+
+				go accountSigners[i].processIncomingTransactions()
 				break
 			}
 			logger.Info(
@@ -316,10 +319,10 @@ func (c *destinationClient) SendTx(
 	return result.receipt, nil
 }
 
-func (s *accountSigner) processIncomingTransactions() {
+func (s *concurrentSigner) processIncomingTransactions() {
 	for {
 		// We can only only get to listen to readyChan if there is an open pending tx slot
-		s.txQueue <- struct{}{}
+		s.queuedTxSemaphore <- struct{}{}
 		s.logger.Debug("Waiting for incoming transaction")
 
 		messageData := <-s.messageChan
@@ -340,7 +343,7 @@ func (s *accountSigner) processIncomingTransactions() {
 	}
 }
 
-func (s *accountSigner) issueTransaction(
+func (s *concurrentSigner) issueTransaction(
 	data MessageData,
 ) error {
 	s.logger.Debug(
@@ -402,7 +405,7 @@ func (s *accountSigner) issueTransaction(
 	return nil
 }
 
-func (s *accountSigner) waitForReceipt(
+func (s *concurrentSigner) waitForReceipt(
 	txHash common.Hash,
 	resultChan chan messageResult,
 ) {
@@ -429,7 +432,7 @@ func (s *accountSigner) waitForReceipt(
 	}
 
 	// Release the txQueue slot
-	<-s.txQueue
+	<-s.queuedTxSemaphore
 
 	resultChan <- messageResult{
 		receipt: receipt,
