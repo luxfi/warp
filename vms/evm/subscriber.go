@@ -11,10 +11,13 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	relayerTypes "github.com/ava-labs/icm-services/types"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/interfaces"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +33,10 @@ type subscriber struct {
 	rpcClient    ethclient.Client
 	blockchainID ids.ID
 	headers      chan *types.Header
+	icmBlocks    chan *relayerTypes.WarpBlockInfo
 	sub          interfaces.Subscription
+
+	errChan chan error
 
 	logger logging.Logger
 }
@@ -47,7 +53,9 @@ func NewSubscriber(
 		wsClient:     wsClient,
 		rpcClient:    rpcClient,
 		logger:       logger,
+		icmBlocks:    make(chan *relayerTypes.WarpBlockInfo, maxClientSubscriptionBuffer),
 		headers:      make(chan *types.Header, maxClientSubscriptionBuffer),
+		errChan:      make(chan error),
 	}
 }
 
@@ -112,7 +120,7 @@ func (s *subscriber) processBlockRange(
 	fromBlock, toBlock *big.Int,
 ) error {
 	for i := fromBlock.Int64(); i <= toBlock.Int64(); i++ {
-		header, err := s.getHeaderByNumberRetryable(big.NewInt(i))
+		logs, err := s.getFilterLogsByBlockRangeRetryable(fromBlock, toBlock)
 		if err != nil {
 			s.logger.Error(
 				"Failed to get header by number after max attempts",
@@ -121,11 +129,31 @@ func (s *subscriber) processBlockRange(
 			)
 			return err
 		}
-		s.headers <- header
+		blocks, err := relayerTypes.LogsToBlocks(logs)
+		if err != nil {
+			s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
+			return err
+		}
+		currentBlock := fromBlock.Uint64()
+		for _, block := range blocks {
+			s.sendEmptyBlocks(currentBlock, block.BlockNumber-1)
+			s.icmBlocks <- block
+			currentBlock = block.BlockNumber + 1
+		}
+		// Send empty blocks for the blocks after the last block in the range
+		s.sendEmptyBlocks(currentBlock, toBlock.Uint64())
 	}
 	return nil
 }
 
+func (s *subscriber) sendEmptyBlocks(fromBlock, toBlock uint64) {
+	for i := fromBlock; i <= toBlock; i++ {
+		s.icmBlocks <- &relayerTypes.WarpBlockInfo{
+			BlockNumber: i,
+			Messages:    []*relayerTypes.WarpMessageInfo{},
+		}
+	}
+}
 func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.Header, error) {
 	var (
 		err    error
@@ -147,6 +175,34 @@ func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.H
 		return nil, err
 	}
 	return header, nil
+}
+
+func (s *subscriber) getFilterLogsByBlockRangeRetryable(fromBlock, toBlock *big.Int) ([]types.Log, error) {
+	var (
+		err  error
+		logs []types.Log
+	)
+	operation := func() (err error) {
+		cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
+		defer cancel()
+		logs, err = s.rpcClient.FilterLogs(cctx, interfaces.FilterQuery{
+			Topics:    [][]common.Hash{{relayerTypes.WarpPrecompileLogFilter}},
+			Addresses: []common.Address{warp.ContractAddress},
+			FromBlock: fromBlock,
+			ToBlock:   toBlock,
+		})
+		return err
+	}
+	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout, "get filter logs by block range")
+	if err != nil {
+		s.logger.Error(
+			"Failed to get filter logs by block range",
+			zap.String("blockchainID", s.blockchainID.String()),
+			zap.Error(err),
+		)
+		return nil, relayerTypes.ErrFailedToProcessLogs
+	}
+	return logs, nil
 }
 
 // Loops forever iff maxResubscribeAttempts == 0
@@ -182,11 +238,27 @@ func (s *subscriber) subscribe(retryTimeout time.Duration) error {
 		return err
 	}
 	s.sub = sub
+
+	go s.blocksInfoFromHeaders()
 	return nil
 }
 
-func (s *subscriber) Headers() <-chan *types.Header {
-	return s.headers
+// blocksInfoFromHeaders listens to the header channel and converts the headers to [relayerTypes.WarpBlockInfo]
+// and writes them to the blocks channel consumed by the listener
+func (s *subscriber) blocksInfoFromHeaders() {
+	for header := range s.headers {
+		block, err := relayerTypes.NewWarpBlockInfo(s.logger, header, s.rpcClient)
+		if err != nil {
+			s.logger.Error("Failed to create Warp block info", zap.Error(err))
+			// TODO: handle error -- send to a different channel (?)
+			continue
+		}
+		s.icmBlocks <- block
+	}
+}
+
+func (s *subscriber) ICMBlocks() <-chan *relayerTypes.WarpBlockInfo {
+	return s.icmBlocks
 }
 
 func (s *subscriber) Err() <-chan error {

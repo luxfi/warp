@@ -5,6 +5,7 @@ package relayer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -13,6 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/icm-services/relayer/config"
+	relayerTypes "github.com/ava-labs/icm-services/types"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/subnet-evm/ethclient"
@@ -192,14 +194,19 @@ func (lstnr *Listener) processLogs(ctx context.Context) error {
 				)
 				return fmt.Errorf("failed to catch up on historical blocks")
 			}
-		case blockHeader := <-lstnr.Subscriber.Headers():
+		case icmBlockInfo := <-lstnr.Subscriber.ICMBlocks():
 			go lstnr.messageCoordinator.ProcessBlock(
-				blockHeader,
+				icmBlockInfo,
 				lstnr.sourceBlockchain.GetBlockchainID(),
-				lstnr.ethClient,
 				errChan,
 			)
 		case err := <-lstnr.Subscriber.Err():
+			// If the error is due to failed to process logs rather than a subscription
+			if errors.Is(err, relayerTypes.ErrFailedToProcessLogs) {
+				lstnr.healthStatus.Store(false)
+				lstnr.logger.Error("Error processing logs. Relayer goroutine exiting")
+				return fmt.Errorf("error processing logs: %w", err)
+			}
 			lstnr.logger.Error(
 				"Received error from subscribed node",
 				zap.String("sourceBlockchainID", lstnr.sourceBlockchain.GetBlockchainID().String()),
