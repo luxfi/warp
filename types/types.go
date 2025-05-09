@@ -125,9 +125,9 @@ func LogsToBlocks(logs []types.Log) ([]*WarpBlockInfo, error) {
 		return 0
 	})
 
-	blocks := make([]*WarpBlockInfo, 0)
+	var blocks []*WarpBlockInfo
 	for _, log := range logs {
-		// If the slice is empty or the last block is not the current block, add a new block
+		// If this log's block hasn't been seen yet, append a new entry to the slice
 		if len(blocks) == 0 || blocks[len(blocks)-1].BlockNumber != log.BlockNumber {
 			blocks = append(blocks, &WarpBlockInfo{
 				BlockNumber: log.BlockNumber,
