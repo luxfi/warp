@@ -31,8 +31,12 @@ type Subscriber interface {
 	// ICMBlocks returns the channel that the subscription writes ICM block info to
 	ICMBlocks() <-chan *relayerTypes.WarpBlockInfo
 
-	// Err returns the channel that the subscription writes errors to
+	// SubscribeErr returns the channel that the subscription writes errors to
 	// If an error is sent to this channel, the subscription should be closed
+	SubscribeErr() <-chan error
+
+	// Err returns the channel that the subscriber writes miscellaneous errors to
+	// that are not recoverable from by resubscribing.
 	Err() <-chan error
 
 	// Cancel cancels the subscription
