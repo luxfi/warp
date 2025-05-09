@@ -407,7 +407,7 @@ func (s *concurrentSigner) issueTransaction(
 
 func (s *concurrentSigner) waitForReceipt(
 	txHash common.Hash,
-	resultChan chan messageResult,
+	resultChan chan<- messageResult,
 ) {
 	defer close(resultChan)
 
