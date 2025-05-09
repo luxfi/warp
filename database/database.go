@@ -1,7 +1,7 @@
 // Copyright (C) 2023, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-//go:generate mockgen -source=$GOFILE -destination=./mocks/mock_database.go -package=mocks
+//go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -destination=./mocks/mock_database.go -package=mocks
 
 package database
 
