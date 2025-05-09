@@ -141,8 +141,8 @@ func TestShouldSendMessage(t *testing.T) {
 		name                    string
 		destinationBlockchainID ids.ID
 		warpUnsignedMessage     *warp.UnsignedMessage
-		senderAddressResult     common.Address
-		senderAddressTimes      int
+		senderAddressesResult   []common.Address
+		senderAddressesTimes    int
 		clientTimes             int
 		messageReceivedCall     *CallContractChecker
 		expectedParseError      bool
@@ -152,8 +152,8 @@ func TestShouldSendMessage(t *testing.T) {
 			name:                    "valid message",
 			destinationBlockchainID: destinationBlockchainID,
 			warpUnsignedMessage:     warpUnsignedMessage,
-			senderAddressResult:     validRelayerAddress,
-			senderAddressTimes:      1,
+			senderAddressesResult:   []common.Address{validRelayerAddress},
+			senderAddressesTimes:    1,
 			clientTimes:             1,
 			messageReceivedCall: &CallContractChecker{
 				input:          messageReceivedInput,
@@ -171,16 +171,16 @@ func TestShouldSendMessage(t *testing.T) {
 		{
 			name:                    "invalid destination chain id",
 			destinationBlockchainID: ids.Empty,
-			senderAddressResult:     common.Address{},
-			senderAddressTimes:      1,
+			senderAddressesResult:   []common.Address{common.Address{}},
+			senderAddressesTimes:    1,
 			warpUnsignedMessage:     warpUnsignedMessage,
 		},
 		{
 			name:                    "not allowed",
 			destinationBlockchainID: destinationBlockchainID,
 			warpUnsignedMessage:     warpUnsignedMessage,
-			senderAddressResult:     common.Address{},
-			senderAddressTimes:      1,
+			senderAddressesResult:   []common.Address{common.Address{}},
+			senderAddressesTimes:    1,
 			clientTimes:             0,
 			expectedResult:          false,
 		},
@@ -188,8 +188,8 @@ func TestShouldSendMessage(t *testing.T) {
 			name:                    "message already delivered",
 			destinationBlockchainID: destinationBlockchainID,
 			warpUnsignedMessage:     warpUnsignedMessage,
-			senderAddressResult:     validRelayerAddress,
-			senderAddressTimes:      1,
+			senderAddressesResult:   []common.Address{validRelayerAddress},
+			senderAddressesTimes:    1,
 			clientTimes:             1,
 			messageReceivedCall: &CallContractChecker{
 				input:          messageReceivedInput,
@@ -235,9 +235,9 @@ func TestShouldSendMessage(t *testing.T) {
 				Return(mockEthClient).
 				Times(test.clientTimes)
 			mockClient.EXPECT().
-				SenderAddress().
-				Return(test.senderAddressResult).
-				Times(test.senderAddressTimes)
+				SenderAddresses().
+				Return(test.senderAddressesResult).
+				Times(test.senderAddressesTimes)
 			mockClient.EXPECT().BlockGasLimit().Return(uint64(blockGasLimit)).AnyTimes()
 			if test.messageReceivedCall != nil {
 				messageReceivedInput := interfaces.CallMsg{
@@ -328,7 +328,7 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 		Times(1)
 
 	mockClient.EXPECT().
-		SendTx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		SendTx(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(
 			&types.Receipt{
 				Status: types.ReceiptStatusFailed,
