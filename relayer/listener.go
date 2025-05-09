@@ -5,7 +5,6 @@ package relayer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -14,7 +13,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/icm-services/relayer/config"
-	relayerTypes "github.com/ava-labs/icm-services/types"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/subnet-evm/ethclient"
@@ -201,26 +199,24 @@ func (lstnr *Listener) processLogs(ctx context.Context) error {
 				errChan,
 			)
 		case err := <-lstnr.Subscriber.Err():
-			// If the error is due to failed to process logs rather than a subscription
-			if errors.Is(err, relayerTypes.ErrFailedToProcessLogs) {
-				lstnr.healthStatus.Store(false)
-				lstnr.logger.Error("Error processing logs. Relayer goroutine exiting")
-				return fmt.Errorf("error processing logs: %w", err)
-			}
+			lstnr.healthStatus.Store(false)
+			lstnr.logger.Error("Error processing logs. Relayer goroutine exiting")
+			return fmt.Errorf("error processing logs: %w", err)
+		case subError := <-lstnr.Subscriber.SubscribeErr():
 			lstnr.logger.Error(
 				"Received error from subscribed node",
 				zap.String("sourceBlockchainID", lstnr.sourceBlockchain.GetBlockchainID().String()),
-				zap.Error(err),
+				zap.Error(subError),
 			)
-			err = lstnr.reconnectToSubscriber()
-			if err != nil {
+			subError = lstnr.reconnectToSubscriber()
+			if subError != nil {
 				lstnr.healthStatus.Store(false)
 				lstnr.logger.Error(
 					"Relayer goroutine exiting.",
 					zap.String("sourceBlockchainID", lstnr.sourceBlockchain.GetBlockchainID().String()),
-					zap.Error(err),
+					zap.Error(subError),
 				)
-				return fmt.Errorf("listener goroutine exiting: %w", err)
+				return fmt.Errorf("listener goroutine exiting: %w", subError)
 			}
 		case <-ctx.Done():
 			lstnr.healthStatus.Store(false)

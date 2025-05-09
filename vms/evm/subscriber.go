@@ -218,8 +218,8 @@ func (s *subscriber) blocksInfoFromHeaders() {
 		block, err := relayerTypes.NewWarpBlockInfo(s.logger, header, s.rpcClient)
 		if err != nil {
 			s.logger.Error("Failed to create Warp block info", zap.Error(err))
-			// TODO: handle error -- send to a different channel (?)
-			continue
+			s.errChan <- err
+			return
 		}
 		s.icmBlocks <- block
 	}
@@ -229,8 +229,15 @@ func (s *subscriber) ICMBlocks() <-chan *relayerTypes.WarpBlockInfo {
 	return s.icmBlocks
 }
 
-func (s *subscriber) Err() <-chan error {
+// SubscribeErr returns the error channel for the underlying subscription
+func (s *subscriber) SubscribeErr() <-chan error {
 	return s.sub.Err()
+}
+
+// Err returns the error channel for miscellaneous errors not recoverable from
+// by resubscribing.
+func (s *subscriber) Err() <-chan error {
+	return s.errChan
 }
 
 func (s *subscriber) Cancel() {
