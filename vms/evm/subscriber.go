@@ -119,62 +119,30 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 func (s *subscriber) processBlockRange(
 	fromBlock, toBlock *big.Int,
 ) error {
-	for i := fromBlock.Int64(); i <= toBlock.Int64(); i++ {
-		logs, err := s.getFilterLogsByBlockRangeRetryable(fromBlock, toBlock)
-		if err != nil {
-			s.logger.Error(
-				"Failed to get header by number after max attempts",
-				zap.String("blockchainID", s.blockchainID.String()),
-				zap.Error(err),
-			)
-			return err
-		}
-		blocksWithICMMessages, err := relayerTypes.LogsToBlocks(logs)
-		if err != nil {
-			s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
-			return err
-		}
-		currentBlock := fromBlock.Uint64()
-		for _, block := range blocks {
-			s.sendEmptyBlocks(currentBlock, block.BlockNumber-1)
-			s.icmBlocks <- block
-			currentBlock = block.BlockNumber + 1
-		}
-		// Send empty blocks for the blocks after the last block in the range
-		s.sendEmptyBlocks(currentBlock, toBlock.Uint64())
-	}
-	return nil
-}
-
-func (s *subscriber) sendEmptyBlocks(fromBlock, toBlock uint64) {
-	for i := fromBlock; i <= toBlock; i++ {
-		s.icmBlocks <- &relayerTypes.WarpBlockInfo{
-			BlockNumber: i,
-			Messages:    []*relayerTypes.WarpMessageInfo{},
-		}
-	}
-}
-func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.Header, error) {
-	var (
-		err    error
-		header *types.Header
-	)
-	operation := func() (err error) {
-		cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
-		defer cancel()
-		header, err = s.rpcClient.HeaderByNumber(cctx, headerNumber)
-		return err
-	}
-	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout, "get header by number")
+	logs, err := s.getFilterLogsByBlockRangeRetryable(fromBlock, toBlock)
 	if err != nil {
 		s.logger.Error(
-			"Failed to get header by number",
+			"Failed to get header by number after max attempts",
 			zap.String("blockchainID", s.blockchainID.String()),
 			zap.Error(err),
 		)
-		return nil, err
+		return err
 	}
-	return header, nil
+
+	blocksWithICMMessages, err := relayerTypes.LogsToBlocks(logs)
+	if err != nil {
+		s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
+		return err
+	}
+	blocks, err := fillBlockRange(fromBlock.Uint64(), toBlock.Uint64(), blocksWithICMMessages)
+	if err != nil {
+		s.logger.Error("Failed to fill block range", zap.Error(err))
+		return err
+	}
+	for _, block := range blocks {
+		s.icmBlocks <- block
+	}
+	return nil
 }
 
 func (s *subscriber) getFilterLogsByBlockRangeRetryable(fromBlock, toBlock *big.Int) ([]types.Log, error) {
@@ -267,4 +235,30 @@ func (s *subscriber) Err() <-chan error {
 
 func (s *subscriber) Cancel() {
 	// Nothing to do here, the ethclient manages both the log and err channels
+}
+
+// Takes a block range and a slice of blocks containing ICM messages and fills in the missing blocks with empty blocks
+func fillBlockRange(fromBlock, toBlock uint64, icmBlocks []*relayerTypes.WarpBlockInfo) ([]*relayerTypes.WarpBlockInfo, error) {
+	var filledBlocks []*relayerTypes.WarpBlockInfo
+	currentBlock := fromBlock
+	for _, block := range icmBlocks {
+		filledBlocks = append(filledBlocks, makeEmptyBlocks(currentBlock, block.BlockNumber-1)...)
+		filledBlocks = append(filledBlocks, block)
+		currentBlock = block.BlockNumber + 1
+	}
+	// Fill the remainder of the range with empty blocks after the last block
+	// with an ICM message was appended to the slice.
+	filledBlocks = append(filledBlocks, makeEmptyBlocks(currentBlock, toBlock)...)
+	return filledBlocks, nil
+}
+
+func makeEmptyBlocks(fromBlock, toBlock uint64) []*relayerTypes.WarpBlockInfo {
+	var emptyBlocks []*relayerTypes.WarpBlockInfo
+	for i := fromBlock; i <= toBlock; i++ {
+		emptyBlocks = append(emptyBlocks, &relayerTypes.WarpBlockInfo{
+			BlockNumber: i,
+			Messages:    []*relayerTypes.WarpMessageInfo{},
+		})
+	}
+	return emptyBlocks
 }
