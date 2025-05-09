@@ -15,7 +15,6 @@ import (
 	mock_ethclient "github.com/ava-labs/icm-services/vms/evm/mocks"
 	"github.com/ava-labs/icm-services/vms/evm/signer"
 	"github.com/ava-labs/subnet-evm/core/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -36,7 +35,7 @@ func TestSendTx(t *testing.T) {
 	require.NoError(t, err)
 
 	queuedTxSemaphore := make(chan struct{}, poolTxsPerAccount)
-	messageChan := make(chan MessageData)
+	messageChan := make(chan txData)
 	signer := concurrentSigner{
 		logger:            logging.NoLog{},
 		signer:            txSigners[0],
@@ -112,8 +111,9 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destClient = destinationClient{
-				signerAddresses:      []common.Address{signer.signer.Address()},
-				messageChans:         []chan MessageData{messageChan},
+				readonlyConcurrentSigners: []*readonlyConcurrentSigner{
+					(*readonlyConcurrentSigner)(&signer),
+				},
 				logger:               logging.NoLog{},
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
