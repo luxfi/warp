@@ -129,7 +129,7 @@ func (s *subscriber) processBlockRange(
 			)
 			return err
 		}
-		blocks, err := relayerTypes.LogsToBlocks(logs)
+		blocksWithICMMessages, err := relayerTypes.LogsToBlocks(logs)
 		if err != nil {
 			s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
 			return err
