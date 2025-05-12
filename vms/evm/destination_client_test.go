@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -118,7 +119,7 @@ func TestSendTx(t *testing.T) {
 				maxBaseFee:           test.maxBaseFee,
 				maxPriorityFeePerGas: big.NewInt(0),
 				blockGasLimit:        0,
-				txInclusionTimeout:   30,
+				txInclusionTimeout:   30 * time.Second,
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
