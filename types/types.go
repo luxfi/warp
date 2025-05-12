@@ -6,7 +6,6 @@ package types
 import (
 	"context"
 	"errors"
-	"slices"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
@@ -114,31 +113,21 @@ func UnpackWarpMessage(unsignedMsgBytes []byte) (*avalancheWarp.UnsignedMessage,
 	return unsignedMsg, nil
 }
 
-func LogsToBlocks(logs []types.Log) ([]*WarpBlockInfo, error) {
-	slices.SortFunc(logs, func(a, b types.Log) int {
-		if a.BlockNumber < b.BlockNumber {
-			return -1
-		}
-		if a.BlockNumber > b.BlockNumber {
-			return 1
-		}
-		return 0
-	})
-
-	var blocks []*WarpBlockInfo
+func LogsToBlocks(logs []types.Log) (map[uint64]*WarpBlockInfo, error) {
+	blocks := make(map[uint64]*WarpBlockInfo)
 	for _, log := range logs {
-		// If this log's block hasn't been seen yet, append a new entry to the slice
-		if len(blocks) == 0 || blocks[len(blocks)-1].BlockNumber != log.BlockNumber {
-			blocks = append(blocks, &WarpBlockInfo{
-				BlockNumber: log.BlockNumber,
-				Messages:    make([]*WarpMessageInfo, 0),
-			})
-		}
 		warpMessageInfo, err := NewWarpMessageInfo(log)
 		if err != nil {
 			return nil, err
 		}
-		blocks[len(blocks)-1].Messages = append(blocks[len(blocks)-1].Messages, warpMessageInfo)
+		if block, ok := blocks[log.BlockNumber]; ok {
+			block.Messages = append(block.Messages, warpMessageInfo)
+		} else {
+			blocks[log.BlockNumber] = &WarpBlockInfo{
+				BlockNumber: log.BlockNumber,
+				Messages:    []*WarpMessageInfo{warpMessageInfo},
+			}
+		}
 	}
 	return blocks, nil
 }
