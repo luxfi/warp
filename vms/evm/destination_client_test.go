@@ -34,14 +34,12 @@ func TestSendTx(t *testing.T) {
 	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
 
-	queuedTxSemaphore := make(chan struct{}, poolTxsPerAccount)
-	messageChan := make(chan txData)
-	signer := concurrentSigner{
+	signer := &concurrentSigner{
 		logger:            logging.NoLog{},
 		signer:            txSigners[0],
 		currentNonce:      0,
-		messageChan:       messageChan,
-		queuedTxSemaphore: queuedTxSemaphore,
+		messageChan:       make(chan txData),
+		queuedTxSemaphore: make(chan struct{}, poolTxsPerAccount),
 		destinationClient: &destClient,
 	}
 	go signer.processIncomingTransactions()
@@ -112,7 +110,7 @@ func TestSendTx(t *testing.T) {
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destClient = destinationClient{
 				readonlyConcurrentSigners: []*readonlyConcurrentSigner{
-					(*readonlyConcurrentSigner)(&signer),
+					(*readonlyConcurrentSigner)(signer),
 				},
 				logger:               logging.NoLog{},
 				client:               mockClient,
