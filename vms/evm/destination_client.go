@@ -333,7 +333,9 @@ func (c *destinationClient) SendTx(
 	return result.receipt, nil
 }
 
-// This function guarantees that for any messageData read from s.messageChan,
+// processIncomingTransactions is a worker that issues transactions from a given concurrentSigner. 
+// Must be called at most once per concurrentSigner.
+// It guarantees that for any messageData read from s.messageChan,
 // exactly 1 value is written to messageData.resultChan.
 func (s *concurrentSigner) processIncomingTransactions() {
 	for {
