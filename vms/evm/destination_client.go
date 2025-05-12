@@ -192,6 +192,8 @@ func NewDestinationClient(
 			go concurrentSigner.processIncomingTransactions()
 
 			readonlyConcurrentSigners[i] = (*readonlyConcurrentSigner)(concurrentSigner)
+
+			break
 		}
 	}
 
