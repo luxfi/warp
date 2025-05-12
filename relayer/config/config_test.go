@@ -67,7 +67,7 @@ func TestMultipleSignersConfig(t *testing.T) {
 			baseConfig:     TestValidConfig,
 			configModifier: func(c Config) Config { return c },
 			envSetter: func() {
-				t.Setenv(accountPrivateKeysEnvVarName, strings.Join([]string{testPk1, testPk2}, " "))
+				t.Setenv(accountPrivateKeyListEnvVarName, strings.Join([]string{testPk1, testPk2}, " "))
 			},
 			resultVerifier: func(c Config) bool {
 				for _, subnet := range c.DestinationBlockchains {
@@ -85,7 +85,7 @@ func TestMultipleSignersConfig(t *testing.T) {
 			configModifier: func(c Config) Config { return c },
 			envSetter: func() {
 				t.Setenv(accountPrivateKeyEnvVarName, testPk1)
-				t.Setenv(accountPrivateKeysEnvVarName, strings.Join([]string{testPk2, testPk3}, " "))
+				t.Setenv(accountPrivateKeyListEnvVarName, strings.Join([]string{testPk2, testPk3}, " "))
 			},
 			resultVerifier: func(c Config) bool {
 				for _, subnet := range c.DestinationBlockchains {
@@ -128,7 +128,7 @@ func TestMultipleSignersConfig(t *testing.T) {
 			envSetter: func() {
 				varName := fmt.Sprintf(
 					"%s_%s",
-					accountPrivateKeysEnvVarName,
+					accountPrivateKeyListEnvVarName,
 					TestValidConfig.DestinationBlockchains[0].BlockchainID,
 				)
 				t.Setenv(varName, strings.Join([]string{testPk1, testPk2}, " "))
@@ -149,7 +149,7 @@ func TestMultipleSignersConfig(t *testing.T) {
 			envSetter: func() {
 				varName := fmt.Sprintf(
 					"%s_%s",
-					accountPrivateKeysEnvVarName,
+					accountPrivateKeyListEnvVarName,
 					TestValidConfig.DestinationBlockchains[0].BlockchainID,
 				)
 				t.Setenv(varName, strings.Join([]string{testPk1, testPk2}, " "))

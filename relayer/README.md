@@ -253,7 +253,7 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
     `"base-url": string`
 
-    - The URL that will be queried
+    - The URL that will be queried. The API node is expected to have all standard ETH endpoints enabled.
 
     `"query-params": map[string]string`
 
@@ -269,7 +269,7 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
     `"base-url": string`
 
-    - The URL that will be queried
+    - The URL that will be queried. The API node is expected to accept eth_subscribe connections.
 
     `"query-params": map[string]string`
 
@@ -299,7 +299,7 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
     `"base-url": string`
 
-    - The URL that will be queried
+    - The URL that will be queried. The API node is expected to have `warp.getMessageAggregateSignature` enabled.
 
     `"query-params": map[string]string`
 
@@ -357,9 +357,9 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The AWS region in which the KMS key is located. Required if `kms-key-id` is provided.
 
-  `"account-private-keys": []string`
+  `"account-private-keys-list": []string`
 
-  - A list of hex-encoded private keys for signing transactions on the destination blockchain. May also be provided as a space-delimited list by the environment variable `ACCOUNT_PRIVATE_KEYS`. Each `destination-subnet` may use a separate list of private keys by appending the cb58 encoded blockchain ID to the private keys environment variable name, for example `ACCOUNT_PRIVATE_KEYS_11111111111111111111111111111111LpoYY`
+  - A list of hex-encoded private keys for signing transactions on the destination blockchain. May also be provided as a space-delimited list by the environment variable `ACCOUNT_PRIVATE_KEYS_LIST`. Each `destination-subnet` may use a separate list of private keys by appending the cb58 encoded blockchain ID to the private keys environment variable name, for example `ACCOUNT_PRIVATE_KEYS_LIST_11111111111111111111111111111111LpoYY`
   - Please note that all private keys should be exclusive to the relayer, see [Private Key Management](#private-key-management).
 
   `"kms-keys": []KMSKey`
