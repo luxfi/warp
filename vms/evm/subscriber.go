@@ -66,11 +66,6 @@ func NewSubscriber(
 // Writes true to the done channel when finished, or false if an error occurs
 func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 	defer close(done)
-	s.logger.Info(
-		"Processing historical logs",
-		zap.String("fromBlockHeight", height.String()),
-		zap.String("blockchainID", s.blockchainID.String()),
-	)
 	if height == nil {
 		s.logger.Error("Cannot process logs from nil height")
 		done <- false
@@ -90,6 +85,12 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 		done <- false
 		return
 	}
+	s.logger.Info(
+		"Processing historical logs",
+		zap.Uint64("fromBlockHeight", height.Uint64()),
+		zap.Uint64("latestBlockHeight", latestBlockHeight)
+		zap.String("blockchainID", s.blockchainID.String()),
+	)
 
 	bigLatestBlockHeight := big.NewInt(0).SetUint64(latestBlockHeight)
 
@@ -119,6 +120,12 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 func (s *subscriber) processBlockRange(
 	fromBlock, toBlock *big.Int,
 ) error {
+	s.logger.Info(
+		"Processing block range",
+		zap.Uint64("fromBlockHeight", fromBlock.Uint64()),
+		zap.Uint64("toBlockHeight", toBlock.Uint64()),
+		zap.String("blockchainID", s.blockchainID.String()),
+	)
 	logs, err := s.getFilterLogsByBlockRangeRetryable(fromBlock, toBlock)
 	if err != nil {
 		s.logger.Error(
