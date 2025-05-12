@@ -105,7 +105,7 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 		}
 		if privateKeysFromEnv := os.Getenv(fmt.Sprintf(
 			"%s_%s",
-			accountPrivateKeysEnvVarName,
+			accountPrivateKeyListEnvVarName,
 			subnet.BlockchainID,
 		)); privateKeysFromEnv != "" {
 			privateKeys = append(privateKeys, strings.Split(privateKeysFromEnv, " ")...)
