@@ -48,7 +48,7 @@ func NewSubscriber(
 	wsClient ethclient.Client,
 	rpcClient ethclient.Client,
 ) *subscriber {
-	return &subscriber{
+	subscriber := &subscriber{
 		blockchainID: blockchainID,
 		wsClient:     wsClient,
 		rpcClient:    rpcClient,
@@ -57,6 +57,8 @@ func NewSubscriber(
 		headers:      make(chan *types.Header, maxClientSubscriptionBuffer),
 		errChan:      make(chan error),
 	}
+	go subscriber.blocksInfoFromHeaders()
+	return subscriber
 }
 
 // Process logs from the given block height to the latest block. Limits the
@@ -88,7 +90,7 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 	s.logger.Info(
 		"Processing historical logs",
 		zap.Uint64("fromBlockHeight", height.Uint64()),
-		zap.Uint64("latestBlockHeight", latestBlockHeight)
+		zap.Uint64("latestBlockHeight", latestBlockHeight),
 		zap.String("blockchainID", s.blockchainID.String()),
 	)
 
@@ -217,7 +219,6 @@ func (s *subscriber) subscribe(retryTimeout time.Duration) error {
 	}
 	s.sub = sub
 
-	go s.blocksInfoFromHeaders()
 	return nil
 }
 
