@@ -138,8 +138,7 @@ func (s *subscriber) processBlockRange(
 		if block, ok := blocksWithICMMessages[i]; ok {
 			s.icmBlocks <- block
 		} else {
-			// All blocks including empty ones need to be explicitly written to the channel
-			// for persistence.
+			// Blocks with no ICM messages also need to be explicitly processed.
 			s.icmBlocks <- &relayerTypes.WarpBlockInfo{
 				BlockNumber: i,
 				Messages:    []*relayerTypes.WarpMessageInfo{},
