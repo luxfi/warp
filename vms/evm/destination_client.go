@@ -305,7 +305,8 @@ func (c *destinationClient) SendTx(
 	reflect.Select(cases)
 
 	// Wait for the receipt or error to be returned
-	timeout := time.NewTimer(c.txInclusionTimeout)
+	// We need to wait for the transaction inclusion, and also the receipt to be returned.
+	timeout := time.NewTimer(c.txInclusionTimeout + utils.DefaultRPCTimeout)
 	defer timeout.Stop()
 	var result txResult
 	var ok bool
@@ -362,8 +363,8 @@ func (s *concurrentSigner) processIncomingTransactions() {
 }
 
 // issueTransaction sends the transaction, but does not wait for confirmation.
-// This function must not be called concurrently for a given concurrentSigner
-// instance in order to manage nonces corre
+// In order to properly manage the in-memory nonce, this function must not be
+// called concurrently for a given concurrentSigner instance.
 // Access to this function should be managed by processIncomingTransactions().
 func (s *concurrentSigner) issueTransaction(
 	data txData,
