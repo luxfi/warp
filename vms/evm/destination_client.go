@@ -360,7 +360,8 @@ func (s *concurrentSigner) processIncomingTransactions() {
 }
 
 // issueTransaction sends the transaction, but does not wait for confirmation.
-// This function must not be called concurrently for a given concurrentSigner instance
+// This function must not be called concurrently for a given concurrentSigner
+// instance in order to manage nonces corre
 // Access to this function should be managed by processIncomingTransactions().
 func (s *concurrentSigner) issueTransaction(
 	data txData,
