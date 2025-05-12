@@ -134,13 +134,17 @@ func (s *subscriber) processBlockRange(
 		s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
 		return err
 	}
-	blocks, err := fillBlockRange(fromBlock.Uint64(), toBlock.Uint64(), blocksWithICMMessages)
-	if err != nil {
-		s.logger.Error("Failed to fill block range", zap.Error(err))
-		return err
-	}
-	for _, block := range blocks {
-		s.icmBlocks <- block
+	for i := fromBlock.Uint64(); i <= toBlock.Uint64(); i++ {
+		if block, ok := blocksWithICMMessages[i]; ok {
+			s.icmBlocks <- block
+		} else {
+			// All blocks including empty ones need to be explicitly written to the channel
+			// for persistence.
+			s.icmBlocks <- &relayerTypes.WarpBlockInfo{
+				BlockNumber: i,
+				Messages:    []*relayerTypes.WarpMessageInfo{},
+			}
+		}
 	}
 	return nil
 }
@@ -242,30 +246,4 @@ func (s *subscriber) Err() <-chan error {
 
 func (s *subscriber) Cancel() {
 	// Nothing to do here, the ethclient manages both the log and err channels
-}
-
-// Takes a block range and a slice of blocks containing ICM messages and fills in the missing blocks with empty blocks
-func fillBlockRange(fromBlock, toBlock uint64, icmBlocks []*relayerTypes.WarpBlockInfo) ([]*relayerTypes.WarpBlockInfo, error) {
-	var filledBlocks []*relayerTypes.WarpBlockInfo
-	currentBlock := fromBlock
-	for _, block := range icmBlocks {
-		filledBlocks = append(filledBlocks, makeEmptyBlocks(currentBlock, block.BlockNumber-1)...)
-		filledBlocks = append(filledBlocks, block)
-		currentBlock = block.BlockNumber + 1
-	}
-	// Fill the remainder of the range with empty blocks after the last block
-	// with an ICM message was appended to the slice.
-	filledBlocks = append(filledBlocks, makeEmptyBlocks(currentBlock, toBlock)...)
-	return filledBlocks, nil
-}
-
-func makeEmptyBlocks(fromBlock, toBlock uint64) []*relayerTypes.WarpBlockInfo {
-	var emptyBlocks []*relayerTypes.WarpBlockInfo
-	for i := fromBlock; i <= toBlock; i++ {
-		emptyBlocks = append(emptyBlocks, &relayerTypes.WarpBlockInfo{
-			BlockNumber: i,
-			Messages:    []*relayerTypes.WarpMessageInfo{},
-		})
-	}
-	return emptyBlocks
 }
