@@ -194,6 +194,7 @@ func (m *messageHandler) SendMessage(
 
 	receipt, err := m.destinationClient.SendTx(
 		signedMessage,
+		nil,
 		m.registryAddress.Hex(),
 		addProtocolVersionGasLimit,
 		callData,

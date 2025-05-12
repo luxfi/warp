@@ -6,6 +6,7 @@ package evm
 import (
 	"fmt"
 	"math/big"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -27,12 +28,29 @@ var destinationSubnet = config.DestinationBlockchain{
 	RPCEndpoint: basecfg.APIConfig{
 		BaseURL: "https://subnets.avax.network/mysubnet/rpc",
 	},
-	AccountPrivateKey: "56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027",
+	AccountPrivateKeys: []string{"56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"},
 }
 
 func TestSendTx(t *testing.T) {
-	txSigner, err := signer.NewTxSigner(destinationSubnet.AccountPrivateKey)
+	txSigners, err := signer.NewTxSigners(destinationSubnet.AccountPrivateKeys)
 	require.NoError(t, err)
+
+	txQueue := make(chan struct{}, poolTxsPerAccount)
+	keys := []accountSigner{
+		{
+			signer:       txSigners[0],
+			currentNonce: 0,
+			lock:         &sync.Mutex{},
+			txQueue:      txQueue,
+		},
+	}
+	selectCases := []reflect.SelectCase{
+		{
+			Dir:  reflect.SelectSend,
+			Chan: reflect.ValueOf(txQueue),
+			Send: reflect.ValueOf(struct{}{}),
+		},
+	}
 
 	testError := fmt.Errorf("call errored")
 	testCases := []struct {
@@ -99,11 +117,11 @@ func TestSendTx(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockClient := mock_ethclient.NewMockClient(ctrl)
 			destinationClient := &destinationClient{
-				nonceCond:            sync.NewCond(&sync.Mutex{}),
+				keys:                 keys,
+				selectCases:          selectCases,
 				logger:               logging.NoLog{},
 				client:               mockClient,
 				evmChainID:           big.NewInt(5),
-				signer:               txSigner,
 				maxBaseFee:           test.maxBaseFee,
 				maxPriorityFeePerGas: big.NewInt(0),
 			}
@@ -132,7 +150,7 @@ func TestSendTx(t *testing.T) {
 					).Times(test.txReceiptTimes),
 			)
 
-			_, err := destinationClient.SendTx(warpMsg, toAddress, 0, []byte{})
+			_, err := destinationClient.SendTx(warpMsg, nil, toAddress, 0, []byte{})
 			if test.expectError {
 				require.Error(t, err)
 			} else {

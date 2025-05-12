@@ -249,11 +249,35 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   `"rpc-endpoint": APIConfig`
 
-  - The RPC endpoint configuration of the source blockchain's API node.
+  - The RPC endpoint configuration of the source blockchain's API node. An `APIConfig` has the following fields:
+
+    `"base-url": string`
+
+    - The URL that will be queried. The API node is expected to have all standard ETH endpoints enabled.
+
+    `"query-params": map[string]string`
+
+    - A map of query parameters to values that will be added to the base URL
+
+    `"http-headers": map[string]string`
+
+    - A map of HTTP headers to include in the requests to this API
 
   `"ws-endpoint": APIConfig`
 
-  - The WebSocket endpoint configuration of the source blockchain's API node.
+  - The WebSocket endpoint configuration of the source blockchain's API node. An `APIConfig` has the following fields:
+
+    `"base-url": string`
+
+    - The URL that will be queried. The API node is expected to accept eth_subscribe connections.
+
+    `"query-params": map[string]string`
+
+    - A map of query parameters to values that will be added to the base URL
+
+    `"http-headers": map[string]string`
+
+    - A map of HTTP headers to include in the requests to this API
 
   `"message-contracts": map[string]MessageProtocolConfig`
 
@@ -271,7 +295,19 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - List of addresses on this source blockchain to relay Warp messages from. The sending address is defined by the message protocol. For example, it could be defined as the EOA that initiates the transaction, or the address that calls the message protocol contract. If empty, then all addresses are allowed.
 
-  `"warp-api-endpoint": APIConfig`
+  `"warp-api-endpoint": APIConfig` An `APIConfig` has the following fields:
+
+    `"base-url": string`
+
+    - The URL that will be queried. The API node is expected to have `warp.getMessageAggregateSignature` enabled.
+
+    `"query-params": map[string]string`
+
+    - A map of query parameters to values that will be added to the base URL
+
+    `"http-headers": map[string]string`
+
+    - A map of HTTP headers to include in the requests to this API
 
   - The RPC endpoint configuration for the Warp API, which is used to fetch Warp aggregate signatures. If omitted, then signatures are fetched via AppRequest instead.
 
@@ -291,7 +327,19 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The VM type of the source blockchain.
 
-  `"rpc-endpoint": APIConfig`
+  `"rpc-endpoint": APIConfig` An `APIConfig` has the following fields:
+
+    `"base-url": string`
+
+    - The URL that will be queried
+
+    `"query-params": map[string]string`
+
+    - A map of query parameters to values that will be added to the base URL
+
+    `"http-headers": map[string]string`
+
+    - A map of HTTP headers to include in the requests to this API
 
   - The RPC endpoint configuration of the destination blockchains's API node.
 
@@ -302,12 +350,29 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   `"kms-key-id": string`
 
-  - The ID of the KMS key to use for signing transactions on the destination blockchain. Only one of `account-private-key` or `kms-key-id` should be provided. If `kms-key-id` is provided, then `kms-aws-region` is required.
+  - The ID of the KMS key to use for signing transactions on the destination blockchain. If `kms-key-id` is provided, then `kms-aws-region` is required.
   - Please note that the private key in KMS should be exclusive to the relayer, see [Private Key Management](#private-key-management).
 
   `"kms-aws-region": string`
 
   - The AWS region in which the KMS key is located. Required if `kms-key-id` is provided.
+
+  `"account-private-keys-list": []string`
+
+  - A list of hex-encoded private keys for signing transactions on the destination blockchain. May also be provided as a space-delimited list by the environment variable `ACCOUNT_PRIVATE_KEYS_LIST`. Each `destination-subnet` may use a separate list of private keys by appending the cb58 encoded blockchain ID to the private keys environment variable name, for example `ACCOUNT_PRIVATE_KEYS_LIST_11111111111111111111111111111111LpoYY`
+  - Please note that all private keys should be exclusive to the relayer, see [Private Key Management](#private-key-management).
+
+  `"kms-keys": []KMSKey`
+
+  A list of KMS Keys that may be used for signing transactions on the destination blockchain. A `KMSKey` has the following fields:
+
+    `"key-id": string`
+
+    - The ID of the KMS key to use for signing transactions on the destination blockchain.
+
+    `"aws-region": string`
+
+    - The AWS region in which the KMS key is located.
 
   `"block-gas-limit": unsigned integer`
 
