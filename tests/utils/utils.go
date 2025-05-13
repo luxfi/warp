@@ -179,7 +179,7 @@ func CreateDefaultRelayerConfig(
 			RPCEndpoint: config.APIConfig{
 				BaseURL: fmt.Sprintf("http://%s:%d/ext/bc/%s/rpc", host, port, l1Info.BlockchainID.String()),
 			},
-			AccountPrivateKey: relayerUtils.PrivateKeyToString(relayerKey),
+			AccountPrivateKeys: []string{relayerUtils.PrivateKeyToString(relayerKey)},
 		}
 
 		log.Info(

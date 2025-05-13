@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -28,14 +29,6 @@ var (
 
 // GetRelayerAccountPrivateKey tests. Individual cases must be run in their own functions
 // because they modify the environment variables.
-type configMondifierEnvVarTestCase struct {
-	baseConfig          Config
-	configModifier      func(Config) Config
-	flags               []string
-	envSetter           func()
-	expectedOverwritten bool
-	resultVerifier      func(Config) bool
-}
 
 // setups config json file and writes content
 func setupConfigJSON(t *testing.T, rootPath string, value string) string {
@@ -44,139 +37,251 @@ func setupConfigJSON(t *testing.T, rootPath string, value string) string {
 	return configFilePath
 }
 
-// Sets up the config file temporary environment and runs the test case.
-func runConfigModifierEnvVarTest(t *testing.T, testCase configMondifierEnvVarTestCase) {
-	root := t.TempDir()
-
-	cfg := testCase.configModifier(testCase.baseConfig)
-	cfgBytes, err := json.Marshal(cfg)
-	require.NoError(t, err)
-
-	configFile := setupConfigJSON(t, root, string(cfgBytes))
-
-	flags := append([]string{"--config-file", configFile}, testCase.flags...)
-	testCase.envSetter()
-
-	fs := BuildFlagSet()
-	if err := fs.Parse(flags); err != nil {
-		panic(fmt.Errorf("couldn't parse flags: %w", err))
-	}
-	v, err := BuildViper(fs)
-	require.NoError(t, err)
-	parsedCfg, err := NewConfig(v)
-	require.NoError(t, err)
-	require.Equal(t, parsedCfg.HasOverwrittenOptions(), testCase.expectedOverwritten)
-
-	require.True(t, testCase.resultVerifier(parsedCfg))
-}
-
-func TestGetRelayerAccountPrivateKey_set_pk_in_config(t *testing.T) {
-	testCase := configMondifierEnvVarTestCase{
-		baseConfig:          TestValidConfig,
-		configModifier:      func(c Config) Config { return c },
-		envSetter:           func() {},
-		expectedOverwritten: false,
-		resultVerifier: func(c Config) bool {
-			// All destination subnets should have the default private key
-			for i, subnet := range c.DestinationBlockchains {
-				if subnet.AccountPrivateKey != utils.SanitizeHexString(
-					TestValidConfig.DestinationBlockchains[i].AccountPrivateKey,
-				) {
-					fmt.Printf(
-						"expected: %s, got: %s\n",
-						utils.SanitizeHexString(TestValidConfig.DestinationBlockchains[i].AccountPrivateKey),
-						subnet.AccountPrivateKey,
-					)
-					return false
+func TestMultipleSignersConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		baseConfig     Config
+		configModifier func(Config) Config
+		envSetter      func()
+		resultVerifier func(Config) bool
+	}{
+		{
+			name:           "global pk",
+			baseConfig:     TestValidConfig,
+			configModifier: func(c Config) Config { return c },
+			envSetter: func() {
+				t.Setenv(accountPrivateKeyEnvVarName, testPk2)
+			},
+			resultVerifier: func(c Config) bool {
+				for _, subnet := range c.DestinationBlockchains {
+					pks := set.Of(subnet.AccountPrivateKeys...)
+					if !pks.Contains(utils.SanitizeHexString(testPk2)) {
+						return false
+					}
 				}
-			}
-			return true
+				return true
+			},
 		},
-	}
-	runConfigModifierEnvVarTest(t, testCase)
-}
-
-func TestGetRelayerAccountPrivateKey_set_pk_with_subnet_env(t *testing.T) {
-	testCase := configMondifierEnvVarTestCase{
-		baseConfig: TestValidConfig,
-		configModifier: func(c Config) Config {
-			// Add a second destination subnet. This PK should NOT be overwritten
-			newSubnet := *c.DestinationBlockchains[0]
-			newSubnet.BlockchainID = testBlockchainID2
-			newSubnet.AccountPrivateKey = testPk1
-			c.DestinationBlockchains = append(c.DestinationBlockchains, &newSubnet)
-			return c
-		},
-		envSetter: func() {
-			// Overwrite the PK for the first subnet using an env var
-			varName := fmt.Sprintf(
-				"%s_%s",
-				accountPrivateKeyEnvVarName,
-				TestValidConfig.DestinationBlockchains[0].BlockchainID,
-			)
-			t.Setenv(varName, testPk2)
-		},
-		expectedOverwritten: true,
-		resultVerifier: func(c Config) bool {
-			// All destination subnets should have testPk1
-			if c.DestinationBlockchains[0].AccountPrivateKey != utils.SanitizeHexString(testPk2) {
-				fmt.Printf(
-					"expected: %s, got: %s\n",
-					utils.SanitizeHexString(testPk2),
-					c.DestinationBlockchains[0].AccountPrivateKey,
-				)
-				return false
-			}
-			if c.DestinationBlockchains[1].AccountPrivateKey != utils.SanitizeHexString(testPk1) {
-				fmt.Printf(
-					"expected: %s, got: %s\n",
-					utils.SanitizeHexString(testPk1),
-					c.DestinationBlockchains[1].AccountPrivateKey,
-				)
-				return false
-			}
-			return true
-		},
-	}
-	runConfigModifierEnvVarTest(t, testCase)
-}
-
-func TestGetRelayerAccountPrivateKey_set_pk_with_global_env(t *testing.T) {
-	testCase := configMondifierEnvVarTestCase{
-		baseConfig: TestValidConfig,
-		configModifier: func(c Config) Config {
-			// Add a second destination subnet. This PK SHOULD be overwritten
-			newSubnet := *c.DestinationBlockchains[0]
-			newSubnet.BlockchainID = testBlockchainID2
-			newSubnet.AccountPrivateKey = testPk1
-			c.DestinationBlockchains = append(c.DestinationBlockchains, &newSubnet)
-			return c
-		},
-		envSetter: func() {
-			// Overwrite the PK for the first subnet using an env var
-			t.Setenv(accountPrivateKeyEnvVarName, testPk2)
-		},
-		expectedOverwritten: true,
-		resultVerifier: func(c Config) bool {
-			// All destination subnets should have testPk2
-			for _, subnet := range c.DestinationBlockchains {
-				if subnet.AccountPrivateKey != utils.SanitizeHexString(testPk2) {
-					fmt.Printf("expected: %s, got: %s\n", utils.SanitizeHexString(testPk2), subnet.AccountPrivateKey)
-					return false
+		{
+			name:           "multiple global pks",
+			baseConfig:     TestValidConfig,
+			configModifier: func(c Config) Config { return c },
+			envSetter: func() {
+				t.Setenv(accountPrivateKeyListEnvVarName, strings.Join([]string{testPk1, testPk2}, " "))
+			},
+			resultVerifier: func(c Config) bool {
+				for _, subnet := range c.DestinationBlockchains {
+					pks := set.Of(subnet.AccountPrivateKeys...)
+					if !pks.Contains(utils.SanitizeHexString(testPk1)) || !pks.Contains(utils.SanitizeHexString(testPk2)) {
+						return false
+					}
 				}
-			}
-			return true
+				return true
+			},
+		},
+		{
+			name:           "individual and multiple global pks",
+			baseConfig:     TestValidConfig,
+			configModifier: func(c Config) Config { return c },
+			envSetter: func() {
+				t.Setenv(accountPrivateKeyEnvVarName, testPk1)
+				t.Setenv(accountPrivateKeyListEnvVarName, strings.Join([]string{testPk2, testPk3}, " "))
+			},
+			resultVerifier: func(c Config) bool {
+				for _, subnet := range c.DestinationBlockchains {
+					pks := set.Of(subnet.AccountPrivateKeys...)
+					if !pks.Contains(utils.SanitizeHexString(testPk1)) ||
+						!pks.Contains(utils.SanitizeHexString(testPk2)) ||
+						!pks.Contains(utils.SanitizeHexString(testPk3)) {
+						return false
+					}
+				}
+				return true
+			},
+		},
+		{
+			name:       "destination blockchain pk env",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = ""
+				return c
+			},
+			envSetter: func() {
+				varName := fmt.Sprintf(
+					"%s_%s",
+					accountPrivateKeyEnvVarName,
+					TestValidConfig.DestinationBlockchains[0].BlockchainID,
+				)
+				t.Setenv(varName, testPk1)
+			},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk1))
+			},
+		},
+		{
+			name: "multiple destination blockchain pks env", baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = ""
+				return c
+			},
+			envSetter: func() {
+				varName := fmt.Sprintf(
+					"%s_%s",
+					accountPrivateKeyListEnvVarName,
+					TestValidConfig.DestinationBlockchains[0].BlockchainID,
+				)
+				t.Setenv(varName, strings.Join([]string{testPk1, testPk2}, " "))
+			},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk1)) &&
+					pks.Contains(utils.SanitizeHexString(testPk2))
+			},
+		},
+		{
+			name:       "individual and multiple destination blockchain pks env",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = ""
+				return c
+			},
+			envSetter: func() {
+				varName := fmt.Sprintf(
+					"%s_%s",
+					accountPrivateKeyListEnvVarName,
+					TestValidConfig.DestinationBlockchains[0].BlockchainID,
+				)
+				t.Setenv(varName, strings.Join([]string{testPk1, testPk2}, " "))
+
+				varName = fmt.Sprintf(
+					"%s_%s",
+					accountPrivateKeyEnvVarName,
+					TestValidConfig.DestinationBlockchains[0].BlockchainID,
+				)
+				t.Setenv(varName, testPk3)
+			},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk1)) &&
+					pks.Contains(utils.SanitizeHexString(testPk2)) &&
+					pks.Contains(utils.SanitizeHexString(testPk3))
+			},
+		},
+		{
+			name:       "destination blockchain pk cfg",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = testPk1
+				return c
+			},
+			envSetter: func() {},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk1))
+			},
+		},
+		{
+			name:       "multiple destination blockchain pks cfg",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKeys = []string{testPk2, testPk3}
+				return c
+			},
+			envSetter: func() {},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk2)) &&
+					pks.Contains(utils.SanitizeHexString(testPk3))
+			},
+		},
+		{
+			name:       "individual and multiple destination blockchain pks cfg",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = testPk1
+				c.DestinationBlockchains[0].AccountPrivateKeys = []string{testPk2, testPk3}
+				return c
+			},
+			envSetter: func() {},
+			resultVerifier: func(c Config) bool {
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk1)) &&
+					pks.Contains(utils.SanitizeHexString(testPk2)) &&
+					pks.Contains(utils.SanitizeHexString(testPk3))
+			},
+		},
+		{
+			name:       "global env, destination env, and destination cfg",
+			baseConfig: TestValidConfig,
+			configModifier: func(c Config) Config {
+				c.DestinationBlockchains[0].AccountPrivateKey = testPk3
+				return c
+			},
+			envSetter: func() {
+				// Global pk
+				t.Setenv(accountPrivateKeyEnvVarName, testPk1)
+
+				// Destination pk
+				varName := fmt.Sprintf(
+					"%s_%s",
+					accountPrivateKeyEnvVarName,
+					TestValidConfig.DestinationBlockchains[0].BlockchainID,
+				)
+				t.Setenv(varName, testPk2)
+			},
+			resultVerifier: func(c Config) bool {
+				// Check global pk
+				for _, subnet := range c.DestinationBlockchains {
+					pks := set.Of(subnet.AccountPrivateKeys...)
+					if !pks.Contains(utils.SanitizeHexString(testPk2)) {
+						return false
+					}
+				}
+
+				// Check destination chain specific pk
+				pks := set.Of(c.DestinationBlockchains[0].AccountPrivateKeys...)
+				return pks.Contains(utils.SanitizeHexString(testPk2)) &&
+					pks.Contains(utils.SanitizeHexString(testPk3))
+			},
 		},
 	}
-	runConfigModifierEnvVarTest(t, testCase)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			root := t.TempDir()
+
+			cfg := testCase.configModifier(testCase.baseConfig)
+			cfgBytes, err := json.Marshal(cfg)
+			require.NoError(t, err)
+
+			configFile := setupConfigJSON(t, root, string(cfgBytes))
+
+			flags := []string{"--config-file", configFile}
+			testCase.envSetter()
+
+			fs := BuildFlagSet()
+			if err := fs.Parse(flags); err != nil {
+				panic(fmt.Errorf("couldn't parse flags: %w", err))
+			}
+			v, err := BuildViper(fs)
+			require.NoError(t, err)
+			parsedCfg, err := NewConfig(v)
+			require.NoError(t, err)
+			require.NoError(t, parsedCfg.Validate())
+
+			require.True(t, testCase.resultVerifier(parsedCfg))
+		})
+	}
 }
 
-func TestEitherKMSOrAccountPrivateKey(t *testing.T) {
+func TestIndividualSignersConfig(t *testing.T) {
 	dstCfg := *TestValidConfig.DestinationBlockchains[0]
 	// Zero out all fields under test
 	dstCfg.AccountPrivateKey = ""
+	dstCfg.AccountPrivateKeys = nil
 	dstCfg.KMSKeyID = ""
 	dstCfg.KMSAWSRegion = ""
+	dstCfg.KMSKeys = nil
 
 	testCases := []struct {
 		name   string
@@ -218,7 +323,7 @@ func TestEitherKMSOrAccountPrivateKey(t *testing.T) {
 				cfg.AccountPrivateKey = "0x56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"
 				return cfg
 			},
-			valid: false,
+			valid: true,
 		},
 		{
 			name: "missing aws region",
@@ -232,13 +337,15 @@ func TestEitherKMSOrAccountPrivateKey(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		dstCfg := testCase.dstCfg()
-		err := dstCfg.Validate()
-		if testCase.valid {
-			require.NoError(t, err)
-		} else {
-			require.Error(t, err)
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			dstCfg := testCase.dstCfg()
+			err := dstCfg.Validate()
+			if testCase.valid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
 	}
 }
 

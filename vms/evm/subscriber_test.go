@@ -84,19 +84,29 @@ func TestProcessFromHeight(t *testing.T) {
 				BlockNumber(gomock.Any()).
 				Return(uint64(tc.latest), nil).
 				Times(1)
-
-			for i := tc.input; i <= tc.latest; i++ {
-				mockEthClient.EXPECT().HeaderByNumber(
+			if tc.latest > tc.input {
+				expectedFilterLogCalls := (tc.latest-tc.input+1)/MaxBlocksPerRequest + 1
+				mockEthClient.EXPECT().FilterLogs(
 					gomock.Any(),
-					big.NewInt(i),
-				).Return(&types.Header{
-					Number: big.NewInt(i),
-				}, nil).Times(1)
+					gomock.Any(),
+				).Return(
+					[]types.Log{},
+					nil,
+				).Times(int(expectedFilterLogCalls))
 			}
 			done := make(chan bool, 1)
 			subscriberUnderTest.ProcessFromHeight(big.NewInt(tc.input), done)
 			result := <-done
 			require.True(t, result)
+
+			if tc.latest > tc.input {
+				for i := tc.input; i <= tc.latest; i++ {
+					block := <-subscriberUnderTest.ICMBlocks()
+					require.Equal(t, uint64(i), block.BlockNumber)
+					require.Empty(t, block.Messages)
+				}
+			}
+			require.Zero(t, len(subscriberUnderTest.ICMBlocks()))
 		})
 	}
 }

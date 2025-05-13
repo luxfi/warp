@@ -16,9 +16,38 @@ type Signer interface {
 	Address() common.Address
 }
 
-func NewSigner(destinationBlockchain *config.DestinationBlockchain) (Signer, error) {
-	if destinationBlockchain.AccountPrivateKey == "" {
-		return NewKMSSigner(destinationBlockchain.KMSAWSRegion, destinationBlockchain.KMSKeyID)
+func NewSigners(destinationBlockchain *config.DestinationBlockchain) ([]Signer, error) {
+	txSigners, err := NewTxSigners(destinationBlockchain.AccountPrivateKeys)
+	if err != nil {
+		return nil, err
 	}
-	return NewTxSigner(destinationBlockchain.AccountPrivateKey)
+	kmsSigners, err := NewKMSSigners(destinationBlockchain.KMSKeys)
+	if err != nil {
+		return nil, err
+	}
+	return append(txSigners, kmsSigners...), nil
+}
+
+func NewTxSigners(pks []string) ([]Signer, error) {
+	var signers []Signer
+	for _, pk := range pks {
+		signer, err := NewTxSigner(pk)
+		if err != nil {
+			return signers, err
+		}
+		signers = append(signers, signer)
+	}
+	return signers, nil
+}
+
+func NewKMSSigners(kmsKeys []config.KMSKey) ([]Signer, error) {
+	var signers []Signer
+	for i := range kmsKeys {
+		signer, err := NewKMSSigner(kmsKeys[i].AWSRegion, kmsKeys[i].KeyID)
+		if err != nil {
+			return signers, err
+		}
+		signers = append(signers, signer)
+	}
+	return signers, nil
 }
