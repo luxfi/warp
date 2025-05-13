@@ -62,6 +62,6 @@ func TestBuildConfig(t *testing.T) {
 			BaseURL: "https://subnets.avax.network/dispatch/testnet/rpc",
 		},
 		VM:                "evm",
-		AccountPrivateKey: "7493...",
+		AccountPrivateKey: "0x7493...",
 	}, cfg.DestinationBlockchains[0])
 }

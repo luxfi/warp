@@ -71,8 +71,6 @@ func SetDefaultConfigValues(v *viper.Viper) {
 // The following precedence order is used. Each item takes precedence over the item below it:
 //  1. Flags
 //  2. Environment variables
-//     a. Global account-private-key
-//     b. Chain-specific account-private-key
 //  3. Config file
 //
 // Returns the Config
@@ -87,33 +85,41 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 		return cfg, fmt.Errorf("failed to unmarshal viper config: %w", err)
 	}
 
-	// Explicitly overwrite the configured account private key
-	// If account-private-key is set as a flag or environment variable,
-	// overwrite all destination subnet configurations to use that key
-	// In all cases, sanitize the key before setting it in the config
+	// Collect global private keys that will be available for all destination blockchains
+	accountPrivateKeys := v.GetStringSlice(AccountPrivateKeysKey)
 	accountPrivateKey := v.GetString(AccountPrivateKeyKey)
+	if accountPrivateKey != "" {
+		accountPrivateKeys = append(accountPrivateKeys, accountPrivateKey)
+	}
+
+	// Fetch destination chain private keys from the environment variables
 	for i, subnet := range cfg.DestinationBlockchains {
-		privateKey := subnet.AccountPrivateKey
-		if accountPrivateKey != "" {
-			privateKey = accountPrivateKey
-			cfg.overwrittenOptions = append(
-				cfg.overwrittenOptions,
-				fmt.Sprintf("destination-blockchain(%s).account-private-key", subnet.blockchainID),
-			)
-			// Otherwise, check for private keys suffixed with the chain ID and set it for that subnet
-			// Since the key is dynamic, this is only possible through environment variables
-		} else if privateKeyFromEnv := os.Getenv(fmt.Sprintf(
+		privateKeys := make([]string, len(accountPrivateKeys))
+		copy(privateKeys, accountPrivateKeys)
+		if privateKeyFromEnv := os.Getenv(fmt.Sprintf(
 			"%s_%s",
 			accountPrivateKeyEnvVarName,
 			subnet.BlockchainID,
 		)); privateKeyFromEnv != "" {
-			privateKey = privateKeyFromEnv
-			cfg.overwrittenOptions = append(cfg.overwrittenOptions, fmt.Sprintf(
-				"destination-blockchain(%s).account-private-key",
-				subnet.blockchainID),
-			)
+			privateKeys = append(privateKeys, privateKeyFromEnv)
 		}
-		cfg.DestinationBlockchains[i].AccountPrivateKey = utils.SanitizeHexString(privateKey)
+		if privateKeysFromEnv := os.Getenv(fmt.Sprintf(
+			"%s_%s",
+			accountPrivateKeyListEnvVarName,
+			subnet.BlockchainID,
+		)); privateKeysFromEnv != "" {
+			privateKeys = append(privateKeys, strings.Split(privateKeysFromEnv, " ")...)
+		}
+
+		for i, privateKey := range privateKeys {
+			privateKeys[i] = utils.SanitizeHexString(privateKey)
+		}
+
+		// Append keys provided via flag or environment variable to the config
+		cfg.DestinationBlockchains[i].AccountPrivateKeys = append(
+			cfg.DestinationBlockchains[i].AccountPrivateKeys,
+			privateKeys...,
+		)
 	}
 
 	if v.IsSet(commonConfig.TLSKeyPathKey) || v.IsSet(commonConfig.TLSCertPathKey) {

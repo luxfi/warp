@@ -20,6 +20,7 @@ import (
 var (
 	WarpPrecompileLogFilter = warp.WarpABI.Events["SendWarpMessage"].ID
 	ErrInvalidLog           = errors.New("invalid warp message log")
+	ErrFailedToProcessLogs  = errors.New("failed to process logs")
 )
 
 // WarpBlockInfo describes the block height and logs needed to process Warp messages.
@@ -110,4 +111,23 @@ func UnpackWarpMessage(unsignedMsgBytes []byte) (*avalancheWarp.UnsignedMessage,
 		}
 	}
 	return unsignedMsg, nil
+}
+
+func LogsToBlocks(logs []types.Log) (map[uint64]*WarpBlockInfo, error) {
+	blocks := make(map[uint64]*WarpBlockInfo)
+	for _, log := range logs {
+		warpMessageInfo, err := NewWarpMessageInfo(log)
+		if err != nil {
+			return nil, err
+		}
+		if block, ok := blocks[log.BlockNumber]; ok {
+			block.Messages = append(block.Messages, warpMessageInfo)
+		} else {
+			blocks[log.BlockNumber] = &WarpBlockInfo{
+				BlockNumber: log.BlockNumber,
+				Messages:    []*WarpMessageInfo{warpMessageInfo},
+			}
+		}
+	}
+	return blocks, nil
 }

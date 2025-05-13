@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	ids "github.com/ava-labs/avalanchego/ids"
+	set "github.com/ava-labs/avalanchego/utils/set"
 	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	types "github.com/ava-labs/subnet-evm/core/types"
 	common "github.com/ethereum/go-ethereum/common"
@@ -86,30 +87,30 @@ func (mr *MockDestinationClientMockRecorder) DestinationBlockchainID() *gomock.C
 }
 
 // SendTx mocks base method.
-func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error) {
+func (m *MockDestinationClient) SendTx(signedMessage *warp.Message, deliverers set.Set[common.Address], toAddress string, gasLimit uint64, callData []byte) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendTx", signedMessage, toAddress, gasLimit, callData)
+	ret := m.ctrl.Call(m, "SendTx", signedMessage, deliverers, toAddress, gasLimit, callData)
 	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SendTx indicates an expected call of SendTx.
-func (mr *MockDestinationClientMockRecorder) SendTx(signedMessage, toAddress, gasLimit, callData any) *gomock.Call {
+func (mr *MockDestinationClientMockRecorder) SendTx(signedMessage, deliverers, toAddress, gasLimit, callData any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTx", reflect.TypeOf((*MockDestinationClient)(nil).SendTx), signedMessage, toAddress, gasLimit, callData)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTx", reflect.TypeOf((*MockDestinationClient)(nil).SendTx), signedMessage, deliverers, toAddress, gasLimit, callData)
 }
 
-// SenderAddress mocks base method.
-func (m *MockDestinationClient) SenderAddress() common.Address {
+// SenderAddresses mocks base method.
+func (m *MockDestinationClient) SenderAddresses() []common.Address {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SenderAddress")
-	ret0, _ := ret[0].(common.Address)
+	ret := m.ctrl.Call(m, "SenderAddresses")
+	ret0, _ := ret[0].([]common.Address)
 	return ret0
 }
 
-// SenderAddress indicates an expected call of SenderAddress.
-func (mr *MockDestinationClientMockRecorder) SenderAddress() *gomock.Call {
+// SenderAddresses indicates an expected call of SenderAddresses.
+func (mr *MockDestinationClientMockRecorder) SenderAddresses() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddress", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddress))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SenderAddresses", reflect.TypeOf((*MockDestinationClient)(nil).SenderAddresses))
 }
