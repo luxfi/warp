@@ -87,6 +87,23 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("couldn't build config: %w", err))
 	}
+
+	// Modify the default http.DefaultClient globally
+	// TODO: Remove this temporary fix once the RPC clients used by the relayer
+	// start accepting custom underlying http clients.
+	{
+		// Set the timeout conservatively to catch any potential cases where the context is not used
+		// and the request hangs indefinitely.
+		http.DefaultClient.Timeout = 2 * utils.DefaultRPCTimeout
+		maxConns := 10_000
+		http.DefaultClient.Transport = &http.Transport{
+			MaxConnsPerHost:     maxConns,
+			MaxIdleConns:        maxConns,
+			MaxIdleConnsPerHost: maxConns,
+			IdleConnTimeout:     0, // Unlimited since handled by context and timeout on the client level.
+		}
+	}
+
 	// Initialize the Warp Config values and trackedSubnets by fetching via RPC
 	// We do this here so that BuildConfig doesn't need to make RPC calls
 	if err = cfg.Initialize(); err != nil {
