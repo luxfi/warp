@@ -11,10 +11,13 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	relayerTypes "github.com/ava-labs/icm-services/types"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/subnet-evm/core/types"
 	"github.com/ava-labs/subnet-evm/ethclient"
 	"github.com/ava-labs/subnet-evm/interfaces"
+	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +33,10 @@ type subscriber struct {
 	rpcClient    ethclient.Client
 	blockchainID ids.ID
 	headers      chan *types.Header
+	icmBlocks    chan *relayerTypes.WarpBlockInfo
 	sub          interfaces.Subscription
+
+	errChan chan error
 
 	logger logging.Logger
 }
@@ -42,13 +48,17 @@ func NewSubscriber(
 	wsClient ethclient.Client,
 	rpcClient ethclient.Client,
 ) *subscriber {
-	return &subscriber{
+	subscriber := &subscriber{
 		blockchainID: blockchainID,
 		wsClient:     wsClient,
 		rpcClient:    rpcClient,
 		logger:       logger,
+		icmBlocks:    make(chan *relayerTypes.WarpBlockInfo, maxClientSubscriptionBuffer),
 		headers:      make(chan *types.Header, maxClientSubscriptionBuffer),
+		errChan:      make(chan error),
 	}
+	go subscriber.blocksInfoFromHeaders()
+	return subscriber
 }
 
 // Process logs from the given block height to the latest block. Limits the
@@ -58,11 +68,6 @@ func NewSubscriber(
 // Writes true to the done channel when finished, or false if an error occurs
 func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 	defer close(done)
-	s.logger.Info(
-		"Processing historical logs",
-		zap.String("fromBlockHeight", height.String()),
-		zap.String("blockchainID", s.blockchainID.String()),
-	)
 	if height == nil {
 		s.logger.Error("Cannot process logs from nil height")
 		done <- false
@@ -82,6 +87,12 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 		done <- false
 		return
 	}
+	s.logger.Info(
+		"Processing historical logs",
+		zap.Uint64("fromBlockHeight", height.Uint64()),
+		zap.Uint64("latestBlockHeight", latestBlockHeight),
+		zap.String("blockchainID", s.blockchainID.String()),
+	)
 
 	bigLatestBlockHeight := big.NewInt(0).SetUint64(latestBlockHeight)
 
@@ -111,42 +122,67 @@ func (s *subscriber) ProcessFromHeight(height *big.Int, done chan bool) {
 func (s *subscriber) processBlockRange(
 	fromBlock, toBlock *big.Int,
 ) error {
-	for i := fromBlock.Int64(); i <= toBlock.Int64(); i++ {
-		header, err := s.getHeaderByNumberRetryable(big.NewInt(i))
-		if err != nil {
-			s.logger.Error(
-				"Failed to get header by number after max attempts",
-				zap.String("blockchainID", s.blockchainID.String()),
-				zap.Error(err),
-			)
-			return err
+	s.logger.Info(
+		"Processing block range",
+		zap.Uint64("fromBlockHeight", fromBlock.Uint64()),
+		zap.Uint64("toBlockHeight", toBlock.Uint64()),
+		zap.String("blockchainID", s.blockchainID.String()),
+	)
+	logs, err := s.getFilterLogsByBlockRangeRetryable(fromBlock, toBlock)
+	if err != nil {
+		s.logger.Error(
+			"Failed to get header by number after max attempts",
+			zap.String("blockchainID", s.blockchainID.String()),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	blocksWithICMMessages, err := relayerTypes.LogsToBlocks(logs)
+	if err != nil {
+		s.logger.Error("Failed to convert logs to blocks", zap.Error(err))
+		return err
+	}
+	for i := fromBlock.Uint64(); i <= toBlock.Uint64(); i++ {
+		if block, ok := blocksWithICMMessages[i]; ok {
+			s.icmBlocks <- block
+		} else {
+			// Blocks with no ICM messages also need to be explicitly processed.
+			s.icmBlocks <- &relayerTypes.WarpBlockInfo{
+				BlockNumber: i,
+				Messages:    []*relayerTypes.WarpMessageInfo{},
+			}
 		}
-		s.headers <- header
 	}
 	return nil
 }
 
-func (s *subscriber) getHeaderByNumberRetryable(headerNumber *big.Int) (*types.Header, error) {
+func (s *subscriber) getFilterLogsByBlockRangeRetryable(fromBlock, toBlock *big.Int) ([]types.Log, error) {
 	var (
-		err    error
-		header *types.Header
+		err  error
+		logs []types.Log
 	)
 	operation := func() (err error) {
 		cctx, cancel := context.WithTimeout(context.Background(), utils.DefaultRPCTimeout)
 		defer cancel()
-		header, err = s.rpcClient.HeaderByNumber(cctx, headerNumber)
+		logs, err = s.rpcClient.FilterLogs(cctx, interfaces.FilterQuery{
+			Topics:    [][]common.Hash{{relayerTypes.WarpPrecompileLogFilter}},
+			Addresses: []common.Address{warp.ContractAddress},
+			FromBlock: fromBlock,
+			ToBlock:   toBlock,
+		})
 		return err
 	}
-	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout, "get header by number")
+	err = utils.WithRetriesTimeout(s.logger, operation, utils.DefaultRPCTimeout, "get filter logs by block range")
 	if err != nil {
 		s.logger.Error(
-			"Failed to get header by number",
+			"Failed to get filter logs by block range",
 			zap.String("blockchainID", s.blockchainID.String()),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, relayerTypes.ErrFailedToProcessLogs
 	}
-	return header, nil
+	return logs, nil
 }
 
 // Loops forever iff maxResubscribeAttempts == 0
@@ -182,15 +218,37 @@ func (s *subscriber) subscribe(retryTimeout time.Duration) error {
 		return err
 	}
 	s.sub = sub
+
 	return nil
 }
 
-func (s *subscriber) Headers() <-chan *types.Header {
-	return s.headers
+// blocksInfoFromHeaders listens to the header channel and converts the headers to [relayerTypes.WarpBlockInfo]
+// and writes them to the blocks channel consumed by the listener
+func (s *subscriber) blocksInfoFromHeaders() {
+	for header := range s.headers {
+		block, err := relayerTypes.NewWarpBlockInfo(s.logger, header, s.rpcClient)
+		if err != nil {
+			s.logger.Error("Failed to create Warp block info", zap.Error(err))
+			s.errChan <- err
+			return
+		}
+		s.icmBlocks <- block
+	}
 }
 
-func (s *subscriber) Err() <-chan error {
+func (s *subscriber) ICMBlocks() <-chan *relayerTypes.WarpBlockInfo {
+	return s.icmBlocks
+}
+
+// SubscribeErr returns the error channel for the underlying subscription
+func (s *subscriber) SubscribeErr() <-chan error {
 	return s.sub.Err()
+}
+
+// Err returns the error channel for miscellaneous errors not recoverable from
+// by resubscribing.
+func (s *subscriber) Err() <-chan error {
+	return s.errChan
 }
 
 func (s *subscriber) Cancel() {
