@@ -41,7 +41,7 @@ fi
 cd "$TARGET"
 
 echo "Running protobuf fmt..."
-buf format -w
+go run github.com/bufbuild/buf/cmd/buf format -w
 
 echo "Running protobuf lint check..."
 if ! go run github.com/bufbuild/buf/cmd/buf lint;  then
