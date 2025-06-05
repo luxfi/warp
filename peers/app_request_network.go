@@ -484,7 +484,10 @@ func (n *appRequestNetwork) NumConnectedPeers() int {
 func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 	n.handler.RegisterAppRequest(requestID)
 }
-func (n *appRequestNetwork) RegisterRequestID(requestID uint32, requestedNode set.Set[ids.NodeID]) chan message.InboundMessage {
+func (n *appRequestNetwork) RegisterRequestID(
+	requestID uint32,
+	requestedNode set.Set[ids.NodeID],
+) chan message.InboundMessage {
 	return n.handler.RegisterRequestID(requestID, requestedNode)
 }
 func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
