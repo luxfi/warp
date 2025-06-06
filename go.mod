@@ -9,7 +9,7 @@ require (
 	github.com/ava-labs/subnet-evm v0.7.3
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
-	github.com/aws/aws-sdk-go-v2/service/kms v1.38.3
+	github.com/aws/aws-sdk-go-v2/service/kms v1.39.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/ethereum/go-ethereum v1.13.14
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -26,7 +26,7 @@ require (
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.5.2
 	go.uber.org/zap v1.27.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 )
