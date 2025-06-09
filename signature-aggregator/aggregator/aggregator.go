@@ -330,31 +330,32 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	// Construct the AppRequest
-	requestID := s.currentRequestID.Add(1)
-	outMsg, err := s.messageCreator.AppRequest(
-		unsignedMessage.SourceChainID,
-		requestID,
-		utils.DefaultAppRequestTimeout,
-		reqBytes,
-	)
-	if err != nil {
-		msg := "Failed to create app request message"
-		log.Error(
-			msg,
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("%s: %w", msg, err)
-	}
-
 	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
+		// Construct the AppRequest
+		requestID := s.currentRequestID.Add(1)
+		outMsg, err := s.messageCreator.AppRequest(
+			unsignedMessage.SourceChainID,
+			requestID,
+			utils.DefaultAppRequestTimeout,
+			reqBytes,
+		)
+		if err != nil {
+			msg := "Failed to create app request message"
+			log.Error(
+				msg,
+				zap.Error(err),
+			)
+			return fmt.Errorf("%s: %w", msg, err)
+		}
+
 		responsesExpected := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
 		log.Debug(
 			"Aggregator collecting signatures from peers.",
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("signingSubnetID", signingSubnet.String()),
+			zap.Int("requestID", int(requestID)),
 			zap.Int("validatorSetSize", len(connectedValidators.ValidatorSet.Validators)),
 			zap.Int("signatureMapSize", len(signatureMap)),
 			zap.Int("responsesExpected", responsesExpected),
