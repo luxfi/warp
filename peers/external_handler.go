@@ -229,6 +229,7 @@ func (h *RelayerExternalHandler) registerAppResponse(inboundMessage message.Inbo
 		close(h.responseChans[requestID])
 		delete(h.responseChans, requestID)
 		delete(h.responsesCount, requestID)
+		delete(h.requestedNodes, requestID)
 	} else {
 		h.responsesCount[requestID] = expectedResponses{
 			expected: responses.expected,
