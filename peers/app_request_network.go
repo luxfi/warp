@@ -486,9 +486,9 @@ func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 }
 func (n *appRequestNetwork) RegisterRequestID(
 	requestID uint32,
-	requestedNode set.Set[ids.NodeID],
+	requestedNodes set.Set[ids.NodeID],
 ) chan message.InboundMessage {
-	return n.handler.RegisterRequestID(requestID, requestedNode)
+	return n.handler.RegisterRequestID(requestID, requestedNodes)
 }
 func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	return n.validatorClient.GetSubnetID(ctx, blockchainID)
