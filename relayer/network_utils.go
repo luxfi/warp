@@ -65,6 +65,11 @@ func checkSufficientConnectedStake(
 	for _, destination := range sourceBlockchain.SupportedDestinations {
 		destinationBlockchainID := destination.GetBlockchainID()
 		warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
+		logger.Debug("Fetched warp config for destination",
+			zap.Stringer("destinationBlockchainID", destinationBlockchainID),
+			zap.Any("warpConfig", warpConfig),
+			zap.Error(err),
+		)
 		if err != nil {
 			logger.Error(
 				"Failed to get warp config from chain config",
@@ -101,6 +106,22 @@ func checkSufficientConnectedStake(
 			)
 			return nil
 		}
+
+		// Log details of each connected validator (nodeID and weight).
+		// This is useful for troubleshooting startup issues when the relayer fails to connect to sufficient stake.
+		if logger.Enabled(logging.Debug) {
+			for _, vdr := range connectedValidators.ValidatorSet.Validators {
+				for _, nodeID := range vdr.NodeIDs {
+					logger.Debug(
+						"Connected validator details",
+						zap.Stringer("subnetID", subnetID),
+						zap.String("nodeID", nodeID.String()),
+						zap.Uint64("weight", vdr.Weight),
+					)
+				}
+			}
+		}
+
 		logger.Warn(
 			"Failed to connect to a threshold of stake, retrying...",
 			zap.Stringer("subnetID", subnetID),
