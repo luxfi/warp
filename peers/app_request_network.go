@@ -495,7 +495,8 @@ func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID
 func (n *appRequestNetwork) NumConnectedPeersForSubnet(subnetID ids.ID) int {
 	connectedValidators, err := n.GetConnectedCanonicalValidators(subnetID, false)
 	if err != nil {
-		n.logger.Debug("Failed to get connected canonical validators for subnet", zap.Stringer("subnetID", subnetID), zap.Error(err))
+		n.logger.Debug("Failed to get connected canonical validators for subnet",
+			zap.Stringer("subnetID", subnetID), zap.Error(err))
 		return 0
 	}
 	return connectedValidators.ConnectedNodes.Len()
