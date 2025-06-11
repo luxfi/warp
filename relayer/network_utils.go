@@ -42,6 +42,10 @@ func InitializeConnectionsAndCheckStake(
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		eg.Go(func() error {
+			logger.Info("Checking sufficient stake for source blockchain",
+				zap.Stringer("subnetID", sourceBlockchain.GetSubnetID()),
+				zap.String("blockchainID", sourceBlockchain.GetBlockchainID().String()),
+			)
 			return checkSufficientConnectedStake(ctx, logger, network, cfg, sourceBlockchain)
 		})
 	}
@@ -128,7 +132,7 @@ func checkSufficientConnectedStake(
 			zap.Uint64("quorumNumerator", maxQuorumNumerator),
 			zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			zap.Int("numConnectedPeers", network.NumConnectedPeers()),
+			zap.Int("numConnectedPeersForSubnet", network.NumConnectedPeersForSubnet(subnetID)),
 		)
 		return fmt.Errorf("failed to connect to sufficient stake")
 	}
