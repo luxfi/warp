@@ -84,7 +84,6 @@ type AppRequestNetwork interface {
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
 	NumConnectedPeers() int
-	NumConnectedPeersForSubnet(subnetID ids.ID) int
 }
 
 type appRequestNetwork struct {
@@ -490,16 +489,6 @@ func (n *appRequestNetwork) RegisterRequestID(requestID uint32, numExpectedRespo
 }
 func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	return n.validatorClient.GetSubnetID(ctx, blockchainID)
-}
-
-func (n *appRequestNetwork) NumConnectedPeersForSubnet(subnetID ids.ID) int {
-	connectedValidators, err := n.GetConnectedCanonicalValidators(subnetID, false)
-	if err != nil {
-		n.logger.Debug("Failed to get connected canonical validators for subnet",
-			zap.Stringer("subnetID", subnetID), zap.Error(err))
-		return 0
-	}
-	return connectedValidators.ConnectedNodes.Len()
 }
 
 //
