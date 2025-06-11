@@ -34,6 +34,10 @@ var (
 	messageCreator message.Creator
 )
 
+const (
+	maxAppRequestRetries uint32 = 6 // Used to calculate expected RequestID values
+)
+
 func instantiateAggregator(t *testing.T) (
 	*SignatureAggregator,
 	*mocks.MockAppRequestNetwork,
@@ -257,21 +261,25 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 	)
 
 	appRequests := makeAppRequests(chainID, requestID, connectedValidators)
-	for _, appRequest := range appRequests {
-		mockNetwork.EXPECT().RegisterAppRequest(appRequest).AnyTimes()
-	}
-
 	var nodeIDs set.Set[ids.NodeID]
 	for _, appRequest := range appRequests {
 		nodeIDs.Add(appRequest.NodeID)
+		// Expect at most one call to RegisterAppRequest per node per retry for up to [maxAppRequestRetries] retries
+		for i := uint32(0); i < maxAppRequestRetries; i++ {
+			appRequestCopy := appRequest
+			appRequestCopy.RequestID = appRequest.RequestID + i
+			mockNetwork.EXPECT().RegisterAppRequest(appRequestCopy).MaxTimes(1)
+		}
 	}
 
-	mockNetwork.EXPECT().RegisterRequestID(
-		requestID,
-		nodeIDs,
-	).Return(
-		make(chan message.InboundMessage, len(appRequests)),
-	).AnyTimes()
+	for i := uint32(0); i < maxAppRequestRetries; i++ {
+		mockNetwork.EXPECT().RegisterRequestID(
+			requestID+i,
+			nodeIDs,
+		).Return(
+			make(chan message.InboundMessage, len(appRequests)),
+		).MaxTimes(1)
+	}
 
 	mockNetwork.EXPECT().Send(
 		gomock.Any(),
