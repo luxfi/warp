@@ -330,31 +330,35 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	// Construct the AppRequest
-	requestID := s.currentRequestID.Add(1)
-	outMsg, err := s.messageCreator.AppRequest(
-		unsignedMessage.SourceChainID,
-		requestID,
-		utils.DefaultAppRequestTimeout,
-		reqBytes,
-	)
-	if err != nil {
-		msg := "Failed to create app request message"
-		log.Error(
-			msg,
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("%s: %w", msg, err)
-	}
-
 	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
-		responsesExpected := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
-		log.Debug(
-			"Aggregator collecting signatures from peers.",
+		// Construct the AppRequest
+		requestID := s.currentRequestID.Add(1)
+		outMsg, err := s.messageCreator.AppRequest(
+			unsignedMessage.SourceChainID,
+			requestID,
+			utils.DefaultAppRequestTimeout,
+			reqBytes,
+		)
+		if err != nil {
+			msg := "Failed to create app request message"
+			log.Error(
+				msg,
+				zap.Error(err),
+			)
+			return fmt.Errorf("%s: %w", msg, err)
+		}
+
+		requestLogger := log.With(
+			zap.Int("requestID", int(requestID)),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("signingSubnetID", signingSubnet.String()),
+		)
+
+		responsesExpected := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
+		requestLogger.Debug(
+			"Aggregator collecting signatures from peers.",
 			zap.Int("validatorSetSize", len(connectedValidators.ValidatorSet.Validators)),
 			zap.Int("signatureMapSize", len(signatureMap)),
 			zap.Int("responsesExpected", responsesExpected),
@@ -371,10 +375,9 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			for _, nodeID := range vdr.NodeIDs {
 				if connectedValidators.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
 					vdrSet.Add(nodeID)
-					log.Debug(
+					requestLogger.Debug(
 						"Added node ID to query.",
 						zap.String("nodeID", nodeID.String()),
-						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
 					// Register a timeout response for each queried node
 					reqID := ids.RequestID{
@@ -391,12 +394,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 		sentTo := s.network.Send(outMsg, vdrSet, sourceSubnet, subnets.NoOpAllower)
 		s.metrics.AppRequestCount.Inc()
-		log.Debug(
+		requestLogger.Debug(
 			"Sent signature request to network",
 			zap.Any("sentTo", sentTo),
-			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.String("sourceSubnetID", sourceSubnet.String()),
-			zap.String("signingSubnetID", signingSubnet.String()),
 		)
 
 		failedSendNodes := make([]ids.NodeID, 0, responsesExpected)
@@ -408,7 +409,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			}
 		}
 		if len(failedSendNodes) > 0 {
-			log.Warn(
+			requestLogger.Warn(
 				"Failed to make async request to some nodes",
 				zap.Int("numSent", responsesExpected),
 				zap.Int("numFailures", len(failedSendNodes)),
@@ -419,10 +420,9 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		responseCount := 0
 		if responsesExpected > 0 {
 			for response := range responseChan {
-				log.Debug(
+				requestLogger.Debug(
 					"Processing response from node",
 					zap.String("nodeID", response.NodeID().String()),
-					zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 				)
 				var relevant bool
 				signedMsg, relevant, err = s.handleResponse(
@@ -450,11 +450,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				}
 				// If we have sufficient signatures, return here.
 				if signedMsg != nil {
-					log.Info(
+					requestLogger.Info(
 						"Created signed message.",
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
 						zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-						zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 					)
 					return nil
 				}
