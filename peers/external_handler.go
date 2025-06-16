@@ -5,7 +5,6 @@ package peers
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -125,6 +124,8 @@ func (h *RelayerExternalHandler) Disconnected(nodeID ids.NodeID) {
 // RegisterRequestID registers an AppRequest by requestID, and marks the number of
 // expected responses, equivalent to the number of nodes requested. requestID should
 // be globally unique for the lifetime of the AppRequest. This is upper bounded by the timeout duration.
+// NOTE: This function must be called at most once per requestID. Multiple calls with the same requestID
+// will result in a fatal log and process termination.
 func (h *RelayerExternalHandler) RegisterRequestID(
 	requestID uint32,
 	requestedNodes set.Set[ids.NodeID],
@@ -136,9 +137,11 @@ func (h *RelayerExternalHandler) RegisterRequestID(
 	h.log.Debug("Registering request ID", zap.Uint32("requestID", requestID))
 
 	if _, exist := h.responseChans[requestID]; exist {
-		panic(
-			fmt.Sprintf("RegisterRequestID called more than once for requestID %d", requestID),
+		h.log.Fatal(
+			"RegisterRequestID called more than once for the same requestID",
+			zap.Uint32("requestID", requestID),
 		)
+		return nil
 	}
 
 	setWithNode := set.NewSet[ids.NodeID](requestedNodes.Len())
