@@ -103,10 +103,10 @@ func checkSufficientConnectedStake(
 		) {
 			// Log details of each connected validator (nodeID and weight).
 			// This is useful for troubleshooting startup issues when the relayer fails to connect to sufficient stake.
-			if logger.Enabled(logging.Debug) {
+			if logger.Enabled(logging.Verbo) {
 				for _, vdr := range connectedValidators.ValidatorSet.Validators {
 					for _, nodeID := range vdr.NodeIDs {
-						logger.Debug(
+						logger.Verbo(
 							"Connected validator details",
 							zap.Stringer("subnetID", subnetID),
 							zap.String("nodeID", nodeID.String()),
