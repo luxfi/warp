@@ -5,6 +5,7 @@ package peers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -134,10 +135,14 @@ func (h *RelayerExternalHandler) RegisterRequestID(
 
 	h.log.Debug("Registering request ID", zap.Uint32("requestID", requestID))
 
-	if _, ok := h.requestedNodes[requestID]; !ok {
-		setWithNode := set.NewSet[ids.NodeID](requestedNodes.Len())
-		h.requestedNodes[requestID] = &setWithNode
+	if _, exist := h.responseChans[requestID]; exist {
+		panic(
+			fmt.Sprintf("RegisterRequestID called more than once for requestID %d", requestID),
+		)
 	}
+
+	setWithNode := set.NewSet[ids.NodeID](requestedNodes.Len())
+	h.requestedNodes[requestID] = &setWithNode
 
 	// Add the requested nodes to the map
 	for nodeID := range requestedNodes {
