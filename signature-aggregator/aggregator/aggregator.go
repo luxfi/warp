@@ -147,11 +147,26 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 			connectedValidators.ValidatorSet.TotalWeight,
 			quorumPercentage,
 		) {
+			// Log details of each connected validator for troubleshooting
+			if log.Enabled(logging.Debug) {
+				for _, vdr := range connectedValidators.ValidatorSet.Validators {
+					for _, nodeID := range vdr.NodeIDs {
+						log.Debug(
+							"Connected validator details",
+							zap.Stringer("signingSubnet", signingSubnet),
+							zap.String("nodeID", nodeID.String()),
+							zap.Uint64("weight", vdr.Weight),
+						)
+					}
+				}
+			}
 			log.Warn(
 				"Failed to connect to a threshold of stake",
+				zap.Stringer("signingSubnet", signingSubnet),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
 				zap.Uint64("quorumPercentage", quorumPercentage),
+				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 			)
 			s.metrics.FailuresToConnectToSufficientStake.Inc()
 			return errNotEnoughConnectedStake
