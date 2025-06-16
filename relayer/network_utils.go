@@ -95,46 +95,47 @@ func checkSufficientConnectedStake(
 			)
 			return err
 		}
-		if utils.CheckStakeWeightExceedsThreshold(
+
+		if !utils.CheckStakeWeightExceedsThreshold(
 			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
 			connectedValidators.ValidatorSet.TotalWeight,
 			maxQuorumNumerator,
 		) {
-			logger.Info(
-				"Connected to sufficient stake",
+			// Log details of each connected validator (nodeID and weight).
+			// This is useful for troubleshooting startup issues when the relayer fails to connect to sufficient stake.
+			if logger.Enabled(logging.Debug) {
+				for _, vdr := range connectedValidators.ValidatorSet.Validators {
+					for _, nodeID := range vdr.NodeIDs {
+						logger.Debug(
+							"Connected validator details",
+							zap.Stringer("subnetID", subnetID),
+							zap.String("nodeID", nodeID.String()),
+							zap.Uint64("weight", vdr.Weight),
+						)
+					}
+				}
+			}
+
+			logger.Warn(
+				"Failed to connect to a threshold of stake, retrying...",
 				zap.Stringer("subnetID", subnetID),
 				zap.Uint64("quorumNumerator", maxQuorumNumerator),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-				zap.Int("numConnectedPeers", network.NumConnectedPeers()),
+				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 			)
-			return nil
+			return fmt.Errorf("failed to connect to sufficient stake")
 		}
 
-		// Log details of each connected validator (nodeID and weight).
-		// This is useful for troubleshooting startup issues when the relayer fails to connect to sufficient stake.
-		if logger.Enabled(logging.Debug) {
-			for _, vdr := range connectedValidators.ValidatorSet.Validators {
-				for _, nodeID := range vdr.NodeIDs {
-					logger.Debug(
-						"Connected validator details",
-						zap.Stringer("subnetID", subnetID),
-						zap.String("nodeID", nodeID.String()),
-						zap.Uint64("weight", vdr.Weight),
-					)
-				}
-			}
-		}
-
-		logger.Warn(
-			"Failed to connect to a threshold of stake, retrying...",
+		logger.Info(
+			"Connected to sufficient stake",
 			zap.Stringer("subnetID", subnetID),
 			zap.Uint64("quorumNumerator", maxQuorumNumerator),
 			zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			zap.Int("numConnectedPeersForSubnet", connectedValidators.ConnectedNodes.Len()),
+			zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 		)
-		return fmt.Errorf("failed to connect to sufficient stake")
+		return nil
 	}
 
 	ticker := time.Tick(retryPeriodSeconds * time.Second)
