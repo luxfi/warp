@@ -390,7 +390,17 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				}
 			}
 		}
-		responseChan := s.network.RegisterRequestID(requestID, vdrSet.Len())
+		responseChan := s.network.RegisterRequestID(requestID, vdrSet)
+		if responseChan == nil {
+			msg := "Failed to register request ID"
+			log.Error(
+				msg,
+				zap.Int("requestID", int(requestID)),
+				zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
+				zap.String("signingSubnetID", signingSubnet.String()),
+			)
+			return fmt.Errorf("%s", msg)
+		}
 
 		sentTo := s.network.Send(outMsg, vdrSet, sourceSubnet, subnets.NoOpAllower)
 		s.metrics.AppRequestCount.Inc()
