@@ -83,7 +83,6 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
-	NumConnectedPeers() int
 }
 
 type appRequestNetwork struct {
@@ -475,10 +474,6 @@ func (n *appRequestNetwork) Send(
 	allower subnets.Allower,
 ) set.Set[ids.NodeID] {
 	return n.network.Send(msg, avagoCommon.SendConfig{NodeIDs: nodeIDs}, subnetID, allower)
-}
-
-func (n *appRequestNetwork) NumConnectedPeers() int {
-	return len(n.network.PeerInfo(nil))
 }
 
 func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
