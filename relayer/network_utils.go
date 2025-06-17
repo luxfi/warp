@@ -96,26 +96,23 @@ func checkSufficientConnectedStake(
 			return err
 		}
 
+		// Log details of each connected validator (nodeID and weight).
+		for _, vdr := range connectedValidators.ValidatorSet.Validators {
+			for _, nodeID := range vdr.NodeIDs {
+				logger.Debug(
+					"Connected validator details",
+					zap.Stringer("subnetID", subnetID),
+					zap.String("nodeID", nodeID.String()),
+					zap.Uint64("weight", vdr.Weight),
+				)
+			}
+		}
+
 		if !utils.CheckStakeWeightExceedsThreshold(
 			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
 			connectedValidators.ValidatorSet.TotalWeight,
 			maxQuorumNumerator,
 		) {
-			// Log details of each connected validator (nodeID and weight).
-			// This is useful for troubleshooting startup issues when the relayer fails to connect to sufficient stake.
-			if logger.Enabled(logging.Verbo) {
-				for _, vdr := range connectedValidators.ValidatorSet.Validators {
-					for _, nodeID := range vdr.NodeIDs {
-						logger.Verbo(
-							"Connected validator details",
-							zap.Stringer("subnetID", subnetID),
-							zap.String("nodeID", nodeID.String()),
-							zap.Uint64("weight", vdr.Weight),
-						)
-					}
-				}
-			}
-
 			logger.Warn(
 				"Failed to connect to a threshold of stake, retrying...",
 				zap.Stringer("subnetID", subnetID),
