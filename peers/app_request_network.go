@@ -73,7 +73,7 @@ type AppRequestNetwork interface {
 	RegisterAppRequest(requestID ids.RequestID)
 	RegisterRequestID(
 		requestID uint32,
-		numExpectedResponse int,
+		requestedNodes set.Set[ids.NodeID],
 	) chan message.InboundMessage
 	Send(
 		msg message.OutboundMessage,
@@ -479,8 +479,11 @@ func (n *appRequestNetwork) Send(
 func (n *appRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 	n.handler.RegisterAppRequest(requestID)
 }
-func (n *appRequestNetwork) RegisterRequestID(requestID uint32, numExpectedResponse int) chan message.InboundMessage {
-	return n.handler.RegisterRequestID(requestID, numExpectedResponse)
+func (n *appRequestNetwork) RegisterRequestID(
+	requestID uint32,
+	requestedNodes set.Set[ids.NodeID],
+) chan message.InboundMessage {
+	return n.handler.RegisterRequestID(requestID, requestedNodes)
 }
 func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	return n.validatorClient.GetSubnetID(ctx, blockchainID)
