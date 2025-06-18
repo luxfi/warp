@@ -75,20 +75,6 @@ func (mr *MockAppRequestNetworkMockRecorder) GetSubnetID(ctx, blockchainID any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnetID", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetSubnetID), ctx, blockchainID)
 }
 
-// NumConnectedPeers mocks base method.
-func (m *MockAppRequestNetwork) NumConnectedPeers() int {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NumConnectedPeers")
-	ret0, _ := ret[0].(int)
-	return ret0
-}
-
-// NumConnectedPeers indicates an expected call of NumConnectedPeers.
-func (mr *MockAppRequestNetworkMockRecorder) NumConnectedPeers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumConnectedPeers", reflect.TypeOf((*MockAppRequestNetwork)(nil).NumConnectedPeers))
-}
-
 // RegisterAppRequest mocks base method.
 func (m *MockAppRequestNetwork) RegisterAppRequest(requestID ids.RequestID) {
 	m.ctrl.T.Helper()
