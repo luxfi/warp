@@ -513,7 +513,8 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	}
 
 	// Populate signature map from cache
-	signatureMap, accumulatedSignatureWeight := s.populateSignatureMapFromCache(unsignedMessage, connectedValidators, excludedValidators)
+	signatureMap, accumulatedSignatureWeight := s.populateSignatureMapFromCache(
+		unsignedMessage, connectedValidators, excludedValidators)
 
 	// Only return early if we have enough signatures to meet the quorum percentage
 	// plus the buffer percentage.
