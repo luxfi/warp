@@ -42,6 +42,10 @@ func InitializeConnectionsAndCheckStake(
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		eg.Go(func() error {
+			logger.Info("Checking sufficient stake for source blockchain",
+				zap.Stringer("subnetID", sourceBlockchain.GetSubnetID()),
+				zap.String("blockchainID", sourceBlockchain.GetBlockchainID().String()),
+			)
 			return checkSufficientConnectedStake(ctx, logger, network, cfg, sourceBlockchain)
 		})
 	}
@@ -65,6 +69,11 @@ func checkSufficientConnectedStake(
 	for _, destination := range sourceBlockchain.SupportedDestinations {
 		destinationBlockchainID := destination.GetBlockchainID()
 		warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
+		logger.Debug("Fetched warp config for destination",
+			zap.Stringer("destinationBlockchainID", destinationBlockchainID),
+			zap.Any("warpConfig", warpConfig),
+			zap.Error(err),
+		)
 		if err != nil {
 			logger.Error(
 				"Failed to get warp config from chain config",
@@ -86,30 +95,44 @@ func checkSufficientConnectedStake(
 			)
 			return err
 		}
-		if utils.CheckStakeWeightExceedsThreshold(
+
+		// Log details of each connected validator (nodeID and weight).
+		for _, vdr := range connectedValidators.ValidatorSet.Validators {
+			for _, nodeID := range vdr.NodeIDs {
+				logger.Debug(
+					"Connected validator details",
+					zap.Stringer("subnetID", subnetID),
+					zap.String("nodeID", nodeID.String()),
+					zap.Uint64("weight", vdr.Weight),
+				)
+			}
+		}
+
+		if !utils.CheckStakeWeightExceedsThreshold(
 			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
 			connectedValidators.ValidatorSet.TotalWeight,
 			maxQuorumNumerator,
 		) {
-			logger.Info(
-				"Connected to sufficient stake",
+			logger.Warn(
+				"Failed to connect to a threshold of stake, retrying...",
 				zap.Stringer("subnetID", subnetID),
 				zap.Uint64("quorumNumerator", maxQuorumNumerator),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-				zap.Int("numConnectedPeers", network.NumConnectedPeers()),
+				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 			)
-			return nil
+			return fmt.Errorf("failed to connect to sufficient stake")
 		}
-		logger.Warn(
-			"Failed to connect to a threshold of stake, retrying...",
+
+		logger.Info(
+			"Connected to sufficient stake",
 			zap.Stringer("subnetID", subnetID),
 			zap.Uint64("quorumNumerator", maxQuorumNumerator),
 			zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			zap.Int("numConnectedPeers", network.NumConnectedPeers()),
+			zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 		)
-		return fmt.Errorf("failed to connect to sufficient stake")
+		return nil
 	}
 
 	ticker := time.Tick(retryPeriodSeconds * time.Second)
