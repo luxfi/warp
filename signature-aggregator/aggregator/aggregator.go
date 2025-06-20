@@ -280,9 +280,9 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 	requiredQuorumPercentage, quorumPercentageBuffer uint64,
 ) (*avalancheWarp.Message, error) {
 	var signedMsg *avalancheWarp.Message
-	var opErr error
-
+	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
+		// Construct the AppRequest
 		requestID := s.currentRequestID.Add(1)
 		outMsg, err := s.messageCreator.AppRequest(
 			unsignedMessage.SourceChainID,
@@ -291,8 +291,12 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			reqBytes,
 		)
 		if err != nil {
-			log.Error("Failed to create app request message", zap.Error(err))
-			return fmt.Errorf("failed to create app request message: %w", err)
+			msg := "Failed to create app request message"
+			log.Error(
+				msg,
+				zap.Error(err),
+			)
+			return fmt.Errorf("%s: %w", msg, err)
 		}
 
 		requestLogger := log.With(
@@ -311,9 +315,12 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 
 		vdrSet := set.NewSet[ids.NodeID](len(connectedValidators.ValidatorSet.Validators))
 		for i, vdr := range connectedValidators.ValidatorSet.Validators {
+			// If we already have the signature for this validator, do not query any of the composite nodes again
 			if _, ok := signatureMap[i]; ok {
 				continue
 			}
+			// Add connected nodes to the request. We still query excludedValidators so that we may cache
+			// their signatures for future requests.
 			for _, nodeID := range vdr.NodeIDs {
 				if connectedValidators.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
 					vdrSet.Add(nodeID)
@@ -321,6 +328,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 						"Added node ID to query.",
 						zap.String("nodeID", nodeID.String()),
 					)
+					// Register a timeout response for each queried node
 					reqID := ids.RequestID{
 						NodeID:    nodeID,
 						ChainID:   unsignedMessage.SourceChainID,
@@ -333,12 +341,14 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 		}
 		responseChan := s.network.RegisterRequestID(requestID, vdrSet)
 		if responseChan == nil {
-			log.Error("Failed to register request ID",
+			msg := "Failed to register request ID"
+			log.Error(
+				msg,
 				zap.Int("requestID", int(requestID)),
 				zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 				zap.String("signingSubnetID", signingSubnet.String()),
 			)
-			return fmt.Errorf("failed to register request ID")
+			return fmt.Errorf("%s", msg)
 		}
 
 		sentTo := s.network.Send(outMsg, vdrSet, sourceSubnet, subnets.NoOpAllower)
@@ -367,7 +377,6 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 		}
 
 		responseCount := 0
-		var handleErr error
 		if responsesExpected > 0 {
 			for response := range responseChan {
 				requestLogger.Debug(
@@ -375,7 +384,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 					zap.String("nodeID", response.NodeID().String()),
 				)
 				var relevant bool
-				signedMsg, relevant, handleErr = s.handleResponse(
+				signedMsg, relevant, err = s.handleResponse(
 					log,
 					response,
 					sentTo,
@@ -387,12 +396,18 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 					accumulatedSignatureWeight,
 					requiredQuorumPercentage+quorumPercentageBuffer,
 				)
-				if handleErr != nil {
-					return backoff.Permanent(fmt.Errorf("failed to handle response: %w", handleErr))
+				if err != nil {
+					// don't increase node failures metric here, because we did
+					// it in handleResponse
+					return backoff.Permanent(fmt.Errorf(
+						"failed to handle response: %w",
+						err,
+					))
 				}
 				if relevant {
 					responseCount++
 				}
+				// If we have sufficient signatures, return here.
 				if signedMsg != nil {
 					requestLogger.Info(
 						"Created signed message.",
@@ -401,12 +416,16 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 					)
 					return nil
 				}
+				// Break once we've had successful or unsuccessful responses from each requested node
 				if responseCount == responsesExpected {
 					break
 				}
 			}
 		}
 
+		// If we don't have enough signatures to represent the required quorum percentage plus the buffer
+		// percentage after all the expected responses have been received, check if we have enough signatures
+		// for just the required quorum percentage.
 		signedMsg, err = s.aggregateIfSufficientWeight(
 			log,
 			unsignedMessage,
@@ -431,14 +450,14 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 		return errNotEnoughSignatures
 	}
 
-	opErr = utils.WithRetriesTimeout(log, operation, signatureRequestTimeout, "request signatures")
-	if opErr != nil {
+	err := utils.WithRetriesTimeout(log, operation, signatureRequestTimeout, "request signatures")
+	if err != nil {
 		log.Warn(
 			"Failed to collect a threshold of signatures",
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			zap.Error(opErr),
+			zap.Error(err),
 		)
 		return nil, errNotEnoughSignatures
 	}
