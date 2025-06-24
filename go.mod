@@ -3,7 +3,7 @@ module github.com/ava-labs/icm-services
 go 1.23.10
 
 require (
-	github.com/alexliesenfeld/health v0.8.0
+	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.13.1-0.20250328202636-14dea8025061 // branch icm-services-patch-v1.13.0
 	github.com/ava-labs/icm-contracts v1.0.9-0.20250307173936-f6a36b902f4f
 	github.com/ava-labs/subnet-evm v0.7.3
@@ -20,7 +20,7 @@ require (
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
-	github.com/redis/go-redis/v9 v9.10.0
+	github.com/redis/go-redis/v9 v9.11.0
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
@@ -148,7 +148,7 @@ require (
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/ghostiam/protogetter v0.3.9 // indirect
-	github.com/go-chi/chi/v5 v5.2.1 // indirect
+	github.com/go-chi/chi/v5 v5.2.2 // indirect
 	github.com/go-cmd/cmd v1.4.1 // indirect
 	github.com/go-critic/go-critic v0.12.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
