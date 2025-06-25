@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/icm-contracts/tests/network"
 	teleporterTestUtils "github.com/ava-labs/icm-contracts/tests/utils"
 	testUtils "github.com/ava-labs/icm-services/tests/utils"
 	"github.com/ava-labs/icm-services/utils"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -85,6 +85,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(err).Should(BeNil())
 	networkStartCtx, networkStartCancel := context.WithTimeout(ctx, 240*2*time.Second)
 	defer networkStartCancel()
+	e2eFlags := e2e.RegisterFlags()
 	localNetworkInstance = network.NewLocalNetwork(
 		networkStartCtx,
 		"icm-off-chain-services-e2e-test",
@@ -111,6 +112,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		},
 		4,
 		0,
+		e2eFlags,
 	)
 	teleporterInfo = teleporterTestUtils.NewTeleporterTestInfo(localNetworkInstance.GetAllL1Infos())
 
@@ -147,8 +149,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(60*len(localNetworkInstance.Nodes))*time.Second)
 	defer cancel()
 
-	logger := logging.NewLogger("tmpnet")
-	err = localNetworkInstance.Restart(ctx, logger)
+	err = localNetworkInstance.Restart(ctx)
 	Expect(err).Should(BeNil())
 
 	decider = exec.CommandContext(ctx, "./tests/cmd/decider/decider")

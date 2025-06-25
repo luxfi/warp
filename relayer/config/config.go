@@ -219,11 +219,11 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 		return warpConfig, nil
 	}
 	// If we didn't find the Warp config in the upgrade precompile list, check the genesis config
-	warpConfig, ok := chainConfig.GenesisPrecompiles[warpConfigKey].(*warp.Config)
-	if !ok {
-		return nil, fmt.Errorf("no Warp config found in chain config")
-	}
-	return warpConfig, nil
+	// warpConfig, ok := chainConfig.GenesisPrecompiles[warpConfigKey].(*warp.Config)
+	// if !ok {
+	// 	return nil, fmt.Errorf("no Warp config found in chain config")
+	// }
+	return nil, fmt.Errorf("no Warp config found in chain config, please ensure the Warp precompile is registered and the Warp config is set in the genesis file")
 }
 
 // Initializes Warp configurations (quorum and self-signing settings) for each destination subnet
