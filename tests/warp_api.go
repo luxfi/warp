@@ -18,7 +18,7 @@ import (
 	"github.com/ava-labs/icm-contracts/tests/utils"
 	testUtils "github.com/ava-labs/icm-services/tests/utils"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/log"
 	. "github.com/onsi/gomega"
 )
 

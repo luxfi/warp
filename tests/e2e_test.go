@@ -22,7 +22,7 @@ import (
 	testUtils "github.com/ava-labs/icm-services/tests/utils"
 	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/log"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -86,6 +86,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	networkStartCtx, networkStartCancel := context.WithTimeout(ctx, 240*2*time.Second)
 	defer networkStartCancel()
 	e2eFlags := e2e.RegisterFlags()
+	fmt.Printf("Using network directory: %s\n", e2eFlags.RootNetworkDir())
 	localNetworkInstance = network.NewLocalNetwork(
 		networkStartCtx,
 		"icm-off-chain-services-e2e-test",
