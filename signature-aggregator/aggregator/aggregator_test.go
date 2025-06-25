@@ -51,7 +51,6 @@ func instantiateAggregator(t *testing.T) (
 	if messageCreator == nil {
 		var err error
 		messageCreator, err = message.NewCreator(
-			logging.NoLog{},
 			prometheus.DefaultRegisterer,
 			constants.DefaultNetworkCompressionType,
 			constants.DefaultNetworkMaximumInboundTimeout,
