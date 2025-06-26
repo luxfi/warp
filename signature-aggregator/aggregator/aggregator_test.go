@@ -35,7 +35,7 @@ var (
 )
 
 const (
-	maxAppRequestRetries uint32 = 6 // Used to calculate expected RequestID values
+	maxAppRequestRetries uint32 = 8 // Used to calculate expected RequestID values
 )
 
 func instantiateAggregator(t *testing.T) (
