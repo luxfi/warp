@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/interfaces"
+	ethereum "github.com/ava-labs/libevm"
 	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
 	teleporterUtils "github.com/ava-labs/icm-contracts/utils/teleporter-utils"
 	"github.com/ava-labs/icm-services/relayer/config"
@@ -240,7 +240,7 @@ func TestShouldSendMessage(t *testing.T) {
 				Times(test.senderAddressesTimes)
 			mockClient.EXPECT().BlockGasLimit().Return(uint64(blockGasLimit)).AnyTimes()
 			if test.messageReceivedCall != nil {
-				messageReceivedInput := interfaces.CallMsg{
+				messageReceivedInput := ethereum.CallMsg{
 					From: bind.CallOpts{}.From,
 					To:   &messageProtocolAddress,
 					Data: test.messageReceivedCall.input,
@@ -292,7 +292,7 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 	messageReceivedCallData, err := teleportermessenger.PackMessageReceived(messageID)
 	require.NoError(t, err)
 
-	messageReceivedInput := interfaces.CallMsg{
+	messageReceivedInput := ethereum.CallMsg{
 		From: bind.CallOpts{}.From,
 		To:   &messageProtocolAddress,
 		Data: messageReceivedCallData,

@@ -272,7 +272,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 					"Skipping L1 validator with nil balance",
 					zap.String("nodeID", validator.NodeID.String()),
 				)
-				underfundedNodes.Add(validator.NodeID)
+				// underfundedNodes.Add(validator.NodeID)
 				continue
 			}
 
