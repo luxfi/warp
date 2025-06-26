@@ -46,11 +46,11 @@ SIGNATURE_AGGREGATOR_PATH=$BASEDIR/icm-services/signature-aggregator
 echo "signature-aggregator Path: ${SIGNATURE_AGGREGATOR_PATH}"
 
 cp ${BASEDIR}/subnet-evm/subnet-evm ${BASEDIR}/avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
-cp ${BASEDIR}/subnet-evm/subnet-evm $HOME/.avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
 echo "Copied ${BASEDIR}/subnet-evm/subnet-evm binary to ${BASEDIR}/avalanchego/plugins/"
 
 export AVALANCHEGO_BUILD_PATH=$BASEDIR/avalanchego
 export AVALANCHEGO_PATH=$BASEDIR/avalanchego/avalanchego
+export AVAGO_PLUGIN_DIR=$BASEDIR/avalanchego/plugins
 
 go run github.com/onsi/ginkgo/v2/ginkgo build ./tests/
 go build -v -o tests/cmd/decider/decider ./tests/cmd/decider/
