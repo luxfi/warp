@@ -44,7 +44,7 @@ type blsSignatureBuf [bls.SignatureLen]byte
 const (
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
-	signatureRequestTimeout = 5 * time.Second
+	signatureRequestTimeout = 2 * utils.DefaultAppRequestTimeout
 	// Maximum amount of time to spend waiting for a connection to a quorum of validators for
 	// a given subnetID
 	connectToValidatorsTimeout = 5 * time.Second

@@ -85,7 +85,6 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(err).Should(BeNil())
 	networkStartCtx, networkStartCancel := context.WithTimeout(ctx, 240*2*time.Second)
 	defer networkStartCancel()
-	e2eFlags := e2e.RegisterFlags()
 	localNetworkInstance = network.NewLocalNetwork(
 		networkStartCtx,
 		"icm-off-chain-services-e2e-test",
@@ -112,7 +111,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		},
 		4,
 		0,
-		e2eFlags,
+		e2e.RegisterFlags(),
 	)
 	teleporterInfo = teleporterTestUtils.NewTeleporterTestInfo(localNetworkInstance.GetAllL1Infos())
 
