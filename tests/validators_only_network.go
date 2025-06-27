@@ -146,7 +146,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		Message: "0x" + hex.EncodeToString(warpMessage.Bytes()),
 	}
 	client := http.Client{
-		Timeout: 20 * time.Second,
+		Timeout: 30 * time.Second,
 	}
 
 	var sendRequestToAPI = func(success bool) {
