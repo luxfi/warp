@@ -106,8 +106,8 @@ github.com/ava-labs/avalanchego v1.13.3-0.20250701190537-839ace23368a h1:mLzIwC2
 github.com/ava-labs/avalanchego v1.13.3-0.20250701190537-839ace23368a/go.mod h1:s7W/kim5L6hiD2PB1v/Ozy1ZZyoLQ4H6mxVO0aMnxng=
 github.com/ava-labs/coreth v0.15.2-rc.0.0.20250620163936-0058a7ec6d9d h1:nZA7nEhlf2uWM1doZz4WFiMkZVZ0iH+c3IebokIO1sk=
 github.com/ava-labs/coreth v0.15.2-rc.0.0.20250620163936-0058a7ec6d9d/go.mod h1:Mk5g2ZI9lEbxA67qikOtUrq71Yr389B34S+Ddsa51K4=
-github.com/ava-labs/icm-contracts v1.0.9-0.20250701191345-667e6df2592c h1:BmN730JzrOsTGLklaKHW/qZb7wjgL+Ha6qKqGmWc9nA=
-github.com/ava-labs/icm-contracts v1.0.9-0.20250701191345-667e6df2592c/go.mod h1:/Mjw7t0yxFhOZVI9hMivAJMGPJ1/XLkw+cgxJ4aBN9o=
+github.com/ava-labs/icm-contracts v1.0.9-0.20250701204604-b34a75d8c753 h1:b1DFRWJhzx6FTwnF2zweXZRguIpga7HKwWTzRztoQcI=
+github.com/ava-labs/icm-contracts v1.0.9-0.20250701204604-b34a75d8c753/go.mod h1:/Mjw7t0yxFhOZVI9hMivAJMGPJ1/XLkw+cgxJ4aBN9o=
 github.com/ava-labs/libevm v1.13.14-0.3.0.rc.1 h1:vBMYo+Iazw0rGTr+cwjkBdh5eadLPlv4ywI4lKye3CA=
 github.com/ava-labs/libevm v1.13.14-0.3.0.rc.1/go.mod h1:+Iol+sVQ1KyoBsHf3veyrBmHCXr3xXRWq6ZXkgVfNLU=
 github.com/ava-labs/subnet-evm v0.7.5 h1:2lEGhTLR4nirTD5031dIJUJVC1FfCSF6ihz22TbJDug=
