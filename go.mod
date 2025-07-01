@@ -4,10 +4,10 @@ go 1.23.10
 
 require (
 	github.com/alexliesenfeld/health v0.8.1
-	github.com/ava-labs/avalanchego v1.13.2-0.20250624141629-e151364ecc3a // branch icm-services-patch-v1.13.1
-	github.com/ava-labs/icm-contracts v1.0.9-0.20250617135041-230c57fe69c3
-	github.com/ava-labs/libevm v1.13.14-0.2.0.release
-	github.com/ava-labs/subnet-evm v0.7.4
+	github.com/ava-labs/avalanchego v1.13.3-0.20250701190537-839ace23368a // branch icm-services-patch-v1.13.2
+	github.com/ava-labs/icm-contracts v1.0.9-0.20250701175410-2fa24776e43d
+	github.com/ava-labs/libevm v1.13.14-0.3.0.rc.1
+	github.com/ava-labs/subnet-evm v0.7.5
 	github.com/aws/aws-sdk-go-v2 v1.36.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.41.2
@@ -34,7 +34,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
-require github.com/ava-labs/coreth v0.15.1-rc.0.0.20250530184801-28421010abae
+require github.com/ava-labs/coreth v0.15.2-rc.0.0.20250620163936-0058a7ec6d9d
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -67,7 +67,6 @@ require (
 	github.com/GaijinEntertainment/go-exhaustruct/v3 v3.3.1 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/OpenPeeDeeP/depguard/v2 v2.2.1 // indirect
 	github.com/StephenButtolph/canoto v0.15.0 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.1 // indirect
