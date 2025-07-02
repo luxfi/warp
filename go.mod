@@ -13,7 +13,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.41.1
 	github.com/bufbuild/buf v1.54.0
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/ethereum/go-ethereum v1.13.14
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/ginkgo/v2 v2.23.4
