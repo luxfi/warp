@@ -33,7 +33,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
-require github.com/ava-labs/coreth v0.15.1-rc.0.0.20250530184801-28421010abae
+require github.com/ava-labs/coreth v0.15.1-rc.0.0.20250530184801-28421010abae // indirect
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
