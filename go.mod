@@ -13,7 +13,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.41.2
 	github.com/bufbuild/buf v1.54.0
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/ethereum/go-ethereum v1.13.14
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/ginkgo/v2 v2.23.4
@@ -33,8 +32,6 @@ require (
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 )
-
-require github.com/ava-labs/coreth v0.15.2-rc.0.0.20250620163936-0058a7ec6d9d
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -78,6 +75,7 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
+	github.com/ava-labs/coreth v0.15.2-rc.0.0.20250620163936-0058a7ec6d9d // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.70 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.36 // indirect
