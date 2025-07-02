@@ -268,11 +268,11 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		underfundedNodes := set.NewSet[ids.NodeID](0)
 		for _, validator := range l1Validators {
 			if validator.Balance == nil {
+				underfundedNodes.Add(validator.NodeID)
 				log.Warn(
 					"Skipping L1 validator with nil balance",
 					zap.String("nodeID", validator.NodeID.String()),
 				)
-				// underfundedNodes.Add(validator.NodeID)
 				continue
 			}
 
