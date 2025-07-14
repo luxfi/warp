@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -212,6 +211,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
+	defer deciderConnection.Close()
 
 	messageHandlerFactories, err := createMessageHandlerFactories(
 		logger,
@@ -599,11 +599,6 @@ func createDeciderConnection(url string) (*grpc.ClientConn, error) {
 			err,
 		)
 	}
-
-	runtime.SetFinalizer(
-		connection,
-		func(c *grpc.ClientConn) { c.Close() },
-	)
 
 	return connection, nil
 }
