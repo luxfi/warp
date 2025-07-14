@@ -30,7 +30,7 @@ type CheckpointManager struct {
 
 func NewCheckpointManager(
 	logger logging.Logger,
-	database database.RelayerDatabase,
+	db database.RelayerDatabase,
 	writeSignal chan struct{},
 	relayerID database.RelayerID,
 	startingHeight uint64,
@@ -42,12 +42,28 @@ func NewCheckpointManager(
 		zap.String("relayerID", relayerID.ID.String()),
 		zap.Uint64("startingHeight", startingHeight),
 	)
+
+	committedHeight := startingHeight
+	storedHeight, err := database.GetLatestProcessedBlockHeight(db, relayerID)
+	if err != nil && !database.IsKeyNotFoundError(err) {
+		logger.Error(
+			"Failed to get latest processed block height",
+			zap.Error(err),
+			zap.String("relayerID", relayerID.ID.String()),
+		)
+		return nil
+	}
+
+	if storedHeight > committedHeight {
+		committedHeight = storedHeight
+	}
+
 	return &CheckpointManager{
 		logger:          logger,
-		database:        database,
+		database:        db,
 		writeSignal:     writeSignal,
 		relayerID:       relayerID,
-		committedHeight: startingHeight,
+		committedHeight: committedHeight,
 		lock:            &sync.RWMutex{},
 		pendingCommits:  h,
 	}
@@ -64,24 +80,13 @@ func (cm *CheckpointManager) writeToDatabase() {
 	if cm.committedHeight == 0 {
 		return
 	}
-	storedHeight, err := database.GetLatestProcessedBlockHeight(cm.database, cm.relayerID)
-	if err != nil && !database.IsKeyNotFoundError(err) {
-		cm.logger.Error(
-			"Failed to get latest processed block height",
-			zap.Error(err),
-			zap.String("relayerID", cm.relayerID.ID.String()),
-		)
-		return
-	}
-	if storedHeight >= cm.committedHeight {
-		return
-	}
+
 	cm.logger.Verbo(
 		"Writing height",
 		zap.Uint64("height", cm.committedHeight),
 		zap.String("relayerID", cm.relayerID.ID.String()),
 	)
-	err = cm.database.Put(
+	err := cm.database.Put(
 		cm.relayerID.ID,
 		database.LatestProcessedBlockKey,
 		[]byte(strconv.FormatUint(cm.committedHeight, 10)),
