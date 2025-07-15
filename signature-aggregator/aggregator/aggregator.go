@@ -291,9 +291,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			exclude := true
 			for _, nodeID := range validator.NodeIDs {
-				// This check will pass if either
-				// 1) the node is an L1 validator with insufficient balance or
-				// 2) the node is a non-L1 (legacy) validator
+				// Filter out L1 validators that do not have minimumL1ValidatorBalance
 				if !underfundedNodes.Contains(nodeID) {
 					exclude = false
 					break
