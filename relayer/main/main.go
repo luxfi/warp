@@ -300,6 +300,7 @@ func main() {
 				relayerHealth[sourceBlockchain.GetBlockchainID()],
 				minHeights[sourceBlockchain.GetBlockchainID()],
 				messageCoordinator,
+				cfg.MaxConcurrentMessages,
 			)
 		})
 	}
