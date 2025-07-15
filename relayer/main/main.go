@@ -197,6 +197,7 @@ func main() {
 		logger.Fatal("Failed to create database", zap.Error(err))
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	// Initialize the global write ticker
 	ticker := utils.NewTicker(cfg.DBWriteIntervalSeconds)
