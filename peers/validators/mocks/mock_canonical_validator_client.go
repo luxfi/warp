@@ -44,18 +44,18 @@ func (m *MockCanonicalValidatorState) EXPECT() *MockCanonicalValidatorStateMockR
 }
 
 // GetCurrentCanonicalValidatorSet mocks base method.
-func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(subnetID ids.ID) (warp.CanonicalValidatorSet, error) {
+func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID) (warp.CanonicalValidatorSet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", subnetID)
+	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", ctx, subnetID)
 	ret0, _ := ret[0].(warp.CanonicalValidatorSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCurrentCanonicalValidatorSet indicates an expected call of GetCurrentCanonicalValidatorSet.
-func (mr *MockCanonicalValidatorStateMockRecorder) GetCurrentCanonicalValidatorSet(subnetID any) *gomock.Call {
+func (mr *MockCanonicalValidatorStateMockRecorder) GetCurrentCanonicalValidatorSet(ctx, subnetID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentCanonicalValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetCurrentCanonicalValidatorSet), subnetID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentCanonicalValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetCurrentCanonicalValidatorSet), ctx, subnetID)
 }
 
 // GetCurrentHeight mocks base method.
