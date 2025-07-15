@@ -119,11 +119,7 @@ func NewNetwork(
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
 ) (AppRequestNetwork, error) {
-	metrics, err := newAppRequestNetworkMetrics(relayerRegistry)
-	if err != nil {
-		logger.Error("Failed to create app request network metrics", zap.Error(err))
-		return nil, err
-	}
+	metrics := newAppRequestNetworkMetrics(relayerRegistry)
 
 	// Create the handler for handling inbound app responses
 	handler, err := NewRelayerExternalHandler(logger, metrics)
