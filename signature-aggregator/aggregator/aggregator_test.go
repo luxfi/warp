@@ -172,7 +172,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
 	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty, false).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(gomock.Any(), ids.Empty, false).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: warp.CanonicalValidatorSet{
@@ -192,7 +192,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
 	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(ids.Empty, false).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(gomock.Any(), ids.Empty, false).Return(
 		&peers.ConnectedCanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: warp.CanonicalValidatorSet{
@@ -254,7 +254,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 	)
 
 	mockNetwork.EXPECT().TrackSubnet(subnetID)
-	mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID, false).Return(
+	mockNetwork.EXPECT().GetConnectedCanonicalValidators(gomock.Any(), subnetID, false).Return(
 		connectedValidators,
 		nil,
 	)
@@ -345,7 +345,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 			)
 
 			mockNetwork.EXPECT().TrackSubnet(subnetID)
-			mockNetwork.EXPECT().GetConnectedCanonicalValidators(subnetID, false).Return(
+			mockNetwork.EXPECT().GetConnectedCanonicalValidators(gomock.Any(), subnetID, false).Return(
 				connectedValidators,
 				nil,
 			)
