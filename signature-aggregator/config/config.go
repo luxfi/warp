@@ -45,7 +45,6 @@ type Config struct {
 
 	// convenience fields
 	trackedSubnets set.Set[ids.ID]
-	myNodeID       ids.NodeID
 	tlsCert        *tls.Certificate
 }
 
@@ -96,10 +95,6 @@ func (c *Config) GetAllowPrivateIPs() bool {
 
 func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 	return c.trackedSubnets
-}
-
-func (c *Config) GetNodeID() ids.NodeID {
-	return c.myNodeID
 }
 
 func (c *Config) GetTLSCert() *tls.Certificate {

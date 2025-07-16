@@ -112,10 +112,6 @@ func NewSignatureAggregator(
 	return &sa, nil
 }
 
-func (s *SignatureAggregator) Shutdown() {
-	s.network.Shutdown()
-}
-
 func (s *SignatureAggregator) connectToQuorumValidators(
 	ctx context.Context,
 	log logging.Logger,
