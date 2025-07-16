@@ -29,7 +29,7 @@ var _ CanonicalValidatorState = &CanonicalValidatorClient{}
 type CanonicalValidatorState interface {
 	validators.State
 
-	GetCurrentCanonicalValidatorSet(subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error)
+	GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error)
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
@@ -51,10 +51,11 @@ func NewCanonicalValidatorClient(logger logging.Logger, apiConfig *config.APICon
 }
 
 func (v *CanonicalValidatorClient) GetCurrentCanonicalValidatorSet(
+	ctx context.Context,
 	subnetID ids.ID,
 ) (avalancheWarp.CanonicalValidatorSet, error) {
 	// Get the current canonical validator set of the source subnet.
-	ctx, cancel := context.WithTimeout(context.Background(), sharedUtils.DefaultRPCTimeout)
+	ctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
 	canonicalSubnetValidators, err := avalancheWarp.GetCanonicalValidatorSetFromSubnetID(
 		ctx,

@@ -65,7 +65,7 @@ var (
 )
 
 type AppRequestNetwork interface {
-	GetConnectedCanonicalValidators(subnetID ids.ID, skipCache bool) (
+	GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
 		*ConnectedCanonicalValidators,
 		error,
 	)
@@ -115,11 +115,7 @@ func NewNetwork(
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
 ) (AppRequestNetwork, error) {
-	metrics, err := newAppRequestNetworkMetrics(relayerRegistry)
-	if err != nil {
-		logger.Error("Failed to create app request network metrics", zap.Error(err))
-		return nil, err
-	}
+	metrics := newAppRequestNetworkMetrics(relayerRegistry)
 
 	// Create the handler for handling inbound app responses
 	handler, err := NewRelayerExternalHandler(logger, metrics)
@@ -421,13 +417,14 @@ func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Va
 // GetConnectedCanonicalValidators returns the validator information in canonical ordering for the given subnet
 // at the time of the call, as well as the total weight of the validators that this network is connected to
 func (n *appRequestNetwork) GetConnectedCanonicalValidators(
+	ctx context.Context,
 	subnetID ids.ID,
 	skipCache bool,
 ) (*ConnectedCanonicalValidators, error) {
 	// Get the subnet's current canonical validator set
 	fetchVdrsFunc := func(subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error) {
 		startPChainAPICall := time.Now()
-		validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(subnetID)
+		validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
 		n.setPChainAPICallLatencyMS(float64(time.Since(startPChainAPICall).Milliseconds()))
 		return validatorSet, err
 	}
@@ -500,9 +497,9 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency float64) {
 // Non-receiver util functions
 
 func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
-	return func(context.Context) error {
+	return func(ctx context.Context) error {
 		for _, subnetID := range subnetIDs {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(subnetID, false)
+			connectedValidators, err := network.GetConnectedCanonicalValidators(ctx, subnetID, false)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to get connected validators: %s, %w", subnetID, err)
