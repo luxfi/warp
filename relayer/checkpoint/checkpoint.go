@@ -6,7 +6,6 @@ package checkpoint
 import (
 	"container/heap"
 	"fmt"
-	"math"
 	"strconv"
 	"sync"
 
@@ -57,14 +56,14 @@ func NewCheckpointManager(
 		return nil, fmt.Errorf("failed to get the latest processed block height: %v", err)
 	}
 
-	committedHeight := math.Max(float64(storedHeight), float64(startingHeight))
+	committedHeight := max(storedHeight, startingHeight)
 
 	return &CheckpointManager{
 		logger:          logger,
 		database:        db,
 		writeSignal:     writeSignal,
 		relayerID:       relayerID,
-		committedHeight: uint64(committedHeight),
+		committedHeight: committedHeight,
 		lock:            &sync.RWMutex{},
 		pendingCommits:  h,
 	}, nil
@@ -75,10 +74,10 @@ func (cm *CheckpointManager) Run() {
 }
 
 func (cm *CheckpointManager) writeToDatabase() {
-	cm.lock.RLock()
-	defer cm.lock.RUnlock()
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 	// Defensively ensure we're not writing the default value
-	// If the committedHeight is not change, we skip the write
+	// If committedHeight is not changed, we can skip the write
 	if cm.committedHeight == 0 || !cm.dirty {
 		return
 	}
