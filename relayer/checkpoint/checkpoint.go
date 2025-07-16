@@ -5,6 +5,7 @@ package checkpoint
 
 import (
 	"container/heap"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -37,7 +38,7 @@ func NewCheckpointManager(
 	writeSignal chan struct{},
 	relayerID database.RelayerID,
 	startingHeight uint64,
-) *CheckpointManager {
+) (*CheckpointManager, error) {
 	h := &utils.UInt64Heap{}
 	heap.Init(h)
 	logger.Info(
@@ -53,7 +54,7 @@ func NewCheckpointManager(
 			zap.Error(err),
 			zap.String("relayerID", relayerID.ID.String()),
 		)
-		return nil
+		return nil, fmt.Errorf("failed to get the latest processed block height: %v", err)
 	}
 
 	committedHeight := math.Max(float64(storedHeight), float64(startingHeight))
@@ -66,7 +67,7 @@ func NewCheckpointManager(
 		committedHeight: uint64(committedHeight),
 		lock:            &sync.RWMutex{},
 		pendingCommits:  h,
-	}
+	}, nil
 }
 
 func (cm *CheckpointManager) Run() {
