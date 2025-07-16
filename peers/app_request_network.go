@@ -350,6 +350,7 @@ func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 				}
 
 			case <-ctx.Done():
+				n.logger.Info("Stopping updating validator process...")
 				return
 			}
 		}
@@ -409,7 +410,9 @@ func (n *appRequestNetwork) updateValidatorSet(
 func (n *appRequestNetwork) Shutdown() {
 	n.network.StartClose()
 	// Wait until startUpdateValidators goroutine stop.
+	n.logger.Info("Waiting for updating validator process to stop...")
 	<-n.done
+	n.logger.Info("Updating validators process stopped")
 }
 
 // Helper struct to hold connected validator information
