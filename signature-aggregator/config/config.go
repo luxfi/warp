@@ -98,10 +98,6 @@ func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 	return c.trackedSubnets
 }
 
-func (c *Config) GetNodeID() ids.NodeID {
-	return c.myNodeID
-}
-
 func (c *Config) GetTLSCert() *tls.Certificate {
 	return c.tlsCert
 }
