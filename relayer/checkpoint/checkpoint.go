@@ -5,6 +5,7 @@ package checkpoint
 
 import (
 	"container/heap"
+	"math"
 	"strconv"
 	"sync"
 
@@ -26,6 +27,8 @@ type CheckpointManager struct {
 	committedHeight uint64
 	lock            *sync.RWMutex
 	pendingCommits  *utils.UInt64Heap
+	// Update the dirty flag when committedHeight is updated
+	dirty bool
 }
 
 func NewCheckpointManager(
@@ -43,7 +46,6 @@ func NewCheckpointManager(
 		zap.Uint64("startingHeight", startingHeight),
 	)
 
-	committedHeight := startingHeight
 	storedHeight, err := database.GetLatestProcessedBlockHeight(db, relayerID)
 	if err != nil && !database.IsKeyNotFoundError(err) {
 		logger.Error(
@@ -54,16 +56,14 @@ func NewCheckpointManager(
 		return nil
 	}
 
-	if storedHeight > committedHeight {
-		committedHeight = storedHeight
-	}
+	committedHeight := math.Max(float64(storedHeight), float64(startingHeight))
 
 	return &CheckpointManager{
 		logger:          logger,
 		database:        db,
 		writeSignal:     writeSignal,
 		relayerID:       relayerID,
-		committedHeight: committedHeight,
+		committedHeight: uint64(committedHeight),
 		lock:            &sync.RWMutex{},
 		pendingCommits:  h,
 	}
@@ -77,7 +77,8 @@ func (cm *CheckpointManager) writeToDatabase() {
 	cm.lock.RLock()
 	defer cm.lock.RUnlock()
 	// Defensively ensure we're not writing the default value
-	if cm.committedHeight == 0 {
+	// If the committedHeight is not change, we skip the write
+	if cm.committedHeight == 0 || !cm.dirty {
 		return
 	}
 
@@ -99,6 +100,9 @@ func (cm *CheckpointManager) writeToDatabase() {
 		)
 		return
 	}
+
+	// Reset the dirty flag after successfully write to db
+	cm.dirty = false
 }
 
 func (cm *CheckpointManager) listenForWriteSignal() {
@@ -143,6 +147,7 @@ func (cm *CheckpointManager) StageCommittedHeight(height uint64) {
 			zap.String("relayerID", cm.relayerID.ID.String()),
 		)
 		cm.committedHeight = h
+		cm.dirty = true
 		if cm.pendingCommits.Len() == 0 {
 			break
 		}
