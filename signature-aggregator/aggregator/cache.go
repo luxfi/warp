@@ -17,7 +17,7 @@ type SignatureCache struct {
 	// map of warp message ID to a map of public keys to signatures
 	signatures *lru.Cache[ids.ID, map[PublicKeyBytes]SignatureBytes]
 	// protects against the race condition where multiple goroutines are trying to
-	// enter a signature for a message ID that is not currently in the cache.
+	// add a signature for a message ID that is not currently in the cache.
 	mu sync.Mutex
 }
 
@@ -52,6 +52,10 @@ func (c *SignatureCache) Add(
 		sigs map[PublicKeyBytes]SignatureBytes
 		ok   bool
 	)
+
+	// The number of signatures cached per message is implicitly bounded
+	// by the number of validators registered on-chain.
+	// As a result, uncontrolled memory growth is not a concern.
 	c.mu.Lock()
 	if sigs, ok = c.Get(msgID); !ok {
 		sigs = make(map[PublicKeyBytes]SignatureBytes)
