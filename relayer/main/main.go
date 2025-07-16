@@ -165,7 +165,9 @@ func main() {
 		})
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
@@ -177,7 +179,10 @@ func main() {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
 		os.Exit(1)
 	}
-	defer network.Shutdown()
+	defer func() {
+		cancel()
+		network.Shutdown()
+	}()
 
 	err = relayer.InitializeConnectionsAndCheckStake(logger, network, &cfg)
 	if err != nil {

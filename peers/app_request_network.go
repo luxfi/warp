@@ -105,13 +105,12 @@ type appRequestNetwork struct {
 	manager                    vdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet]
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan bool
+	done chan bool
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
 func NewNetwork(
+	ctx context.Context,
 	logger logging.Logger,
 	relayerRegistry prometheus.Registerer,
 	peerNetworkRegistry prometheus.Registerer,
@@ -277,7 +276,6 @@ func NewNetwork(
 	}
 	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 
-	ctx, cancel := context.WithCancel(context.Background())
 	arNetwork := &appRequestNetwork{
 		network:                    testNetwork,
 		handler:                    handler,
@@ -291,12 +289,10 @@ func NewNetwork(
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
-		ctx:                        ctx,
-		cancel:                     cancel,
 		done:                       make(chan bool),
 	}
 
-	arNetwork.startUpdateValidators()
+	arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
 }
@@ -331,8 +327,8 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
-func (n *appRequestNetwork) startUpdateValidators() {
-	go func() {
+func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
+	go func(ctx context.Context) {
 		defer close(n.done)
 		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 		ticker := time.NewTicker(ValidatorRefreshPeriod)
@@ -348,16 +344,16 @@ func (n *appRequestNetwork) startUpdateValidators() {
 					zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
 				)
 
-				n.updateValidatorSet(context.Background(), constants.PrimaryNetworkID)
+				n.updateValidatorSet(ctx, constants.PrimaryNetworkID)
 				for _, subnet := range subnets {
-					n.updateValidatorSet(context.Background(), subnet)
+					n.updateValidatorSet(ctx, subnet)
 				}
 
-			case <-n.ctx.Done():
+			case <-ctx.Done():
 				return
 			}
 		}
-	}()
+	}(ctx)
 }
 
 func (n *appRequestNetwork) updateValidatorSet(
@@ -412,8 +408,6 @@ func (n *appRequestNetwork) updateValidatorSet(
 
 func (n *appRequestNetwork) Shutdown() {
 	n.network.StartClose()
-	// Signal the startUpdateValidators goroutine to stop
-	n.cancel()
 	// Wait until startUpdateValidators goroutine stop.
 	<-n.done
 }
