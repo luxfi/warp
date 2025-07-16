@@ -196,7 +196,7 @@ func signatureAggregationAPIHandler(
 			}
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), utils.DefaultCreateSignedMessageTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), utils.DefaultCreateSignedMessageTimeout)
 		defer cancel()
 
 		signedMessage, err := aggregator.CreateSignedMessage(

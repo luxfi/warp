@@ -185,12 +185,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	relayerMetrics, err := relayer.NewApplicationRelayerMetrics(relayerMetricsRegistry)
-	if err != nil {
-		logger.Fatal("Failed to create application relayer metrics", zap.Error(err))
-		os.Exit(1)
-	}
-
 	// Initialize the database
 	db, err := database.NewDatabase(logger, &cfg)
 	if err != nil {
@@ -246,7 +240,7 @@ func main() {
 	applicationRelayers, minHeights, err := createApplicationRelayers(
 		context.Background(),
 		logger,
-		relayerMetrics,
+		relayer.NewApplicationRelayerMetrics(relayerMetricsRegistry),
 		db,
 		ticker,
 		network,
@@ -301,6 +295,7 @@ func main() {
 				relayerHealth[sourceBlockchain.GetBlockchainID()],
 				minHeights[sourceBlockchain.GetBlockchainID()],
 				messageCoordinator,
+				cfg.MaxConcurrentMessages,
 			)
 		})
 	}
