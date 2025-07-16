@@ -45,7 +45,6 @@ type Config struct {
 
 	// convenience fields
 	trackedSubnets set.Set[ids.ID]
-	myNodeID       ids.NodeID
 	tlsCert        *tls.Certificate
 }
 
