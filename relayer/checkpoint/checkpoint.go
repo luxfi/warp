@@ -66,6 +66,7 @@ func NewCheckpointManager(
 		committedHeight: committedHeight,
 		lock:            &sync.RWMutex{},
 		pendingCommits:  h,
+		dirty:           true,
 	}, nil
 }
 
