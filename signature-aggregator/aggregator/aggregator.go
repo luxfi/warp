@@ -117,6 +117,7 @@ func (s *SignatureAggregator) Shutdown() {
 }
 
 func (s *SignatureAggregator) connectToQuorumValidators(
+	ctx context.Context,
 	log logging.Logger,
 	signingSubnet ids.ID,
 	quorumPercentage uint64,
@@ -127,7 +128,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	var connectedValidators *peers.ConnectedCanonicalValidators
 	var err error
 	connectOp := func() error {
-		connectedValidators, err = s.network.GetConnectedCanonicalValidators(signingSubnet, skipCache)
+		connectedValidators, err = s.network.GetConnectedCanonicalValidators(ctx, signingSubnet, skipCache)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
 			log.Error(
@@ -221,7 +222,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	connectedValidators, err := s.connectToQuorumValidators(log, signingSubnet, requiredQuorumPercentage, skipCache)
+	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
