@@ -10,7 +10,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
+	"time"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -268,9 +271,13 @@ func main() {
 	api.HandleRelay(logger, messageCoordinator)
 	api.HandleRelayMessage(logger, messageCoordinator)
 
+	healthCheckServer := &http.Server{
+		Addr: fmt.Sprintf(":%d", cfg.APIPort),
+	}
+
 	// start the health check server
 	go func() {
-		err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
+		err := healthCheckServer.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
 			logger.Info("Health check server closed")
 		} else if err != nil {
@@ -299,9 +306,48 @@ func main() {
 			)
 		})
 	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- errGroup.Wait()
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	logger.Info("Initialization complete")
-	err = errGroup.Wait()
-	logger.Error("Relayer exiting.", zap.Error(err))
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			logger.Fatal("Relayer exiting", zap.Error(err))
+		}
+	case sig := <-sigChan:
+		logger.Info("Receive os signal", zap.String("signal", sig.String()))
+
+		logger.Info("Starting graceful shutdown...")
+
+		// Stop health check server
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := healthCheckServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown health check server", zap.Error(err))
+		} else {
+			logger.Info("Health check server stopped")
+		}
+
+		// Stop network
+		network.Shutdown()
+
+		// Close db connection
+		if err := db.Close(); err != nil {
+			logger.Error("Failed to close db connections", zap.Error(err))
+		} else {
+			logger.Info("DB connections closed")
+		}
+
+		logger.Info("Graceful shutdown complete")
+	}
 }
 
 // buildConfig parses the flags and builds the config
