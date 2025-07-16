@@ -16,7 +16,9 @@ import (
 type SignatureCache struct {
 	// map of warp message ID to a map of public keys to signatures
 	signatures *lru.Cache[ids.ID, map[PublicKeyBytes]SignatureBytes]
-	mu         sync.RWMutex
+	// protects against the race condition where multiple goroutines are trying to
+	// enter a signature for a message ID that is not currently in the cache.
+	mu sync.Mutex
 }
 
 type PublicKeyBytes [bls.PublicKeyLen]byte
