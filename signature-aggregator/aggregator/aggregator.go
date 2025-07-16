@@ -117,6 +117,7 @@ func (s *SignatureAggregator) Shutdown() {
 }
 
 func (s *SignatureAggregator) connectToQuorumValidators(
+	ctx context.Context,
 	log logging.Logger,
 	signingSubnet ids.ID,
 	quorumPercentage uint64,
@@ -127,7 +128,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	var connectedValidators *peers.ConnectedCanonicalValidators
 	var err error
 	connectOp := func() error {
-		connectedValidators, err = s.network.GetConnectedCanonicalValidators(signingSubnet, skipCache)
+		connectedValidators, err = s.network.GetConnectedCanonicalValidators(ctx, signingSubnet, skipCache)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
 			log.Error(
@@ -221,7 +222,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	connectedValidators, err := s.connectToQuorumValidators(log, signingSubnet, requiredQuorumPercentage, skipCache)
+	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -290,9 +291,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			exclude := true
 			for _, nodeID := range validator.NodeIDs {
-				// This check will pass if either
-				// 1) the node is an L1 validator with insufficient balance or
-				// 2) the node is a non-L1 (legacy) validator
+				// Filter out L1 validators that do not have minimumL1ValidatorBalance
 				if !underfundedNodes.Contains(nodeID) {
 					exclude = false
 					break
