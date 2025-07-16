@@ -154,7 +154,7 @@ func (c *Config) Validate() error {
 
 	if len(c.DeciderURL) != 0 {
 		if _, err := url.ParseRequestURI(c.DeciderURL); err != nil {
-			return fmt.Errorf("Invalid decider URL: %w", err)
+			return fmt.Errorf("invalid decider URL: %w", err)
 		}
 	}
 
