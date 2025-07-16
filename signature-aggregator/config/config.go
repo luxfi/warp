@@ -58,22 +58,22 @@ func DisplayUsageText() {
 // but does initialize private fields available through getters.
 func (c *Config) Validate() error {
 	if err := c.PChainAPI.Validate(); err != nil {
-		return err
+		return fmt.Errorf("failed to validate p-chain API config: %w", err)
 	}
 	if err := c.InfoAPI.Validate(); err != nil {
-		return err
+		return fmt.Errorf("failed to validate info API config: %w", err)
 	}
 	c.trackedSubnets = set.NewSet[ids.ID](len(c.TrackedSubnetIDs))
 	for _, trackedL1 := range c.TrackedSubnetIDs {
 		trackedL1ID, err := ids.FromString(trackedL1)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse tracked subnet ID %s: %w", trackedL1, err)
 		}
 		c.trackedSubnets.Add(trackedL1ID)
 	}
 	for _, p := range c.ManuallyTrackedPeers {
 		if err := p.Validate(); err != nil {
-			return err
+			return fmt.Errorf("failed to validate manually tracked peer %s: %w", p.ID, err)
 		}
 	}
 

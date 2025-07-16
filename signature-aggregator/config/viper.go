@@ -73,7 +73,7 @@ func BuildConfig(v *viper.Viper) (Config, error) {
 	// Build the config from Viper
 	var cfg Config
 
-	if err := v.Unmarshal(&cfg); err != nil {
+	if err := v.UnmarshalExact(&cfg); err != nil {
 		return cfg, fmt.Errorf("failed to unmarshal viper config: %w", err)
 	}
 
