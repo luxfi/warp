@@ -535,13 +535,21 @@ func createApplicationRelayersForSourceChain(
 			}
 		}
 
-		checkpointManager := checkpoint.NewCheckpointManager(
+		checkpointManager, err := checkpoint.NewCheckpointManager(
 			logger,
 			db,
 			ticker.Subscribe(),
 			relayerID,
 			height,
 		)
+		if err != nil {
+			logger.Error(
+				"Failed to create checkpoint manager",
+				zap.String("relayerID", relayerID.ID.String()),
+				zap.Error(err),
+			)
+			return nil, 0, err
+		}
 
 		applicationRelayer, err := relayer.NewApplicationRelayer(
 			logger,
