@@ -5,6 +5,7 @@ package aggregator
 
 import (
 	"math"
+	"sync"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -15,6 +16,7 @@ import (
 type SignatureCache struct {
 	// map of warp message ID to a map of public keys to signatures
 	signatures *lru.Cache[ids.ID, map[PublicKeyBytes]SignatureBytes]
+	mu         sync.RWMutex
 }
 
 type PublicKeyBytes [bls.PublicKeyLen]byte
@@ -48,9 +50,11 @@ func (c *SignatureCache) Add(
 		sigs map[PublicKeyBytes]SignatureBytes
 		ok   bool
 	)
+	c.mu.Lock()
 	if sigs, ok = c.Get(msgID); !ok {
 		sigs = make(map[PublicKeyBytes]SignatureBytes)
 	}
 	sigs[pubKey] = signature
 	c.signatures.Add(msgID, sigs)
+	c.mu.Unlock()
 }
