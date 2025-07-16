@@ -4,11 +4,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/message"
@@ -143,13 +147,47 @@ func main() {
 	networkHealthcheckFunc := peers.GetNetworkHealthFunc(network, healthCheckSubnets)
 	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
+	healthCheckServer := &http.Server{
+		Addr: fmt.Sprintf(":%d", cfg.APIPort),
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		logger.Info("Starting health check server")
+		errChan <- healthCheckServer.ListenAndServe()
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	logger.Info("Initialization complete")
-	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
-	if errors.Is(err, http.ErrServerClosed) {
-		logger.Info("Server closed")
-	} else if err != nil {
-		logger.Fatal("Server error", zap.Error(err))
-		os.Exit(1)
+
+	select {
+	case err := <-errChan:
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("Server closed")
+		} else if err != nil {
+			logger.Fatal("Server error", zap.Error(err))
+			os.Exit(1)
+		}
+	case sig := <-sigChan:
+		logger.Info("Receive os signal", zap.String("signal", sig.String()))
+
+		logger.Info("Starting graceful shutdown...")
+
+		// Stop health check server
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := healthCheckServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown health check server", zap.Error(err))
+		} else {
+			logger.Info("Health check server stopped")
+		}
+
+		// Stop network
+		network.Shutdown()
+
+		logger.Info("Graceful shutdown complete")
 	}
 }
 
