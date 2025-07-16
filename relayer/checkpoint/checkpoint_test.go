@@ -65,7 +65,8 @@ func TestCommitHeight(t *testing.T) {
 		id := database.RelayerID{
 			ID: common.BytesToHash(crypto.Keccak256([]byte(test.name))),
 		}
-		cm := NewCheckpointManager(logging.NoLog{}, db, nil, id, test.currentMaxHeight)
+		cm, err := NewCheckpointManager(logging.NoLog{}, db, nil, id, test.currentMaxHeight)
+		require.NoError(t, err)
 		heap.Init(test.pendingHeights)
 		cm.pendingCommits = test.pendingHeights
 		cm.committedHeight = test.currentMaxHeight
