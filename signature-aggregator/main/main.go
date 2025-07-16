@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -93,7 +94,9 @@ func main() {
 		})
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		prometheus.DefaultRegisterer,
 		prometheus.DefaultRegisterer,
@@ -105,7 +108,10 @@ func main() {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
 		os.Exit(1)
 	}
-	defer network.Shutdown()
+	defer func() {
+		cancel()
+		network.Shutdown()
+	}()
 
 	registries, err := metricsServer.StartMetricsServer(
 		logger,
