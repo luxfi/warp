@@ -105,7 +105,8 @@ type appRequestNetwork struct {
 	manager                    vdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet]
 
-	done chan bool
+	ctx context.Context
+	wg  sync.WaitGroup
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
@@ -290,10 +291,10 @@ func NewNetwork(
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
-		done:                       make(chan bool),
+		ctx:                        ctx,
 	}
 
-	arNetwork.startUpdateValidators(ctx)
+	arNetwork.startUpdateValidators()
 
 	return arNetwork, nil
 }
@@ -328,9 +329,10 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
-func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
-	go func(ctx context.Context) {
-		defer close(n.done)
+func (n *appRequestNetwork) startUpdateValidators() {
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
 		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 		ticker := time.NewTicker(ValidatorRefreshPeriod)
 		for {
@@ -345,17 +347,17 @@ func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 					zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
 				)
 
-				n.updateValidatorSet(ctx, constants.PrimaryNetworkID)
+				n.updateValidatorSet(n.ctx, constants.PrimaryNetworkID)
 				for _, subnet := range subnets {
-					n.updateValidatorSet(ctx, subnet)
+					n.updateValidatorSet(n.ctx, subnet)
 				}
 
-			case <-ctx.Done():
+			case <-n.ctx.Done():
 				n.logger.Info("Stopping updating validator process...")
 				return
 			}
 		}
-	}(ctx)
+	}()
 }
 
 func (n *appRequestNetwork) updateValidatorSet(
@@ -412,7 +414,7 @@ func (n *appRequestNetwork) Shutdown() {
 	n.network.StartClose()
 	// Wait until startUpdateValidators goroutine stop.
 	n.logger.Info("Waiting for updating validator process to stop...")
-	<-n.done
+	n.wg.Wait()
 	n.logger.Info("Updating validators process stopped")
 }
 
