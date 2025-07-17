@@ -35,7 +35,6 @@ import (
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/subnet-evm/ethclient"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -49,8 +48,10 @@ import (
 var version = "v0.0.0-dev"
 
 const (
-	relayerMetricsPrefix     = "app"
-	peerNetworkMetricsPrefix = "peers"
+	relayerMetricsPrefix        = "app"
+	peerNetworkMetricsPrefix    = "peers"
+	msgCreatorMetricsPrefix     = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
@@ -115,6 +116,8 @@ func main() {
 		[]string{
 			relayerMetricsPrefix,
 			peerNetworkMetricsPrefix,
+			msgCreatorMetricsPrefix,
+			timeoutManagerMetricsPrefix,
 		},
 	)
 	if err != nil {
@@ -123,6 +126,8 @@ func main() {
 	}
 	relayerMetricsRegistry := registries[relayerMetricsPrefix]
 	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
+	msgCreatorMetricsRegistry := registries[msgCreatorMetricsPrefix]
+	timeoutManagerMetricsRegistry := registries[timeoutManagerMetricsPrefix]
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -145,7 +150,7 @@ func main() {
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		msgCreatorMetricsRegistry,
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -168,6 +173,7 @@ func main() {
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
+		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
