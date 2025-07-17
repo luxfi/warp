@@ -216,7 +216,3 @@ func buildConfig() config.Config {
 	}
 	return cfg
 }
-
-func runHealthCheckServer() error {
-
-}
