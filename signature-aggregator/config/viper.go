@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	commonConfig "github.com/ava-labs/icm-services/config"
@@ -31,10 +32,14 @@ func BuildViper(fs *pflag.FlagSet) (*viper.Viper, error) {
 	// Map flag names to env var names. Flags are capitalized, and hyphens are replaced with underscores.
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
-	filename, err := fs.GetString(ConfigFileKey)
-	if err != nil {
-		DisplayUsageText()
-		return nil, fmt.Errorf("failed to get config file flag: %w", err)
+	var filename string
+	var err error
+	filename = os.Getenv(ConfigFileEnvKey)
+	if filename == "" {
+		filename, err = fs.GetString(ConfigFileKey)
+		if err != nil {
+			return nil, fmt.Errorf("config file not set via flag or environment variable: %w", err)
+		}
 	}
 
 	v.SetConfigFile(filename)
