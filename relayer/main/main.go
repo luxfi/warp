@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -206,6 +205,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
+	defer deciderConnection.Close()
 
 	messageHandlerFactories, err := createMessageHandlerFactories(
 		logger,
@@ -535,13 +535,21 @@ func createApplicationRelayersForSourceChain(
 			}
 		}
 
-		checkpointManager := checkpoint.NewCheckpointManager(
+		checkpointManager, err := checkpoint.NewCheckpointManager(
 			logger,
 			db,
 			ticker.Subscribe(),
 			relayerID,
 			height,
 		)
+		if err != nil {
+			logger.Error(
+				"Failed to create checkpoint manager",
+				zap.String("relayerID", relayerID.ID.String()),
+				zap.Error(err),
+			)
+			return nil, 0, err
+		}
 
 		applicationRelayer, err := relayer.NewApplicationRelayer(
 			logger,
@@ -594,11 +602,6 @@ func createDeciderConnection(url string) (*grpc.ClientConn, error) {
 			err,
 		)
 	}
-
-	runtime.SetFinalizer(
-		connection,
-		func(c *grpc.ClientConn) { c.Close() },
-	)
 
 	return connection, nil
 }
