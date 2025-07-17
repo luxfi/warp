@@ -32,7 +32,9 @@ import (
 var version = "v0.0.0-dev"
 
 const (
-	sigAggMetricsPrefix = "signature-aggregator"
+	sigAggMetricsPrefix         = "signature-aggregator"
+	msgCreatorPrefix            = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
@@ -72,10 +74,24 @@ func main() {
 		),
 	)
 
+	registries, err := metricsServer.StartMetricsServer(
+		logger,
+		cfg.MetricsPort,
+		[]string{
+			sigAggMetricsPrefix,
+			msgCreatorPrefix,
+			timeoutManagerMetricsPrefix,
+		},
+	)
+	if err != nil {
+		logger.Fatal("Failed to start metrics server", zap.Error(err))
+		os.Exit(1)
+	}
+
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		registries[msgCreatorPrefix],
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -100,6 +116,7 @@ func main() {
 		networkLogger,
 		prometheus.DefaultRegisterer,
 		prometheus.DefaultRegisterer,
+		registries[timeoutManagerMetricsPrefix],
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -112,16 +129,6 @@ func main() {
 		cancel()
 		network.Shutdown()
 	}()
-
-	registries, err := metricsServer.StartMetricsServer(
-		logger,
-		cfg.MetricsPort,
-		[]string{sigAggMetricsPrefix},
-	)
-	if err != nil {
-		logger.Fatal("Failed to start metrics server", zap.Error(err))
-		os.Exit(1)
-	}
 
 	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries[sigAggMetricsPrefix])
 

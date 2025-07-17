@@ -114,6 +114,7 @@ func NewNetwork(
 	logger logging.Logger,
 	relayerRegistry prometheus.Registerer,
 	peerNetworkRegistry prometheus.Registerer,
+	timeoutManagerRegistry prometheus.Registerer,
 	trackedSubnets set.Set[ids.ID],
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
@@ -121,7 +122,7 @@ func NewNetwork(
 	metrics := newAppRequestNetworkMetrics(relayerRegistry)
 
 	// Create the handler for handling inbound app responses
-	handler, err := NewRelayerExternalHandler(logger, metrics)
+	handler, err := NewRelayerExternalHandler(logger, metrics, timeoutManagerRegistry)
 	if err != nil {
 		logger.Error(
 			"Failed to create p2p network handler",
