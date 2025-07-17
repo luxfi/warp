@@ -163,12 +163,12 @@ func main() {
 		go func() {
 			<-ctx.Done()
 			if err := httpServer.Shutdown(ctx); err != nil {
-				logger.Error("Failed to shutdown healthcheck server", zap.Error(err))
+				logger.Error("Failed to shutdown server", zap.Error(err))
 			}
 		}()
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("Failed to start healthcheck server: %w", err)
+			return fmt.Errorf("Failed to start server: %w", err)
 		}
 
 		return nil
