@@ -334,7 +334,7 @@ func buildConfig() config.Config {
 
 	v, err := config.BuildViper(fs)
 	if err != nil {
-		log.Fatalf("couldn't configure flags: %s", err)
+		log.Fatalf("couldn't build viper: %s", err)
 	}
 
 	cfg, err := config.NewConfig(v)
