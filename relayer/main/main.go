@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -36,7 +35,6 @@ import (
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/subnet-evm/ethclient"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -50,8 +48,10 @@ import (
 var version = "v0.0.0-dev"
 
 const (
-	relayerMetricsPrefix     = "app"
-	peerNetworkMetricsPrefix = "peers"
+	relayerMetricsPrefix        = "app"
+	peerNetworkMetricsPrefix    = "peers"
+	msgCreatorMetricsPrefix     = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
@@ -116,6 +116,8 @@ func main() {
 		[]string{
 			relayerMetricsPrefix,
 			peerNetworkMetricsPrefix,
+			msgCreatorMetricsPrefix,
+			timeoutManagerMetricsPrefix,
 		},
 	)
 	if err != nil {
@@ -124,6 +126,8 @@ func main() {
 	}
 	relayerMetricsRegistry := registries[relayerMetricsPrefix]
 	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
+	msgCreatorMetricsRegistry := registries[msgCreatorMetricsPrefix]
+	timeoutManagerMetricsRegistry := registries[timeoutManagerMetricsPrefix]
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -146,7 +150,7 @@ func main() {
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		msgCreatorMetricsRegistry,
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -169,6 +173,7 @@ func main() {
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
+		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -206,6 +211,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
+	defer deciderConnection.Close()
 
 	messageHandlerFactories, err := createMessageHandlerFactories(
 		logger,
@@ -535,13 +541,21 @@ func createApplicationRelayersForSourceChain(
 			}
 		}
 
-		checkpointManager := checkpoint.NewCheckpointManager(
+		checkpointManager, err := checkpoint.NewCheckpointManager(
 			logger,
 			db,
 			ticker.Subscribe(),
 			relayerID,
 			height,
 		)
+		if err != nil {
+			logger.Error(
+				"Failed to create checkpoint manager",
+				zap.String("relayerID", relayerID.ID.String()),
+				zap.Error(err),
+			)
+			return nil, 0, err
+		}
 
 		applicationRelayer, err := relayer.NewApplicationRelayer(
 			logger,
@@ -594,11 +608,6 @@ func createDeciderConnection(url string) (*grpc.ClientConn, error) {
 			err,
 		)
 	}
-
-	runtime.SetFinalizer(
-		connection,
-		func(c *grpc.ClientConn) { c.Close() },
-	)
 
 	return connection, nil
 }
