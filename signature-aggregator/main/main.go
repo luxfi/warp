@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,6 +26,7 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 var version = "v0.0.0-dev"
@@ -110,7 +110,8 @@ func main() {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	errGroup, ctx := errgroup.WithContext(context.Background())
+
 	network, err := peers.NewNetwork(
 		ctx,
 		networkLogger,
@@ -125,10 +126,7 @@ func main() {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
 		os.Exit(1)
 	}
-	defer func() {
-		cancel()
-		network.Shutdown()
-	}()
+	defer network.Shutdown()
 
 	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries[sigAggMetricsPrefix])
 
@@ -157,11 +155,25 @@ func main() {
 	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
 	logger.Info("Initialization complete")
-	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
-	if errors.Is(err, http.ErrServerClosed) {
-		logger.Info("Server closed")
-	} else if err != nil {
-		logger.Fatal("Server error", zap.Error(err))
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
+		}
+		// Handle Graceful shutshown
+		go func() {
+			<-ctx.Done()
+			_ = httpServer.Shutdown(ctx)
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start healthcheck server: %w", err)
+		}
+
+		return nil
+	})
+
+	if err := errGroup.Wait(); err != nil {
+		logger.Fatal("Exited with error", zap.Error(err))
 		os.Exit(1)
 	}
 }
@@ -203,4 +215,8 @@ func buildConfig() config.Config {
 		log.Fatalf("couldn't build config: %s", err)
 	}
 	return cfg
+}
+
+func runHealthCheckServer() error {
+
 }
