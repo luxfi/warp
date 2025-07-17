@@ -32,9 +32,8 @@ func BuildViper(fs *pflag.FlagSet) (*viper.Viper, error) {
 	// Map flag names to env var names. Flags are capitalized, and hyphens are replaced with underscores.
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
-	var filename string
 	var err error
-	filename = os.Getenv(ConfigFileEnvKey)
+	var filename = os.Getenv(ConfigFileEnvKey)
 	if filename == "" {
 		filename, err = fs.GetString(ConfigFileKey)
 		if err != nil {
