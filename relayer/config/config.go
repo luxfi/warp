@@ -154,7 +154,7 @@ func (c *Config) Validate() error {
 
 	if len(c.DeciderURL) != 0 {
 		if _, err := url.ParseRequestURI(c.DeciderURL); err != nil {
-			return fmt.Errorf("Invalid decider URL: %w", err)
+			return fmt.Errorf("invalid decider URL: %w", err)
 		}
 	}
 
@@ -253,15 +253,7 @@ func (c *Config) initializeTrackedSubnets() error {
 		c.trackedSubnets.Add(sourceBlockchain.GetSubnetID())
 	}
 	for _, destinationBlockchain := range c.DestinationBlockchains {
-		warpCfg, err := c.GetWarpConfig(destinationBlockchain.GetBlockchainID())
-		if err != nil {
-			return fmt.Errorf(
-				"failed to get warp config for destination blockchain %s: %w",
-				destinationBlockchain.GetBlockchainID(),
-				err,
-			)
-		}
-		if !warpCfg.RequirePrimaryNetworkSigners {
+		if !destinationBlockchain.warpConfig.RequirePrimaryNetworkSigners {
 			c.trackedSubnets.Add(destinationBlockchain.GetSubnetID())
 		}
 	}
