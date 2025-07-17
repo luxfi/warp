@@ -30,17 +30,13 @@ func BuildViper(fs *pflag.FlagSet) (*viper.Viper, error) {
 	v.AutomaticEnv()
 	// Map flag names to env var names. Flags are capitalized, and hyphens are replaced with underscores.
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	if err := v.BindPFlags(fs); err != nil {
-		return nil, err
-	}
 
-	// Verify required flags are set
-	if !v.IsSet(ConfigFileKey) {
+	filename, err := fs.GetString(ConfigFileKey)
+	if err != nil {
 		DisplayUsageText()
-		return nil, fmt.Errorf("config file not set")
+		return nil, fmt.Errorf("failed to get config file flag: %w", err)
 	}
 
-	filename := v.GetString(ConfigFileKey)
 	v.SetConfigFile(filename)
 	v.SetConfigType("json")
 	if err := v.ReadInConfig(); err != nil {
