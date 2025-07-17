@@ -162,7 +162,9 @@ func main() {
 		// Handle Graceful shutshown
 		go func() {
 			<-ctx.Done()
-			_ = httpServer.Shutdown(ctx)
+			if err := httpServer.Shutdown(ctx); err != nil {
+				logger.Error("Failed to shutdown healthcheck server", zap.Error(err))
+			}
 		}()
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
