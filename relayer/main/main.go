@@ -169,7 +169,8 @@ func main() {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	errGroup, ctx := errgroup.WithContext(context.Background())
+
 	network, err := peers.NewNetwork(
 		ctx,
 		networkLogger,
@@ -184,10 +185,7 @@ func main() {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
 		os.Exit(1)
 	}
-	defer func() {
-		cancel()
-		network.Shutdown()
-	}()
+	defer network.Shutdown()
 
 	err = relayer.InitializeConnectionsAndCheckStake(logger, network, &cfg)
 	if err != nil {
@@ -290,7 +288,6 @@ func main() {
 	}()
 
 	// Create listeners for each of the subnets configured as a source
-	errGroup, ctx := errgroup.WithContext(context.Background())
 	for _, s := range cfg.SourceBlockchains {
 		sourceBlockchain := s
 
