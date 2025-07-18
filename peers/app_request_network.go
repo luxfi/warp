@@ -104,9 +104,6 @@ type appRequestNetwork struct {
 
 	manager                    vdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet]
-
-	ctx context.Context
-	wg  sync.WaitGroup
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
@@ -291,10 +288,9 @@ func NewNetwork(
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
-		ctx:                        ctx,
 	}
 
-	arNetwork.startUpdateValidators()
+	go arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
 }
@@ -329,35 +325,31 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
-func (n *appRequestNetwork) startUpdateValidators() {
-	n.wg.Add(1)
-	go func() {
-		defer n.wg.Done()
-		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
-		ticker := time.NewTicker(ValidatorRefreshPeriod)
-		for {
-			select {
-			case <-ticker.C:
-				n.trackedSubnetsLock.RLock()
-				subnets := n.trackedSubnets.List()
-				n.trackedSubnetsLock.RUnlock()
+func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
+	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
+	ticker := time.NewTicker(ValidatorRefreshPeriod)
+	for {
+		select {
+		case <-ticker.C:
+			n.trackedSubnetsLock.RLock()
+			subnets := n.trackedSubnets.List()
+			n.trackedSubnetsLock.RUnlock()
 
-				n.logger.Debug(
-					"Fetching validators for subnets",
-					zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
-				)
+			n.logger.Debug(
+				"Fetching validators for subnets",
+				zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
+			)
 
-				n.updateValidatorSet(n.ctx, constants.PrimaryNetworkID)
-				for _, subnet := range subnets {
-					n.updateValidatorSet(n.ctx, subnet)
-				}
-
-			case <-n.ctx.Done():
-				n.logger.Info("Stopping updating validator process...")
-				return
+			n.updateValidatorSet(ctx, constants.PrimaryNetworkID)
+			for _, subnet := range subnets {
+				n.updateValidatorSet(ctx, subnet)
 			}
+
+		case <-ctx.Done():
+			n.logger.Info("Stopping updating validator process...")
+			return
 		}
-	}()
+	}
 }
 
 func (n *appRequestNetwork) updateValidatorSet(
@@ -412,10 +404,6 @@ func (n *appRequestNetwork) updateValidatorSet(
 
 func (n *appRequestNetwork) Shutdown() {
 	n.network.StartClose()
-	// Wait until startUpdateValidators goroutine stop.
-	n.logger.Info("Waiting for updating validator process to stop...")
-	n.wg.Wait()
-	n.logger.Info("Updating validators process stopped")
 }
 
 // Helper struct to hold connected validator information
