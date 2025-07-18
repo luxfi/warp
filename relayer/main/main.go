@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -57,6 +56,8 @@ const (
 func main() {
 	cfg := buildConfig()
 
+	errGroup, ctx := errgroup.WithContext(context.Background())
+
 	// Modify the default http.DefaultClient globally
 	// TODO: Remove this temporary fix once the RPC clients used by the relayer
 	// start accepting custom underlying http clients.
@@ -103,7 +104,7 @@ func main() {
 
 	// Initialize all source clients
 	logger.Info("Initializing source clients")
-	sourceClients, err := createSourceClients(context.Background(), logger, &cfg)
+	sourceClients, err := createSourceClients(ctx, logger, &cfg)
 	if err != nil {
 		logger.Fatal("Failed to create source clients", zap.Error(err))
 		os.Exit(1)
@@ -170,6 +171,7 @@ func main() {
 	}
 
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
@@ -199,7 +201,7 @@ func main() {
 
 	// Initialize the global write ticker
 	ticker := utils.NewTicker(cfg.DBWriteIntervalSeconds)
-	go ticker.Run()
+	go ticker.Run(ctx)
 
 	relayerHealth := createHealthTrackers(&cfg)
 
@@ -273,19 +275,26 @@ func main() {
 	api.HandleRelay(logger, messageCoordinator)
 	api.HandleRelayMessage(logger, messageCoordinator)
 
-	// start the health check server
-	go func() {
-		err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
-		if errors.Is(err, http.ErrServerClosed) {
-			logger.Info("Health check server closed")
-		} else if err != nil {
-			logger.Fatal("Health check server exited with error", zap.Error(err))
-			os.Exit(1)
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
 		}
-	}()
+		// Handle graceful shutdown
+		go func() {
+			<-ctx.Done()
+			if err := httpServer.Shutdown(context.Background()); err != nil {
+				logger.Error("Failed to shutdown server", zap.Error(err))
+			}
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start server: %w", err)
+		}
+
+		return nil
+	})
 
 	// Create listeners for each of the subnets configured as a source
-	errGroup, ctx := errgroup.WithContext(context.Background())
 	for _, s := range cfg.SourceBlockchains {
 		sourceBlockchain := s
 
