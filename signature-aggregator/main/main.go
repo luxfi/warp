@@ -155,14 +155,15 @@ func main() {
 	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
 	logger.Info("Initialization complete")
+
 	errGroup.Go(func() error {
 		httpServer := &http.Server{
 			Addr: fmt.Sprintf(":%d", cfg.APIPort),
 		}
-		// Handle Graceful shutshown
+		// Handle graceful shutdown
 		go func() {
 			<-ctx.Done()
-			if err := httpServer.Shutdown(ctx); err != nil {
+			if err := httpServer.Shutdown(context.Background()); err != nil {
 				logger.Error("Failed to shutdown server", zap.Error(err))
 			}
 		}()
