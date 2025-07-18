@@ -9,6 +9,9 @@ const (
 	VersionKey    = "version"
 	HelpKey       = "help"
 
+	// Environment variable keys
+	ConfigFileEnvKey = "CONFIG_FILE"
+
 	// Top-level configuration keys
 	LogLevelKey           = "log-level"
 	APIPortKey            = "api-port"

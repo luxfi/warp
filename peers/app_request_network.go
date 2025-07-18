@@ -108,9 +108,11 @@ type appRequestNetwork struct {
 
 // NewNetwork creates a P2P network client for interacting with validators
 func NewNetwork(
+	ctx context.Context,
 	logger logging.Logger,
 	relayerRegistry prometheus.Registerer,
 	peerNetworkRegistry prometheus.Registerer,
+	timeoutManagerRegistry prometheus.Registerer,
 	trackedSubnets set.Set[ids.ID],
 	manuallyTrackedPeers []info.Peer,
 	cfg Config,
@@ -118,7 +120,7 @@ func NewNetwork(
 	metrics := newAppRequestNetworkMetrics(relayerRegistry)
 
 	// Create the handler for handling inbound app responses
-	handler, err := NewRelayerExternalHandler(logger, metrics)
+	handler, err := NewRelayerExternalHandler(logger, metrics, timeoutManagerRegistry)
 	if err != nil {
 		logger.Error(
 			"Failed to create p2p network handler",
@@ -288,7 +290,7 @@ func NewNetwork(
 		canonicalValidatorSetCache: vdrsCache,
 	}
 
-	arNetwork.startUpdateValidators()
+	go arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
 }
@@ -323,11 +325,12 @@ func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
 	n.updateValidatorSet(context.Background(), subnetID)
 }
 
-func (n *appRequestNetwork) startUpdateValidators() {
-	go func() {
-		// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
-		ticker := time.NewTicker(ValidatorRefreshPeriod)
-		for ; true; <-ticker.C {
+func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
+	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
+	ticker := time.NewTicker(ValidatorRefreshPeriod)
+	for {
+		select {
+		case <-ticker.C:
 			n.trackedSubnetsLock.RLock()
 			subnets := n.trackedSubnets.List()
 			n.trackedSubnetsLock.RUnlock()
@@ -337,12 +340,16 @@ func (n *appRequestNetwork) startUpdateValidators() {
 				zap.Any("subnetIDs", append([]ids.ID{constants.PrimaryNetworkID}, subnets...)),
 			)
 
-			n.updateValidatorSet(context.Background(), constants.PrimaryNetworkID)
+			n.updateValidatorSet(ctx, constants.PrimaryNetworkID)
 			for _, subnet := range subnets {
-				n.updateValidatorSet(context.Background(), subnet)
+				n.updateValidatorSet(ctx, subnet)
 			}
+
+		case <-ctx.Done():
+			n.logger.Info("Stopping updating validator process...")
+			return
 		}
-	}()
+	}
 }
 
 func (n *appRequestNetwork) updateValidatorSet(
