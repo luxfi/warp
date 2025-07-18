@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,7 +37,6 @@ import (
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/subnet-evm/ethclient"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -52,12 +50,16 @@ import (
 var version = "v0.0.0-dev"
 
 const (
-	relayerMetricsPrefix     = "app"
-	peerNetworkMetricsPrefix = "peers"
+	relayerMetricsPrefix        = "app"
+	peerNetworkMetricsPrefix    = "peers"
+	msgCreatorMetricsPrefix     = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
 	cfg := buildConfig()
+
+	errGroup, ctx := errgroup.WithContext(context.Background())
 
 	// Modify the default http.DefaultClient globally
 	// TODO: Remove this temporary fix once the RPC clients used by the relayer
@@ -105,7 +107,7 @@ func main() {
 
 	// Initialize all source clients
 	logger.Info("Initializing source clients")
-	sourceClients, err := createSourceClients(context.Background(), logger, &cfg)
+	sourceClients, err := createSourceClients(ctx, logger, &cfg)
 	if err != nil {
 		logger.Fatal("Failed to create source clients", zap.Error(err))
 		os.Exit(1)
@@ -118,6 +120,8 @@ func main() {
 		[]string{
 			relayerMetricsPrefix,
 			peerNetworkMetricsPrefix,
+			msgCreatorMetricsPrefix,
+			timeoutManagerMetricsPrefix,
 		},
 	)
 	if err != nil {
@@ -126,6 +130,8 @@ func main() {
 	}
 	relayerMetricsRegistry := registries[relayerMetricsPrefix]
 	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
+	msgCreatorMetricsRegistry := registries[msgCreatorMetricsPrefix]
+	timeoutManagerMetricsRegistry := registries[timeoutManagerMetricsPrefix]
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -148,7 +154,7 @@ func main() {
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		msgCreatorMetricsRegistry,
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -168,9 +174,11 @@ func main() {
 	}
 
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
+		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -197,7 +205,7 @@ func main() {
 
 	// Initialize the global write ticker
 	ticker := utils.NewTicker(cfg.DBWriteIntervalSeconds)
-	go ticker.Run()
+	go ticker.Run(ctx)
 
 	relayerHealth := createHealthTrackers(&cfg)
 
@@ -271,23 +279,26 @@ func main() {
 	api.HandleRelay(logger, messageCoordinator)
 	api.HandleRelayMessage(logger, messageCoordinator)
 
-	healthCheckServer := &http.Server{
-		Addr: fmt.Sprintf(":%d", cfg.APIPort),
-	}
-
-	// start the health check server
-	go func() {
-		err := healthCheckServer.ListenAndServe()
-		if errors.Is(err, http.ErrServerClosed) {
-			logger.Info("Health check server closed")
-		} else if err != nil {
-			logger.Fatal("Health check server exited with error", zap.Error(err))
-			os.Exit(1)
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
 		}
-	}()
+		// Handle graceful shutdown
+		go func() {
+			<-ctx.Done()
+			if err := httpServer.Shutdown(context.Background()); err != nil {
+				logger.Error("Failed to shutdown server", zap.Error(err))
+			}
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start server: %w", err)
+		}
+
+		return nil
+	})
 
 	// Create listeners for each of the subnets configured as a source
-	errGroup, ctx := errgroup.WithContext(context.Background())
 	for _, s := range cfg.SourceBlockchains {
 		sourceBlockchain := s
 
@@ -381,7 +392,7 @@ func buildConfig() config.Config {
 
 	v, err := config.BuildViper(fs)
 	if err != nil {
-		log.Fatalf("couldn't configure flags: %s", err)
+		log.Fatalf("couldn't build viper: %s", err)
 	}
 
 	cfg, err := config.NewConfig(v)
