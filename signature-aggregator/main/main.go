@@ -5,7 +5,10 @@ package main
 
 import (
 	"context"
+<<<<<<< HEAD
 	"errors"
+=======
+>>>>>>> origin/main
 	"fmt"
 	"log"
 	"net/http"
@@ -30,12 +33,15 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 var version = "v0.0.0-dev"
 
 const (
-	sigAggMetricsPrefix = "signature-aggregator"
+	sigAggMetricsPrefix         = "signature-aggregator"
+	msgCreatorPrefix            = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
@@ -75,10 +81,24 @@ func main() {
 		),
 	)
 
+	registries, err := metricsServer.StartMetricsServer(
+		logger,
+		cfg.MetricsPort,
+		[]string{
+			sigAggMetricsPrefix,
+			msgCreatorPrefix,
+			timeoutManagerMetricsPrefix,
+		},
+	)
+	if err != nil {
+		logger.Fatal("Failed to start metrics server", zap.Error(err))
+		os.Exit(1)
+	}
+
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		registries[msgCreatorPrefix],
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -97,10 +117,14 @@ func main() {
 		})
 	}
 
+	errGroup, ctx := errgroup.WithContext(context.Background())
+
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		prometheus.DefaultRegisterer,
 		prometheus.DefaultRegisterer,
+		registries[timeoutManagerMetricsPrefix],
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -110,16 +134,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer network.Shutdown()
-
-	registries, err := metricsServer.StartMetricsServer(
-		logger,
-		cfg.MetricsPort,
-		[]string{sigAggMetricsPrefix},
-	)
-	if err != nil {
-		logger.Fatal("Failed to start metrics server", zap.Error(err))
-		os.Exit(1)
-	}
 
 	metricsInstance := metrics.NewSignatureAggregatorMetrics(registries[sigAggMetricsPrefix])
 
@@ -162,6 +176,7 @@ func main() {
 
 	logger.Info("Initialization complete")
 
+<<<<<<< HEAD
 	select {
 	case err := <-errChan:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -188,6 +203,30 @@ func main() {
 		network.Shutdown()
 
 		logger.Info("Graceful shutdown complete")
+=======
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
+		}
+		// Handle graceful shutdown
+		go func() {
+			<-ctx.Done()
+			if err := httpServer.Shutdown(context.Background()); err != nil {
+				logger.Error("Failed to shutdown server", zap.Error(err))
+			}
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start server: %w", err)
+		}
+
+		return nil
+	})
+
+	if err := errGroup.Wait(); err != nil {
+		logger.Fatal("Exited with error", zap.Error(err))
+		os.Exit(1)
+>>>>>>> origin/main
 	}
 }
 
