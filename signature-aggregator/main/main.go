@@ -4,7 +4,7 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 var version = "v0.0.0-dev"
@@ -109,7 +110,10 @@ func main() {
 		})
 	}
 
+	errGroup, ctx := errgroup.WithContext(context.Background())
+
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		prometheus.DefaultRegisterer,
 		prometheus.DefaultRegisterer,
@@ -151,11 +155,28 @@ func main() {
 	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
 	logger.Info("Initialization complete")
-	err = http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
-	if errors.Is(err, http.ErrServerClosed) {
-		logger.Info("Server closed")
-	} else if err != nil {
-		logger.Fatal("Server error", zap.Error(err))
+
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
+		}
+		// Handle graceful shutdown
+		go func() {
+			<-ctx.Done()
+			if err := httpServer.Shutdown(context.Background()); err != nil {
+				logger.Error("Failed to shutdown server", zap.Error(err))
+			}
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start server: %w", err)
+		}
+
+		return nil
+	})
+
+	if err := errGroup.Wait(); err != nil {
+		logger.Fatal("Exited with error", zap.Error(err))
 		os.Exit(1)
 	}
 }

@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -33,12 +34,17 @@ func (t *Ticker) Subscribe() chan struct{} {
 	return sub
 }
 
-func (t *Ticker) Run() {
-	for range time.Tick(t.interval) {
-		t.lock.Lock()
-		for _, sub := range t.subscriptions {
-			sub <- struct{}{}
+func (t *Ticker) Run(ctx context.Context) {
+	for {
+		select {
+		case <-time.Tick(t.interval):
+			t.lock.Lock()
+			for _, sub := range t.subscriptions {
+				sub <- struct{}{}
+			}
+			t.lock.Unlock()
+		case <-ctx.Done():
+			return
 		}
-		t.lock.Unlock()
 	}
 }
