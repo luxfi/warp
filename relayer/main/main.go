@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -56,7 +58,12 @@ const (
 func main() {
 	cfg := buildConfig()
 
-	errGroup, ctx := errgroup.WithContext(context.Background())
+	// Create parent context with cancel function
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create errgroup with parent context
+	errGroup, ctx := errgroup.WithContext(parentCtx)
 
 	// Modify the default http.DefaultClient globally
 	// TODO: Remove this temporary fix once the RPC clients used by the relayer
@@ -198,6 +205,7 @@ func main() {
 		logger.Fatal("Failed to create database", zap.Error(err))
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	// Initialize the global write ticker
 	ticker := utils.NewTicker(cfg.DBWriteIntervalSeconds)
@@ -313,9 +321,30 @@ func main() {
 			)
 		})
 	}
+
+	// Handle os signal
+	errGroup.Go(func() error {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+		sig := <-sigChan
+		logger.Info("Receive os signal", zap.String("signal", sig.String()))
+
+		// Cancel the parent context
+		// This will cascade to errgroup context
+		cancel()
+
+		// No error for graceful shutdown
+		return nil
+	})
+
 	logger.Info("Initialization complete")
-	err = errGroup.Wait()
-	logger.Error("Relayer exiting.", zap.Error(err))
+	if err := errGroup.Wait(); err != nil {
+		logger.Fatal("Relayer exiting with error.", zap.Error(err))
+		os.Exit(1)
+	}
+
+	logger.Info("Relayer exited gracefully")
 }
 
 // buildConfig parses the flags and builds the config
