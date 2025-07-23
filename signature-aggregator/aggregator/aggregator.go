@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/subnets"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
+	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -249,7 +250,40 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	if isL1 {
 		log.Debug("Checking L1 validators for zero balance nodes")
 		fetchL1Validators := func(subnetID ids.ID) ([]platformvmapi.APIL1Validator, error) {
-			return s.pChainClient.GetCurrentL1Validators(ctx, subnetID, nil, s.pChainClientOptions...)
+			validators, err := s.pChainClient.GetCurrentValidators(ctx, subnetID, nil, s.pChainClientOptions...)
+			if err != nil {
+				log.Error(
+					"Failed to fetch current L1 validators",
+					zap.String("subnetID", subnetID.String()),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to fetch current L1 validators: %w", err)
+			}
+
+			l1Validators := make([]platformvmapi.APIL1Validator, 0, len(validators))
+			for _, v := range validators {
+				if v.ClientL1Validator.ValidationID == nil {
+					log.Info(
+						"Skipping non-L1 validator",
+						zap.String("nodeID", v.NodeID.String()),
+					)
+					continue
+				}
+
+				apiL1Validator := platformvmapi.APIL1Validator{
+					NodeID:    v.NodeID,
+					Weight:    json.Uint64(v.Weight),
+					StartTime: json.Uint64(v.StartTime),
+					BaseL1Validator: platformvmapi.BaseL1Validator{
+						ValidationID: v.ClientL1Validator.ValidationID,
+						MinNonce:     (*json.Uint64)(v.ClientL1Validator.MinNonce),
+						Balance:      (*json.Uint64)(v.ClientL1Validator.Balance),
+					},
+				}
+				l1Validators = append(l1Validators, apiL1Validator)
+			}
+
+			return l1Validators, nil
 		}
 		l1Validators, err := s.currentL1ValidatorsCache.Get(signingSubnet, fetchL1Validators, skipCache)
 		if err != nil {
