@@ -80,14 +80,6 @@ func (v *CanonicalValidatorClient) GetSubnetID(ctx context.Context, blockchainID
 	return v.client.ValidatedBy(ctx, blockchainID, v.options...)
 }
 
-// Not called directly just defined for interface implementation
-func (v *CanonicalValidatorClient) GetCurrentValidatorSet(
-	_ context.Context,
-	_ ids.ID,
-) (map[ids.ID]*validators.GetCurrentValidatorOutput, uint64, error) {
-	return nil, 0, nil
-}
-
 func (v *CanonicalValidatorClient) GetProposedValidators(
 	ctx context.Context,
 	subnetID ids.ID,
