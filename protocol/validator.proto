@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package lux.warp.v1;
+
+option go_package = "github.com/luxfi/warp/protocol";
+
+// Validator represents a network validator
+message Validator {
+  // Validator node ID (32 bytes)
+  bytes node_id = 1;
+  
+  // BLS public key (96 bytes)
+  bytes bls_public_key = 2;
+  
+  // Validator weight for consensus
+  uint64 weight = 3;
+}
+
+// ValidatorSet represents a set of validators
+message ValidatorSet {
+  // List of validators
+  repeated Validator validators = 1;
+  
+  // Total weight of all validators
+  uint64 total_weight = 2;
+  
+  // Subnet ID this validator set belongs to
+  bytes subnet_id = 3;
+  
+  // Height at which this validator set is valid
+  uint64 height = 4;
+}
+
+// ValidatorSetUpdate represents changes to the validator set
+message ValidatorSetUpdate {
+  // Validators being added
+  repeated Validator added = 1;
+  
+  // Node IDs of validators being removed
+  repeated bytes removed = 2;
+  
+  // Height at which update takes effect
+  uint64 effective_height = 3;
+}
