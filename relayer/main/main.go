@@ -5,11 +5,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -35,7 +36,6 @@ import (
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/subnet-evm/ethclient"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -49,12 +49,21 @@ import (
 var version = "v0.0.0-dev"
 
 const (
-	relayerMetricsPrefix     = "app"
-	peerNetworkMetricsPrefix = "peers"
+	relayerMetricsPrefix        = "app"
+	peerNetworkMetricsPrefix    = "peers"
+	msgCreatorMetricsPrefix     = "msgcreator"
+	timeoutManagerMetricsPrefix = "timeoutmanager"
 )
 
 func main() {
 	cfg := buildConfig()
+
+	// Create parent context with cancel function
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create errgroup with parent context
+	errGroup, ctx := errgroup.WithContext(parentCtx)
 
 	// Modify the default http.DefaultClient globally
 	// TODO: Remove this temporary fix once the RPC clients used by the relayer
@@ -102,7 +111,7 @@ func main() {
 
 	// Initialize all source clients
 	logger.Info("Initializing source clients")
-	sourceClients, err := createSourceClients(context.Background(), logger, &cfg)
+	sourceClients, err := createSourceClients(ctx, logger, &cfg)
 	if err != nil {
 		logger.Fatal("Failed to create source clients", zap.Error(err))
 		os.Exit(1)
@@ -115,6 +124,8 @@ func main() {
 		[]string{
 			relayerMetricsPrefix,
 			peerNetworkMetricsPrefix,
+			msgCreatorMetricsPrefix,
+			timeoutManagerMetricsPrefix,
 		},
 	)
 	if err != nil {
@@ -123,6 +134,8 @@ func main() {
 	}
 	relayerMetricsRegistry := registries[relayerMetricsPrefix]
 	peerNetworkMetricsRegistry := registries[peerNetworkMetricsPrefix]
+	msgCreatorMetricsRegistry := registries[msgCreatorMetricsPrefix]
+	timeoutManagerMetricsRegistry := registries[timeoutManagerMetricsPrefix]
 
 	// Initialize the global app request network
 	logger.Info("Initializing app request network")
@@ -145,7 +158,7 @@ func main() {
 	// Initialize message creator passed down to relayers for creating app requests.
 	// We do not collect metrics for the message creator.
 	messageCreator, err := message.NewCreator(
-		prometheus.NewRegistry(), // isolate this from the rest of the metrics
+		msgCreatorMetricsRegistry,
 		constants.DefaultNetworkCompressionType,
 		constants.DefaultNetworkMaximumInboundTimeout,
 	)
@@ -165,9 +178,11 @@ func main() {
 	}
 
 	network, err := peers.NewNetwork(
+		ctx,
 		networkLogger,
 		relayerMetricsRegistry,
 		peerNetworkMetricsRegistry,
+		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
@@ -190,10 +205,11 @@ func main() {
 		logger.Fatal("Failed to create database", zap.Error(err))
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	// Initialize the global write ticker
 	ticker := utils.NewTicker(cfg.DBWriteIntervalSeconds)
-	go ticker.Run()
+	go ticker.Run(ctx)
 
 	relayerHealth := createHealthTrackers(&cfg)
 
@@ -267,19 +283,26 @@ func main() {
 	api.HandleRelay(logger, messageCoordinator)
 	api.HandleRelayMessage(logger, messageCoordinator)
 
-	// start the health check server
-	go func() {
-		err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.APIPort), nil)
-		if errors.Is(err, http.ErrServerClosed) {
-			logger.Info("Health check server closed")
-		} else if err != nil {
-			logger.Fatal("Health check server exited with error", zap.Error(err))
-			os.Exit(1)
+	errGroup.Go(func() error {
+		httpServer := &http.Server{
+			Addr: fmt.Sprintf(":%d", cfg.APIPort),
 		}
-	}()
+		// Handle graceful shutdown
+		go func() {
+			<-ctx.Done()
+			if err := httpServer.Shutdown(context.Background()); err != nil {
+				logger.Error("Failed to shutdown server", zap.Error(err))
+			}
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Failed to start server: %w", err)
+		}
+
+		return nil
+	})
 
 	// Create listeners for each of the subnets configured as a source
-	errGroup, ctx := errgroup.WithContext(context.Background())
 	for _, s := range cfg.SourceBlockchains {
 		sourceBlockchain := s
 
@@ -298,9 +321,30 @@ func main() {
 			)
 		})
 	}
+
+	// Handle os signal
+	errGroup.Go(func() error {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+		sig := <-sigChan
+		logger.Info("Receive os signal", zap.String("signal", sig.String()))
+
+		// Cancel the parent context
+		// This will cascade to errgroup context
+		cancel()
+
+		// No error for graceful shutdown
+		return nil
+	})
+
 	logger.Info("Initialization complete")
-	err = errGroup.Wait()
-	logger.Error("Relayer exiting.", zap.Error(err))
+	if err := errGroup.Wait(); err != nil {
+		logger.Fatal("Relayer exiting with error.", zap.Error(err))
+		os.Exit(1)
+	}
+
+	logger.Info("Relayer exited gracefully")
 }
 
 // buildConfig parses the flags and builds the config
@@ -334,7 +378,7 @@ func buildConfig() config.Config {
 
 	v, err := config.BuildViper(fs)
 	if err != nil {
-		log.Fatalf("couldn't configure flags: %s", err)
+		log.Fatalf("couldn't build viper: %s", err)
 	}
 
 	cfg, err := config.NewConfig(v)
