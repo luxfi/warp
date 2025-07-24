@@ -136,7 +136,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	// Default balance for funded accounts
 	fundedBalance := units.Avax * 100
 	// Underfunded balance for validators
-	underfundedBalance := uint64(2048*units.NanoAvax - 1)
+	underfundedBalance := 2048*units.NanoAvax - 1
 
 	// Convert the subnets to sovereign L1s
 	for _, subnet := range localNetworkInstance.GetL1Infos() {
