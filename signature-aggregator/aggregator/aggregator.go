@@ -35,7 +35,6 @@ import (
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
-	"github.com/ava-labs/libevm/log"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -180,7 +179,12 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	return connectedValidators, nil
 }
 
-func (s *SignatureAggregator) getL1Validators(ctx context.Context, signingSubnet ids.ID, skipCache bool) ([]platformvmapi.APIL1Validator, error) {
+func (s *SignatureAggregator) getL1Validators(
+	ctx context.Context,
+	log logging.Logger,
+	signingSubnet ids.ID,
+	skipCache bool,
+) ([]platformvmapi.APIL1Validator, error) {
 	fetchL1Validators := func(subnetID ids.ID) ([]platformvmapi.APIL1Validator, error) {
 		validators, err := s.pChainClient.GetCurrentValidators(ctx, subnetID, nil, s.pChainClientOptions...)
 		if err != nil {
@@ -238,7 +242,7 @@ func (s *SignatureAggregator) getExcludedValidators(
 	connectedValidators *peers.ConnectedCanonicalValidators,
 	skipCache bool,
 ) (set.Set[int], error) {
-	l1Validators, err := s.getL1Validators(ctx, signingSubnet, skipCache)
+	l1Validators, err := s.getL1Validators(ctx, log, signingSubnet, skipCache)
 	if err != nil {
 		log.Error(
 			"Failed to fetch L1 validators",
