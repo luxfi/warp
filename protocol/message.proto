@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package lux.warp.v1;
+
+option go_package = "github.com/luxfi/warp/protocol";
+
+// WarpMessage represents a cross-chain message
+message WarpMessage {
+  // Unique identifier for the message
+  bytes id = 1;
+  
+  // Source blockchain ID (32 bytes)
+  bytes source_chain_id = 2;
+  
+  // Destination blockchain ID (32 bytes)  
+  bytes destination_chain_id = 3;
+  
+  // Message payload
+  bytes payload = 4;
+  
+  // Optional: Addressed call information
+  AddressedCall addressed_call = 5;
+}
+
+// AddressedCall contains information for contract-to-contract calls
+message AddressedCall {
+  // Source contract address (20 bytes for EVM)
+  bytes source_address = 1;
+  
+  // Destination contract address (20 bytes for EVM)
+  bytes destination_address = 2;
+  
+  // Optional: Function selector or method ID
+  bytes method = 3;
+}
+
+// UnsignedMessage is a message without signatures
+message UnsignedMessage {
+  // The warp message
+  WarpMessage message = 1;
+  
+  // Timestamp when message was created
+  uint64 timestamp = 2;
+  
+  // Nonce for replay protection
+  uint64 nonce = 3;
+}
+
+// SignedMessage includes the message and its signatures
+message SignedMessage {
+  // The unsigned message
+  UnsignedMessage unsigned_message = 1;
+  
+  // Aggregated BLS signature
+  bytes signature = 2;
+  
+  // Bitmap indicating which validators signed
+  bytes signer_bitmap = 3;
+}
