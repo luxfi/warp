@@ -200,7 +200,7 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 		underfundedL1Nodes := set.NewSet[ids.NodeID](0)
 		for _, v := range validators {
 			if v.ClientL1Validator.ValidationID == nil {
-				log.Info(
+				log.Debug(
 					"Skipping non-L1 validator",
 					zap.String("nodeID", v.NodeID.String()),
 				)
@@ -347,7 +347,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// Inactive validator's stake weight still contributes to the total weight, but the verifying
 	// node will not be able to verify the aggregate signature if it includes an inactive validator.
 	signatureMap := make(map[int][bls.SignatureLen]byte)
-	excludedValidators := set.NewSet[int](0)
+	var excludedValidators set.Set[int]
 
 	// Fetch L1 validators and find the node IDs with Balance < minimumL1ValidatorBalance
 	// Find the corresponding canonical validator set index for each of these, and add to the exclusion list
