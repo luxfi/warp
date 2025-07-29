@@ -218,12 +218,12 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 				continue
 			}
 
-			if uint64(*l1Validator.Balance) < minimumL1ValidatorBalance {
+			if *l1Validator.Balance < minimumL1ValidatorBalance {
 				underfundedL1Nodes.Add(v.NodeID)
 				log.Debug(
 					"Node has insufficient balance",
 					zap.String("nodeID", v.NodeID.String()),
-					zap.Uint64("balance", uint64(*l1Validator.Balance)),
+					zap.Uint64("balance", *l1Validator.Balance),
 				)
 			}
 		}
