@@ -108,7 +108,7 @@ func NewSignatureAggregator(
 		pChainClientOptions:      pChainClientOptions,
 		currentL1ValidatorsCache: cache.NewTTLCache[ids.ID, []platformvmapi.APIL1Validator](l1ValidatorBalanceTTL),
 	}
-	sa.currentRequestID.Store(rand.Uint32() | 1)
+	sa.currentRequestID.Store(rand.Uint32() | 1) // Ensures only an odd request is generated when the network spins out
 	return &sa, nil
 }
 
@@ -354,7 +354,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
 		// Construct the AppRequest
-		requestID := s.currentRequestID.Add(2)
+		requestID := s.currentRequestID.Add(2) // Ensures the increments are made such that request numbers are odd
 		outMsg, err := s.messageCreator.AppRequest(
 			unsignedMessage.SourceChainID,
 			requestID,
