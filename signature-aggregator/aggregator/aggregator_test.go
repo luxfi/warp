@@ -239,7 +239,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 
 	var (
 		connectedValidators, _ = makeConnectedValidators(2)
-		requestID              = aggregator.currentRequestID.Load() + 1
+		requestID              = aggregator.currentRequestID.Load() + 2
 	)
 
 	chainID := ids.GenerateTestID()
@@ -266,14 +266,14 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		// Expect at most one call to RegisterAppRequest per node per retry for up to [maxAppRequestRetries] retries
 		for i := uint32(0); i < maxAppRequestRetries; i++ {
 			appRequestCopy := appRequest
-			appRequestCopy.RequestID = appRequest.RequestID + i
+			appRequestCopy.RequestID = appRequest.RequestID + i*2
 			mockNetwork.EXPECT().RegisterAppRequest(appRequestCopy).MaxTimes(1)
 		}
 	}
 
 	for i := uint32(0); i < maxAppRequestRetries; i++ {
 		mockNetwork.EXPECT().RegisterRequestID(
-			requestID+i,
+			requestID+i*2,
 			nodeIDs,
 		).Return(
 			make(chan message.InboundMessage, len(appRequests)),
@@ -357,7 +357,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 
 			// prime the signers' responses:
 
-			requestID := aggregator.currentRequestID.Load() + 1
+			requestID := aggregator.currentRequestID.Load() + 2
 
 			appRequests := makeAppRequests(chainID, requestID, connectedValidators)
 			for _, appRequest := range appRequests {
