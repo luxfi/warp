@@ -224,6 +224,7 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 					"Node has insufficient balance",
 					zap.String("nodeID", v.NodeID.String()),
 					zap.Uint64("balance", *l1Validator.Balance),
+					zap.Any("signingSubnetID", signingSubnet),
 				)
 			}
 		}
@@ -275,7 +276,9 @@ func (s *SignatureAggregator) getExcludedValidators(
 		if exclude {
 			log.Debug(
 				"Excluding validator",
+				zap.Int("index", i),
 				zap.Any("nodeIDs", validator.NodeIDs),
+				zap.Any("signingSubnetID", signingSubnet),
 			)
 			excludedValidators.Add(i)
 		}
@@ -873,6 +876,10 @@ func (s *SignatureAggregator) aggregateSignatures(
 			return nil, set.Bits{}, fmt.Errorf("%s: %w", msg, err)
 		}
 		signatures = append(signatures, sig)
+		log.Info(
+			"Adding signature to aggregate",
+			zap.Int("index", i),
+		)
 		vdrBitSet.Add(i)
 	}
 
