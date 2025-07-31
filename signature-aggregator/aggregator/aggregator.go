@@ -876,10 +876,6 @@ func (s *SignatureAggregator) aggregateSignatures(
 			return nil, set.Bits{}, fmt.Errorf("%s: %w", msg, err)
 		}
 		signatures = append(signatures, sig)
-		log.Info(
-			"Adding signature to aggregate",
-			zap.Int("index", i),
-		)
 		vdrBitSet.Add(i)
 	}
 

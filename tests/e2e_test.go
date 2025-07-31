@@ -28,7 +28,9 @@ import (
 )
 
 const (
-	warpGenesisTemplateFile = "./tests/utils/warp-genesis-template.json"
+	warpGenesisTemplateFile   = "./tests/utils/warp-genesis-template.json"
+	minimumL1ValidatorBalance = 2048 * units.NanoAvax
+	defaultBalance            = 100 * units.Avax
 )
 
 var (
@@ -133,11 +135,6 @@ var _ = ginkgo.BeforeSuite(func() {
 		teleporterInfo.DeployTeleporterRegistry(subnet, fundedKey)
 	}
 
-	// Default balance for funded accounts
-	fundedBalance := units.Avax * 100
-	// Underfunded balance for validators
-	underfundedBalance := 2048*units.NanoAvax - 1
-
 	// Convert the subnets to sovereign L1s
 	for _, subnet := range localNetworkInstance.GetL1Infos() {
 		localNetworkInstance.ConvertSubnet(
@@ -145,7 +142,7 @@ var _ = ginkgo.BeforeSuite(func() {
 			subnet,
 			teleporterTestUtils.PoAValidatorManager,
 			[]uint64{units.Schmeckle, units.Schmeckle, units.Schmeckle, units.Schmeckle},
-			[]uint64{fundedBalance, fundedBalance, fundedBalance, underfundedBalance},
+			[]uint64{defaultBalance, defaultBalance, defaultBalance, minimumL1ValidatorBalance - 1},
 			fundedKey,
 			false,
 		)
