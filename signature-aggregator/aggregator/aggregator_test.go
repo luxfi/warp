@@ -481,9 +481,8 @@ func TestUnmarshalResponse(t *testing.T) {
 }
 
 func TestGetExcludedValidators(t *testing.T) {
-	minBalance := minimumL1ValidatorBalance
-	underFunded := minBalance - 1
-	funded := minBalance + 1
+	underFunded := minimumL1ValidatorBalance - 1
+	funded := minimumL1ValidatorBalance
 
 	nodeID1 := ids.GenerateTestNodeID()
 	validationID1 := ids.GenerateTestID()

@@ -248,7 +248,7 @@ func getUnderfundedNodeIndexes(
 	pClient := platformvm.NewClient(primaryNetworkURI)
 	currentValidators, err := pClient.GetCurrentValidators(ctx, subnetID, nil)
 	Expect(err).Should(BeNil(), "Failed to get current validators")
-	
+
 	underfundedNodes := set.NewSet[ids.NodeID](0)
 	minBalance := 2048 * units.NanoAvax
 	for _, v := range currentValidators {
