@@ -33,6 +33,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	minimumBalanceForValidator = 2048 * units.NanoAvax // Minimum balance for a validator to be considered funded
+)
+
 // Tests signature aggregation with a private network
 // Steps:
 // - Sets up a primary network and a subnet.
@@ -250,10 +254,9 @@ func getUnderfundedNodeIndexes(
 	Expect(err).Should(BeNil(), "Failed to get current validators")
 
 	underfundedNodes := set.NewSet[ids.NodeID](0)
-	minBalance := 2048 * units.NanoAvax
 	for _, v := range currentValidators {
 		// Check if the validator is L1 and underfunded
-		if v.ClientL1Validator.ValidationID != nil && (v.Balance == nil || *v.Balance < minBalance) {
+		if v.ClientL1Validator.ValidationID != nil && (v.Balance == nil || *v.Balance < minimumBalanceForValidator) {
 			underfundedNodes.Add(v.NodeID)
 		}
 	}
