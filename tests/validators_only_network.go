@@ -270,7 +270,6 @@ func getUnderfundedNodeIndexes(
 	canonicalSet, err := validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
 	Expect(err).Should(BeNil(), "Failed to get current canonical validator set")
 	for i, validator := range canonicalSet.Validators {
-		fmt.Printf("Index %d: NodeIDs: %v\n", i, validator.NodeIDs)
 		for _, nodeID := range validator.NodeIDs {
 			if underfundedNodes.Contains(nodeID) {
 				underfundedNodesIndex.Add(i)

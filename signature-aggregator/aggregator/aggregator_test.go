@@ -3,6 +3,7 @@ package aggregator
 import (
 	"bytes"
 	"context"
+	"slices"
 	"testing"
 
 	"crypto/rand"
@@ -489,12 +490,13 @@ func TestGetExcludedValidators(t *testing.T) {
 	nodeID2 := ids.GenerateTestNodeID()
 	validationID2 := ids.GenerateTestID()
 	nodeID3 := ids.GenerateTestNodeID()
+	validationID3 := ids.GenerateTestID()
 
 	testCases := []struct {
 		name         string
 		l1Validators []platformvm.ClientPermissionlessValidator
 		connected    *peers.ConnectedCanonicalValidators
-		excludedIdx  map[int]bool // validator indices expected to be excluded
+		excludedIdx  []int // Indices of validators that should be excluded
 	}{
 		{
 			name: "all underfunded",
@@ -522,7 +524,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: true, 1: true},
+			excludedIdx: []int{0, 1},
 		},
 		{
 			name: "all funded",
@@ -550,7 +552,42 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: false, 1: false},
+			excludedIdx: []int{},
+		},
+		{
+			name: "one underfunded, one funded",
+			l1Validators: []platformvm.ClientPermissionlessValidator{
+				{
+					ClientStaker: platformvm.ClientStaker{NodeID: nodeID1},
+					ClientL1Validator: platformvm.ClientL1Validator{
+						ValidationID: &validationID1,
+						Balance:      &funded,
+					},
+				},
+				{
+					ClientStaker: platformvm.ClientStaker{NodeID: nodeID2},
+					ClientL1Validator: platformvm.ClientL1Validator{
+						ValidationID: &validationID2,
+						Balance:      &funded,
+					},
+				},
+				{
+					ClientStaker: platformvm.ClientStaker{NodeID: nodeID3},
+					ClientL1Validator: platformvm.ClientL1Validator{
+						ValidationID: &validationID3,
+						Balance:      &underFunded,
+					},
+				},
+			},
+			connected: &peers.ConnectedCanonicalValidators{
+				ValidatorSet: warp.CanonicalValidatorSet{
+					Validators: []*warp.Validator{
+						{NodeIDs: []ids.NodeID{nodeID1}},
+						{NodeIDs: []ids.NodeID{nodeID2, nodeID3}},
+					},
+				},
+			},
+			excludedIdx: []int{},
 		},
 		{
 			name: "mixed L1/non-L1",
@@ -577,7 +614,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: false, 1: false},
+			excludedIdx: []int{},
 		},
 		{
 			name: "nil balance",
@@ -597,7 +634,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: true},
+			excludedIdx: []int{0},
 		},
 		{
 			name: "multiple nodeIDs per validator",
@@ -622,7 +659,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: false},
+			excludedIdx: []int{},
 		},
 		{
 			name:         "no L1 validators",
@@ -634,7 +671,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					},
 				},
 			},
-			excludedIdx: map[int]bool{0: false},
+			excludedIdx: []int{},
 		},
 		{
 			name:         "empty validator set",
@@ -644,7 +681,7 @@ func TestGetExcludedValidators(t *testing.T) {
 					Validators: []*warp.Validator{},
 				},
 			},
-			excludedIdx: map[int]bool{},
+			excludedIdx: []int{},
 		},
 	}
 
@@ -662,7 +699,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			excluded, err := aggregator.getExcludedValidators(ctx, log, signingSubnet, tc.connected, true)
 			require.NoError(t, err)
 			for idx := range tc.connected.ValidatorSet.Validators {
-				shouldBeExcluded := tc.excludedIdx[idx]
+				shouldBeExcluded := slices.Contains(tc.excludedIdx, idx)
 				if shouldBeExcluded {
 					require.True(t, excluded.Contains(idx), "validator %d should be excluded", idx)
 				} else {
