@@ -263,7 +263,7 @@ func (s *SignatureAggregator) getExcludedValidators(
 	}
 
 	excludedValidators := set.NewSet[int](0)
-	// Only exclude a canonical validator if all of its nodes are unfunded L1 validators.
+	// Only exclude a canonical validator if all of its nodes are underfunded L1 validators.
 	for i, validator := range connectedValidators.ValidatorSet.Validators {
 		exclude := true
 		for _, nodeID := range validator.NodeIDs {
