@@ -27,7 +27,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/ava-labs/avalanchego/vms/platformvm"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/cache"
 	"github.com/ava-labs/icm-services/peers"
@@ -69,7 +68,7 @@ type SignatureAggregator struct {
 	currentRequestID       atomic.Uint32
 	metrics                *metrics.SignatureAggregatorMetrics
 	signatureCache         *SignatureCache
-	pChainClient           platformvm.Client
+	pChainClient           peers.PChainClient
 	pChainClientOptions    []rpc.Option
 	underfundedL1NodeCache *cache.TTLCache[ids.ID, set.Set[ids.NodeID]]
 
@@ -85,7 +84,7 @@ func NewSignatureAggregator(
 	messageCreator message.Creator,
 	signatureCacheSize uint64,
 	metrics *metrics.SignatureAggregatorMetrics,
-	pChainClient platformvm.Client,
+	pChainClient peers.PChainClient,
 	pChainClientOptions []rpc.Option,
 ) (*SignatureAggregator, error) {
 	signatureCache, err := NewSignatureCache(signatureCacheSize)

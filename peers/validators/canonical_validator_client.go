@@ -37,7 +37,7 @@ type CanonicalValidatorState interface {
 // CanonicalValidatorClient wraps [platformvm.Client] and implements [CanonicalValidatorState]
 type CanonicalValidatorClient struct {
 	logger  logging.Logger
-	client  platformvm.Client
+	client  *platformvm.Client
 	options []rpc.Option
 }
 
