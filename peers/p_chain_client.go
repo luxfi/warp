@@ -16,6 +16,11 @@ import (
 var _ PChainClient = &platformvm.Client{}
 
 type PChainClient interface {
-	GetCurrentValidators(ctx context.Context, subnetID ids.ID, nodeIDs []ids.NodeID, options ...rpc.Option) ([]platformvm.ClientPermissionlessValidator, error)
+	GetCurrentValidators(
+		ctx context.Context,
+		subnetID ids.ID,
+		nodeIDs []ids.NodeID,
+		options ...rpc.Option,
+	) ([]platformvm.ClientPermissionlessValidator, error)
 	GetSubnet(ctx context.Context, subnetID ids.ID, options ...rpc.Option) (platformvm.GetSubnetClientResponse, error)
 }
