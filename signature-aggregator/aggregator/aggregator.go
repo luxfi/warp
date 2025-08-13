@@ -300,14 +300,16 @@ func (s *SignatureAggregator) selectSigningSubnet(
 	log logging.Logger,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	inputSigningSubnet ids.ID,
-) (signingSubnetID ids.ID, sourceSubnetID ids.ID, err error) {
-	sourceSubnetID, err = s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
+) (ids.ID, ids.ID, error) {
+	sourceSubnetID, err := s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
 	if err != nil {
 		return ids.ID{}, ids.ID{}, fmt.Errorf(
 			"source message subnet not found for chainID %s",
 			unsignedMessage.SourceChainID,
 		)
 	}
+
+	var signingSubnetID ids.ID
 	if inputSigningSubnet == ids.Empty {
 		signingSubnetID = sourceSubnetID
 	} else {
@@ -357,7 +359,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
 		// Construct the AppRequest
-		requestID := s.currentRequestID.Add(1)
+		requestID := s.currentRequestID.Add(2)
 		outMsg, err := s.messageCreator.AppRequest(
 			unsignedMessage.SourceChainID,
 			requestID,
@@ -591,7 +593,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// For L1s, we must take care to *not* include inactive validators in the signature map.
 	// Inactive validator's stake weight still contributes to the total weight, but the verifying
 	// node will not be able to verify the aggregate signature if it includes an inactive validator.
-	signatureMap := make(map[int][bls.SignatureLen]byte)
 	var excludedValidators set.Set[int]
 
 	// Fetch L1 validators and find the node IDs with Balance < minimumL1ValidatorBalance
