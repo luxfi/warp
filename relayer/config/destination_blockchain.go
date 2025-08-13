@@ -10,8 +10,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/utils"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -126,7 +126,7 @@ func (s *DestinationBlockchain) Validate() error {
 
 	if s.subnetID == constants.PrimaryNetworkID &&
 		s.BlockGasLimit > defaultBlockGasLimit {
-		return fmt.Errorf("C-Chain block-gas-limit '%d' exceeded", s.BlockGasLimit)
+		return fmt.Errorf("c-chain block-gas-limit '%d' exceeded", s.BlockGasLimit)
 	}
 
 	// If not set, use the default value for the maximum priority fee per gas.

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -93,5 +93,9 @@ func (m *mockDB) Get(relayerID common.Hash, key DataKey) ([]byte, error) {
 }
 
 func (m *mockDB) Put(relayerID common.Hash, key DataKey, value []byte) error {
+	return nil
+}
+
+func (m *mockDB) Close() error {
 	return nil
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
+	"github.com/ava-labs/libevm/log"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -43,7 +44,7 @@ type blsSignatureBuf [bls.SignatureLen]byte
 const (
 	// Maximum amount of time to spend waiting (in addition to network round trip time per attempt)
 	// during relayer signature query routine
-	signatureRequestTimeout = 5 * time.Second
+	signatureRequestTimeout = 2 * utils.DefaultAppRequestTimeout
 	// Maximum amount of time to spend waiting for a connection to a quorum of validators for
 	// a given subnetID
 	connectToValidatorsTimeout = 5 * time.Second
@@ -64,14 +65,14 @@ var (
 )
 
 type SignatureAggregator struct {
-	network                  peers.AppRequestNetwork
-	messageCreator           message.Creator
-	currentRequestID         atomic.Uint32
-	metrics                  *metrics.SignatureAggregatorMetrics
-	signatureCache           *SignatureCache
-	pChainClient             platformvm.Client
-	pChainClientOptions      []rpc.Option
-	currentL1ValidatorsCache *cache.TTLCache[ids.ID, []platformvm.APIL1Validator]
+	network                peers.AppRequestNetwork
+	messageCreator         message.Creator
+	currentRequestID       atomic.Uint32
+	metrics                *metrics.SignatureAggregatorMetrics
+	signatureCache         *SignatureCache
+	pChainClient           platformvm.Client
+	pChainClientOptions    []rpc.Option
+	underfundedL1NodeCache *cache.TTLCache[ids.ID, set.Set[ids.NodeID]]
 
 	subnetMapsLock sync.Mutex
 
@@ -96,26 +97,24 @@ func NewSignatureAggregator(
 		)
 	}
 	sa := SignatureAggregator{
-		network:                  network,
-		subnetIDsByBlockchainID:  map[ids.ID]ids.ID{},
-		subnetIDIsL1:             map[ids.ID]bool{},
-		metrics:                  metrics,
-		currentRequestID:         atomic.Uint32{},
-		signatureCache:           signatureCache,
-		messageCreator:           messageCreator,
-		pChainClient:             pChainClient,
-		pChainClientOptions:      pChainClientOptions,
-		currentL1ValidatorsCache: cache.NewTTLCache[ids.ID, []platformvm.APIL1Validator](l1ValidatorBalanceTTL),
+		network:                 network,
+		subnetIDsByBlockchainID: map[ids.ID]ids.ID{},
+		subnetIDIsL1:            map[ids.ID]bool{},
+		metrics:                 metrics,
+		currentRequestID:        atomic.Uint32{},
+		signatureCache:          signatureCache,
+		messageCreator:          messageCreator,
+		pChainClient:            pChainClient,
+		pChainClientOptions:     pChainClientOptions,
+		underfundedL1NodeCache:  cache.NewTTLCache[ids.ID, set.Set[ids.NodeID]](l1ValidatorBalanceTTL),
 	}
-	sa.currentRequestID.Store(rand.Uint32())
+	// invariant: requestIDs for AppRequests must be odd numbered
+	sa.currentRequestID.Store(rand.Uint32() | 1)
 	return &sa, nil
 }
 
-func (s *SignatureAggregator) Shutdown() {
-	s.network.Shutdown()
-}
-
 func (s *SignatureAggregator) connectToQuorumValidators(
+	ctx context.Context,
 	log logging.Logger,
 	signingSubnet ids.ID,
 	quorumPercentage uint64,
@@ -126,7 +125,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	var connectedValidators *peers.ConnectedCanonicalValidators
 	var err error
 	connectOp := func() error {
-		connectedValidators, err = s.network.GetConnectedCanonicalValidators(signingSubnet, skipCache)
+		connectedValidators, err = s.network.GetConnectedCanonicalValidators(ctx, signingSubnet, skipCache)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
 			log.Error(
@@ -147,11 +146,26 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 			connectedValidators.ValidatorSet.TotalWeight,
 			quorumPercentage,
 		) {
+			// Log details of each connected validator for troubleshooting
+			if log.Enabled(logging.Debug) {
+				for _, vdr := range connectedValidators.ValidatorSet.Validators {
+					for _, nodeID := range vdr.NodeIDs {
+						log.Debug(
+							"Connected validator details",
+							zap.Stringer("signingSubnet", signingSubnet),
+							zap.String("nodeID", nodeID.String()),
+							zap.Uint64("weight", vdr.Weight),
+						)
+					}
+				}
+			}
 			log.Warn(
 				"Failed to connect to a threshold of stake",
+				zap.Stringer("signingSubnet", signingSubnet),
 				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
 				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
 				zap.Uint64("quorumPercentage", quorumPercentage),
+				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
 			)
 			s.metrics.FailuresToConnectToSufficientStake.Inc()
 			return errNotEnoughConnectedStake
@@ -163,6 +177,115 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 		return nil, err
 	}
 	return connectedValidators, nil
+}
+
+// getUnderfundedL1Nodes fetches the set of L1 nodes that are underfunded
+// It uses the underfundedL1NodeCache to avoid fetching the same data multiple times
+func (s *SignatureAggregator) getUnderfundedL1Nodes(
+	ctx context.Context,
+	log logging.Logger,
+	signingSubnet ids.ID,
+	skipCache bool,
+) (set.Set[ids.NodeID], error) {
+	fetchUnderfundedL1Nodes := func(subnetID ids.ID) (set.Set[ids.NodeID], error) {
+		validators, err := s.pChainClient.GetCurrentValidators(ctx, subnetID, nil, s.pChainClientOptions...)
+		if err != nil {
+			log.Error(
+				"Failed to fetch current L1 validators",
+				zap.String("subnetID", subnetID.String()),
+				zap.Error(err),
+			)
+			return nil, fmt.Errorf("failed to fetch current L1 validators: %w", err)
+		}
+
+		underfundedL1Nodes := set.NewSet[ids.NodeID](0)
+		for _, v := range validators {
+			if v.ClientL1Validator.ValidationID == nil {
+				log.Debug(
+					"Skipping non-L1 validator",
+					zap.String("nodeID", v.NodeID.String()),
+				)
+				continue
+			}
+
+			l1Validator := v.ClientL1Validator
+
+			if l1Validator.Balance == nil {
+				underfundedL1Nodes.Add(v.NodeID)
+				log.Warn(
+					"Node has nil balance",
+					zap.String("nodeID", v.NodeID.String()),
+				)
+				continue
+			}
+
+			if *l1Validator.Balance < minimumL1ValidatorBalance {
+				underfundedL1Nodes.Add(v.NodeID)
+				log.Debug(
+					"Node has insufficient balance",
+					zap.String("nodeID", v.NodeID.String()),
+					zap.Uint64("balance", *l1Validator.Balance),
+					zap.Any("signingSubnetID", signingSubnet),
+				)
+			}
+		}
+
+		return underfundedL1Nodes, nil
+	}
+
+	underfundedL1Nodes, err := s.underfundedL1NodeCache.Get(signingSubnet, fetchUnderfundedL1Nodes, skipCache)
+	if err != nil {
+		log.Error(
+			"Failed to get underfunded L1 nodes",
+			zap.String("signingSubnetID", signingSubnet.String()),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	return underfundedL1Nodes, nil
+}
+
+func (s *SignatureAggregator) getExcludedValidators(
+	ctx context.Context,
+	log logging.Logger,
+	signingSubnet ids.ID,
+	connectedValidators *peers.ConnectedCanonicalValidators,
+	skipCache bool,
+) (set.Set[int], error) {
+	underfundedL1Nodes, err := s.getUnderfundedL1Nodes(ctx, log, signingSubnet, skipCache)
+	if err != nil {
+		log.Error(
+			"Failed to fetch underfunded L1 nodes",
+			zap.String("signingSubnetID", signingSubnet.String()),
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("failed to fetch underfunded L1 nodes: %w", err)
+	}
+
+	excludedValidators := set.NewSet[int](0)
+	// Only exclude a canonical validator if all of its nodes are underfunded L1 validators.
+	for i, validator := range connectedValidators.ValidatorSet.Validators {
+		exclude := true
+		for _, nodeID := range validator.NodeIDs {
+			// Filter out L1 validators that do not have minimumL1ValidatorBalance
+			if !underfundedL1Nodes.Contains(nodeID) {
+				exclude = false
+				break
+			}
+		}
+		if exclude {
+			log.Debug(
+				"Excluding validator",
+				zap.Int("index", i),
+				zap.Any("nodeIDs", validator.NodeIDs),
+				zap.Any("signingSubnetID", signingSubnet),
+			)
+			excludedValidators.Add(i)
+		}
+	}
+
+	return excludedValidators, nil
 }
 
 func validateQuorumPercentages(required, buffer uint64) error {
@@ -177,8 +300,8 @@ func (s *SignatureAggregator) selectSigningSubnet(
 	log logging.Logger,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	inputSigningSubnet ids.ID,
-) (signingSubnet, sourceSubnet ids.ID, err error) {
-	sourceSubnet, err = s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
+) (signingSubnetID ids.ID, sourceSubnetID ids.ID, err error) {
+	sourceSubnetID, err = s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
 	if err != nil {
 		return ids.ID{}, ids.ID{}, fmt.Errorf(
 			"source message subnet not found for chainID %s",
@@ -186,63 +309,11 @@ func (s *SignatureAggregator) selectSigningSubnet(
 		)
 	}
 	if inputSigningSubnet == ids.Empty {
-		signingSubnet = sourceSubnet
+		signingSubnetID = sourceSubnetID
 	} else {
-		signingSubnet = inputSigningSubnet
+		signingSubnetID = inputSigningSubnet
 	}
-	return signingSubnet, sourceSubnet, nil
-}
-
-func (s *SignatureAggregator) getExcludedValidators(
-	ctx context.Context,
-	log logging.Logger,
-	signingSubnet ids.ID,
-	connectedValidators *peers.ConnectedCanonicalValidators,
-	skipCache bool,
-) (set.Set[int], error) {
-	fetchL1Validators := func(subnetID ids.ID) ([]platformvm.APIL1Validator, error) {
-		return s.pChainClient.GetCurrentL1Validators(ctx, subnetID, nil, s.pChainClientOptions...)
-	}
-	l1Validators, err := s.currentL1ValidatorsCache.Get(signingSubnet, fetchL1Validators, skipCache)
-	if err != nil {
-		log.Error(
-			"Failed to get L1 validators",
-			zap.String("signingSubnetID", signingSubnet.String()),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	underfundedNodes := set.NewSet[ids.NodeID](0)
-	for _, validator := range l1Validators {
-		if uint64(validator.Balance) < minimumL1ValidatorBalance {
-			underfundedNodes.Add(validator.NodeID)
-			log.Debug(
-				"Node has insufficient balance",
-				zap.String("nodeID", validator.NodeID.String()),
-				zap.Uint64("balance", uint64(validator.Balance)),
-			)
-		}
-	}
-
-	excludedValidators := set.NewSet[int](0)
-	for i, validator := range connectedValidators.ValidatorSet.Validators {
-		exclude := true
-		for _, nodeID := range validator.NodeIDs {
-			if !underfundedNodes.Contains(nodeID) {
-				exclude = false
-				break
-			}
-		}
-		if exclude {
-			log.Debug(
-				"Excluding validator",
-				zap.Any("nodeIDs", validator.NodeIDs),
-			)
-			excludedValidators.Add(i)
-		}
-	}
-	return excludedValidators, nil
+	return signingSubnetID, sourceSubnetID, nil
 }
 
 func (s *SignatureAggregator) populateSignatureMapFromCache(
@@ -253,8 +324,10 @@ func (s *SignatureAggregator) populateSignatureMapFromCache(
 	signatureMap := make(map[int][bls.SignatureLen]byte)
 	accumulatedSignatureWeight := big.NewInt(0)
 	if cachedSignatures, ok := s.signatureCache.Get(unsignedMessage.ID()); ok {
+		log.Debug("Found cached signatures", zap.Int("signatureCount", len(cachedSignatures)))
 		for i, validator := range connectedValidators.ValidatorSet.Validators {
 			cachedSignature, found := cachedSignatures[PublicKeyBytes(validator.PublicKeyBytes)]
+			// Do not include explicitly excluded validators in the aggregation
 			if found && !excludedValidators.Contains(i) {
 				signatureMap[i] = cachedSignature
 				accumulatedSignatureWeight.Add(
@@ -264,6 +337,7 @@ func (s *SignatureAggregator) populateSignatureMapFromCache(
 			}
 		}
 	}
+	s.metrics.SignatureCacheHits.Add(float64(len(signatureMap)))
 	return signatureMap, accumulatedSignatureWeight
 }
 
@@ -495,8 +569,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	// Fetch connected validators
-	connectedValidators, err := s.connectToQuorumValidators(log, signingSubnet, requiredQuorumPercentage, skipCache)
+	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -506,7 +579,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return nil, err
 	}
 
-	// (If L1) Exclude underfunded validators
 	isL1 := false
 	if signingSubnet != constants.PrimaryNetworkID {
 		isL1, err = s.isSubnetL1(ctx, log, signingSubnet)
@@ -519,15 +591,22 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// For L1s, we must take care to *not* include inactive validators in the signature map.
 	// Inactive validator's stake weight still contributes to the total weight, but the verifying
 	// node will not be able to verify the aggregate signature if it includes an inactive validator.
-	excludedValidators := set.NewSet[int](0)
+	signatureMap := make(map[int][bls.SignatureLen]byte)
+	var excludedValidators set.Set[int]
 
 	// Fetch L1 validators and find the node IDs with Balance < minimumL1ValidatorBalance
 	// Find the corresponding canonical validator set index for each of these, and add to the exclusion list
 	// if ALL of the node IDs for a validator have Balance < minimumL1ValidatorBalance
 	if isL1 {
+		log.Debug("Checking L1 validators for zero balance nodes")
 		excludedValidators, err = s.getExcludedValidators(ctx, log, signingSubnet, connectedValidators, skipCache)
 		if err != nil {
-			return nil, err
+			log.Error(
+				"Failed to get excluded validators",
+				zap.String("signingSubnetID", signingSubnet.String()),
+				zap.Error(err),
+			)
+			return nil, fmt.Errorf("failed to get excluded validators: %w", err)
 		}
 	}
 
@@ -590,7 +669,6 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		)
 		return nil, err
 	}
-
 	return signedMsg, nil
 }
 

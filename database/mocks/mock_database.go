@@ -13,7 +13,7 @@ import (
 	reflect "reflect"
 
 	database "github.com/ava-labs/icm-services/database"
-	common "github.com/ethereum/go-ethereum/common"
+	common "github.com/ava-labs/libevm/common"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -39,6 +39,20 @@ func NewMockRelayerDatabase(ctrl *gomock.Controller) *MockRelayerDatabase {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRelayerDatabase) EXPECT() *MockRelayerDatabaseMockRecorder {
 	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockRelayerDatabase) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockRelayerDatabaseMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRelayerDatabase)(nil).Close))
 }
 
 // Get mocks base method.
