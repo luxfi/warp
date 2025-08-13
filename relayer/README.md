@@ -48,7 +48,7 @@ See the [Building](#building) section for instructions on how to build the relay
 
 ## Requirements
 
-[buf](github.com/bufbuild/buf/) is required to rebuild protobuf definitions if changes are made to any `.proto` files. See [Generate Protobuf Files](#generate-protobuf-files) for more information.
+[buf](https://github.com/bufbuild/buf/) is required to rebuild protobuf definitions if changes are made to any `.proto` files. See [Generate Protobuf Files](#generate-protobuf-files) for more information.
 
 ### System Requirements
 
@@ -530,7 +530,7 @@ go generate ./...
 
 ### Generate Protobuf Files
 
-[buf](github.com/bufbuild/buf/) is used to generate protobuf definitions for communication with the [Decider service](https://github.com/ava-labs/icm-services/blob/main/proto/decider/decider.proto). If you change any of the protobuf definitions you will have to regenerate the `.go` files. To generate these files, run the following command at the root of the project:
+[buf](https://github.com/bufbuild/buf/) is used to generate protobuf definitions for communication with the [Decider service](https://github.com/ava-labs/icm-services/blob/main/proto/decider/decider.proto). If you change any of the protobuf definitions you will have to regenerate the `.go` files. To generate these files, run the following command at the root of the project:
 
 ```bash
 ./scripts/protobuf_codegen.sh
@@ -538,7 +538,7 @@ go generate ./...
 
 ### Generate Abi Bindings
 
-[subnet-evm](github.com/ava-labs/subnet-evm/cmd/abigen/) is used to generate abi binding `.go` files for solidity contracts. If you change any of the smart contracts, you will have to update the abi bindings. To generate these files, run the following command at the root of the project:
+[subnet-evm](https://github.com/ava-labs/subnet-evm/tree/6e67777132dd7d0d556e1e34d68ad8e27b22ebef/cmd/abigen) is used to generate abi binding `.go` files for solidity contracts. If you change any of the smart contracts, you will have to update the abi bindings. To generate these files, run the following command at the root of the project:
 
 ```bash
 ./scripts/abi_bindings.sh

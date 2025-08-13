@@ -19,13 +19,22 @@ import (
 	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-contracts/tests/interfaces"
 	"github.com/ava-labs/icm-contracts/tests/network"
 	"github.com/ava-labs/icm-contracts/tests/utils"
+	"github.com/ava-labs/icm-services/config"
+	"github.com/ava-labs/icm-services/peers/validators"
 	"github.com/ava-labs/icm-services/signature-aggregator/api"
 	testUtils "github.com/ava-labs/icm-services/tests/utils"
 	. "github.com/onsi/gomega"
+)
+
+const (
+	minimumBalanceForValidator = 2048 * units.NanoAvax // Minimum balance for a validator to be considered funded
 )
 
 // Tests signature aggregation with a private network
@@ -48,6 +57,8 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	_, l1BInfo := network.GetTwoL1s()
 	fundedAddress, fundedKey := network.GetFundedAccountInfo()
 
+	underfundedNodesIndex := getUnderfundedNodeIndexes(ctx, l1AInfo.NodeURIs[0], l1BInfo.SubnetID)
+
 	// Start the signature-aggregator for the first time to generate the
 	// TLS cert key pair
 	dir, err := os.MkdirTemp(os.TempDir(), "sig-agg-tls-cert")
@@ -66,6 +77,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	certPath := dir + "/cert.pem"
 
 	signatureAggregatorConfig := baseConfig
+	signatureAggregatorConfig.TrackedSubnetIDs = []string{l1BInfo.SubnetID.String()}
 	signatureAggregatorConfig.TLSCertPath = certPath
 	signatureAggregatorConfig.TLSKeyPath = keyPath
 
@@ -120,7 +132,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 			subnet.Config = make(map[string]interface{})
 			subnet.Config["validatorOnly"] = true
 			subnet.Config["allowedNodes"] = relayerNodeIDSet
-			err := subnet.Write(network.GetSubnetDir(), network.GetChainConfigDir())
+			err := subnet.Write(network.GetSubnetDir())
 			Expect(err).Should(BeNil())
 			l1BNodes.Add(subnet.ValidatorIDs...)
 		}
@@ -128,11 +140,13 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	// Restart l1B nodes
 	for _, tmpnetNode := range network.Nodes {
 		if l1BNodes.Contains(tmpnetNode.NodeID) {
-			tmpnetNode.RuntimeConfig.ReuseDynamicPorts = true
+			Expect(network.DefaultRuntimeConfig).ShouldNot(BeNil())
+			Expect(network.DefaultRuntimeConfig.Process.ReuseDynamicPorts).Should(BeTrue())
+			tmpnetNode.RuntimeConfig = &network.DefaultRuntimeConfig
 			// Restart the network to apply the new chain configs
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
-			err := network.RestartNode(ctx, logging.NoLog{}, tmpnetNode)
+			err := tmpnetNode.Restart(ctx)
 			Expect(err).Should(BeNil())
 		}
 	}
@@ -145,7 +159,7 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		Message: "0x" + hex.EncodeToString(warpMessage.Bytes()),
 	}
 	client := http.Client{
-		Timeout: 20 * time.Second,
+		Timeout: 30 * time.Second,
 	}
 
 	var sendRequestToAPI = func(success bool) {
@@ -182,6 +196,16 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 		signedMessage, err := avalancheWarp.ParseMessage(decodedMessage)
 		Expect(err).Should(BeNil())
 		Expect(signedMessage.ID()).Should(Equal(warpMessage.ID()))
+
+		bitsetSig, ok := signedMessage.Signature.(*warp.BitSetSignature)
+		Expect(ok).Should(BeTrue(), "Signature is not a BitSetSignature")
+
+		signerBits := set.BitsFromBytes(bitsetSig.Signers)
+		for i := 0; i < signerBits.BitLen(); i++ {
+			if underfundedNodesIndex.Contains(i) {
+				Expect(signerBits.Contains(i)).Should(BeFalse(), "Signature contains underfunded node index %d", i)
+			}
+		}
 	}
 
 	// start sig-agg again with a floating TLS cert - this should fail
@@ -217,4 +241,44 @@ func ValidatorsOnlyNetwork(network *network.LocalNetwork, teleporter utils.Telep
 	testUtils.WaitForChannelClose(startupCtx, readyChan)
 
 	sendRequestToAPI(true)
+}
+
+func getUnderfundedNodeIndexes(
+	ctx context.Context,
+	primaryNetworkURI string,
+	subnetID ids.ID,
+) set.Set[int] {
+	// Find the underfunded nodes index
+	pClient := platformvm.NewClient(primaryNetworkURI)
+	currentValidators, err := pClient.GetCurrentValidators(ctx, subnetID, nil)
+	Expect(err).Should(BeNil(), "Failed to get current validators")
+
+	underfundedNodes := set.NewSet[ids.NodeID](0)
+	for _, v := range currentValidators {
+		// Check if the validator is L1 and underfunded
+		if v.ClientL1Validator.ValidationID != nil && (v.Balance == nil || *v.Balance < minimumBalanceForValidator) {
+			underfundedNodes.Add(v.NodeID)
+		}
+	}
+
+	if underfundedNodes.Len() == 0 {
+		return set.NewSet[int](0)
+	}
+
+	// Get the canonical validator set to find the underfunded nodes index
+	underfundedNodesIndex := set.NewSet[int](0)
+	validatorClient := validators.NewCanonicalValidatorClient(logging.NoLog{}, &config.APIConfig{
+		BaseURL: primaryNetworkURI,
+	})
+	canonicalSet, err := validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
+	Expect(err).Should(BeNil(), "Failed to get current canonical validator set")
+	for i, validator := range canonicalSet.Validators {
+		for _, nodeID := range validator.NodeIDs {
+			if underfundedNodes.Contains(nodeID) {
+				underfundedNodesIndex.Add(i)
+			}
+		}
+	}
+
+	return underfundedNodesIndex
 }
