@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -70,6 +70,10 @@ func (r *RedisDatabase) Put(relayerID common.Hash, key DataKey, value []byte) er
 		return err
 	}
 	return nil
+}
+
+func (r *RedisDatabase) Close() error {
+	return r.client.Close()
 }
 
 func constructCompositeKey(relayerID common.Hash, key DataKey) string {

@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 
 	"github.com/ava-labs/subnet-evm/ethclient"
+	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 
 	// Force-load precompiles to trigger registration
@@ -106,17 +107,17 @@ func (c *Config) Validate() error {
 		return errors.New("relayer not configured to relay to any subnets. A list of destination subnets must be provided in the configuration file") //nolint:lll
 	}
 	if err := c.PChainAPI.Validate(); err != nil {
-		return err
+		return fmt.Errorf("failed to validate p-chain API config: %w", err)
 	}
 	if err := c.InfoAPI.Validate(); err != nil {
-		return err
+		return fmt.Errorf("failed to validate info API config: %w", err)
 	}
 	if c.DBWriteIntervalSeconds == 0 || c.DBWriteIntervalSeconds > 600 {
 		return errors.New("db-write-interval-seconds must be between 1 and 600")
 	}
 	for _, p := range c.ManuallyTrackedPeers {
 		if err := p.Validate(); err != nil {
-			return err
+			return fmt.Errorf("failed to validate manually tracked peer %s: %w", p.ID, err)
 		}
 	}
 
@@ -126,7 +127,7 @@ func (c *Config) Validate() error {
 	destinationChains := set.NewSet[string](len(c.DestinationBlockchains))
 	for _, s := range c.DestinationBlockchains {
 		if err := s.Validate(); err != nil {
-			return err
+			return fmt.Errorf("failed to validate destination blockchain %s: %w", s.BlockchainID, err)
 		}
 		if destinationChains.Contains(s.BlockchainID) {
 			return errors.New("configured destination subnets must have unique chain IDs")
@@ -140,7 +141,7 @@ func (c *Config) Validate() error {
 	for _, s := range c.SourceBlockchains {
 		// Validate configuration
 		if err := s.Validate(&destinationChains); err != nil {
-			return err
+			return fmt.Errorf("failed to validate source blockchain %s: %w", s.BlockchainID, err)
 		}
 		// Verify uniqueness
 		if sourceBlockchains.Contains(s.BlockchainID) {
@@ -153,7 +154,7 @@ func (c *Config) Validate() error {
 
 	if len(c.DeciderURL) != 0 {
 		if _, err := url.ParseRequestURI(c.DeciderURL); err != nil {
-			return fmt.Errorf("Invalid decider URL: %w", err)
+			return fmt.Errorf("invalid decider URL: %w", err)
 		}
 	}
 
@@ -218,8 +219,10 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 	if warpConfig != nil {
 		return warpConfig, nil
 	}
+
+	extra := params.GetExtra(&chainConfig.ChainConfig)
 	// If we didn't find the Warp config in the upgrade precompile list, check the genesis config
-	warpConfig, ok := chainConfig.GenesisPrecompiles[warpConfigKey].(*warp.Config)
+	warpConfig, ok := extra.GenesisPrecompiles[warpConfigKey].(*warp.Config)
 	if !ok {
 		return nil, fmt.Errorf("no Warp config found in chain config")
 	}
@@ -250,15 +253,7 @@ func (c *Config) initializeTrackedSubnets() error {
 		c.trackedSubnets.Add(sourceBlockchain.GetSubnetID())
 	}
 	for _, destinationBlockchain := range c.DestinationBlockchains {
-		warpCfg, err := c.GetWarpConfig(destinationBlockchain.GetBlockchainID())
-		if err != nil {
-			return fmt.Errorf(
-				"failed to get warp config for destination blockchain %s: %w",
-				destinationBlockchain.GetBlockchainID(),
-				err,
-			)
-		}
-		if !warpCfg.RequirePrimaryNetworkSigners {
+		if !destinationBlockchain.warpConfig.RequirePrimaryNetworkSigners {
 			c.trackedSubnets.Add(destinationBlockchain.GetSubnetID())
 		}
 	}

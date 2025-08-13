@@ -8,7 +8,7 @@ package database
 import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/icm-services/relayer/config"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -38,6 +38,7 @@ func (k DataKey) String() string {
 type RelayerDatabase interface {
 	Get(relayerID common.Hash, key DataKey) ([]byte, error)
 	Put(relayerID common.Hash, key DataKey, value []byte) error
+	Close() error
 }
 
 func NewDatabase(logger logging.Logger, cfg *config.Config) (RelayerDatabase, error) {
