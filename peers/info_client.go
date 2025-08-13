@@ -27,7 +27,7 @@ func NewInfoAPI(apiConfig *config.APIConfig) (*InfoAPI, error) {
 	client := info.NewClient(apiConfig.BaseURL)
 	options := utils.InitializeOptions(apiConfig)
 	return &InfoAPI{
-		client:  client,
+		client:  *client,
 		options: options,
 	}, nil
 }
