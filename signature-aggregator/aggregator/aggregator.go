@@ -318,7 +318,10 @@ func (s *SignatureAggregator) selectSigningSubnet(
 	return signingSubnetID, sourceSubnetID, nil
 }
 
-func (s *SignatureAggregator) populateSignatureMapFromCache(
+// Gets all of the signatures for the given message that have been cached from the connected validators.
+// Excludes previously fetched signatures from any validators now inactive.
+// Returns the valid cached signatures to be used, and the total weight of the validators those signatures represent.
+func (s *SignatureAggregator) getCachedSignaturesForMessage(
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	connectedValidators *peers.ConnectedCanonicalValidators,
 	excludedValidators set.Set[int],
@@ -612,7 +615,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	}
 
 	// Populate signature map from cache
-	signatureMap, accumulatedSignatureWeight := s.populateSignatureMapFromCache(
+	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
 		unsignedMessage, connectedValidators, excludedValidators)
 
 	// Only return early if we have enough signatures to meet the quorum percentage
