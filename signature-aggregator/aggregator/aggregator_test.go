@@ -21,7 +21,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/peers"
-	avago_mocks "github.com/ava-labs/icm-services/peers/avago_mocks"
 	"github.com/ava-labs/icm-services/peers/mocks"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,7 +41,7 @@ const (
 func instantiateAggregator(t *testing.T) (
 	*SignatureAggregator,
 	*mocks.MockAppRequestNetwork,
-	*avago_mocks.MockClient,
+	*mocks.MockPChainClient,
 ) {
 	mockController := gomock.NewController(t)
 	mockNetwork := mocks.NewMockAppRequestNetwork(mockController)
@@ -58,7 +57,7 @@ func instantiateAggregator(t *testing.T) (
 		)
 		require.NoError(t, err)
 	}
-	mockPClient := avago_mocks.NewMockClient(mockController)
+	mockPClient := mocks.NewMockPChainClient(mockController)
 	aggregator, err := NewSignatureAggregator(
 		mockNetwork,
 		messageCreator,
