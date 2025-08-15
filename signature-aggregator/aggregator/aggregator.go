@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
+	"github.com/ava-labs/libevm/log"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -286,87 +287,45 @@ func (s *SignatureAggregator) getExcludedValidators(
 	return excludedValidators, nil
 }
 
-func (s *SignatureAggregator) CreateSignedMessage(
+func validateQuorumPercentages(required, buffer uint64) error {
+	if required == 0 || required+buffer > 100 {
+		return errInvalidQuorumPercentage
+	}
+	return nil
+}
+
+func (s *SignatureAggregator) selectSigningSubnet(
 	ctx context.Context,
 	log logging.Logger,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
-	justification []byte,
 	inputSigningSubnet ids.ID,
-	requiredQuorumPercentage uint64,
-	quorumPercentageBuffer uint64,
-	skipCache bool,
-) (*avalancheWarp.Message, error) {
-	if requiredQuorumPercentage == 0 || requiredQuorumPercentage+quorumPercentageBuffer > 100 {
-		log.Error(
-			"Invalid quorum percentages",
-			zap.Uint64("requiredQuorumPercentage", requiredQuorumPercentage),
-			zap.Uint64("quorumPercentageBuffer", quorumPercentageBuffer),
-		)
-		return nil, errInvalidQuorumPercentage
-	}
-
-	log.Debug("Creating signed message")
-	var signingSubnet ids.ID
-	var err error
-	// If signingSubnet is not set we default to the subnet of the source blockchain
-	sourceSubnet, err := s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
+) (ids.ID, ids.ID, error) {
+	sourceSubnetID, err := s.getSubnetID(ctx, log, unsignedMessage.SourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return ids.ID{}, ids.ID{}, fmt.Errorf(
 			"source message subnet not found for chainID %s",
 			unsignedMessage.SourceChainID,
 		)
 	}
+
+	var signingSubnetID ids.ID
 	if inputSigningSubnet == ids.Empty {
-		signingSubnet = sourceSubnet
+		signingSubnetID = sourceSubnetID
 	} else {
-		signingSubnet = inputSigningSubnet
+		signingSubnetID = inputSigningSubnet
 	}
-	log.Debug(
-		"Creating signed message with signing subnet",
-		zap.Stringer("signingSubnet", signingSubnet),
-	)
+	return signingSubnetID, sourceSubnetID, nil
+}
 
-	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
-	if err != nil {
-		log.Error(
-			"Failed to fetch quorum of connected canonical validators",
-			zap.Stringer("signingSubnet", signingSubnet),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	isL1 := false
-	if signingSubnet != constants.PrimaryNetworkID {
-		isL1, err = s.isSubnetL1(ctx, log, signingSubnet)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check if signing subnet is L1: %w", err)
-		}
-	}
-
-	// Tracks all collected signatures.
-	// For L1s, we must take care to *not* include inactive validators in the signature map.
-	// Inactive validator's stake weight still contributes to the total weight, but the verifying
-	// node will not be able to verify the aggregate signature if it includes an inactive validator.
+// Gets all of the signatures for the given message that have been cached from the connected validators.
+// Excludes previously fetched signatures from any validators now inactive.
+// Returns the valid cached signatures to be used, and the total weight of the validators those signatures represent.
+func (s *SignatureAggregator) getCachedSignaturesForMessage(
+	unsignedMessage *avalancheWarp.UnsignedMessage,
+	connectedValidators *peers.ConnectedCanonicalValidators,
+	excludedValidators set.Set[int],
+) (map[int][bls.SignatureLen]byte, *big.Int) {
 	signatureMap := make(map[int][bls.SignatureLen]byte)
-	var excludedValidators set.Set[int]
-
-	// Fetch L1 validators and find the node IDs with Balance < minimumL1ValidatorBalance
-	// Find the corresponding canonical validator set index for each of these, and add to the exclusion list
-	// if ALL of the node IDs for a validator have Balance < minimumL1ValidatorBalance
-	if isL1 {
-		log.Debug("Checking L1 validators for zero balance nodes")
-		excludedValidators, err = s.getExcludedValidators(ctx, log, signingSubnet, connectedValidators, skipCache)
-		if err != nil {
-			log.Error(
-				"Failed to get excluded validators",
-				zap.String("signingSubnetID", signingSubnet.String()),
-				zap.Error(err),
-			)
-			return nil, fmt.Errorf("failed to get excluded validators: %w", err)
-		}
-	}
-
 	accumulatedSignatureWeight := big.NewInt(0)
 	if cachedSignatures, ok := s.signatureCache.Get(unsignedMessage.ID()); ok {
 		log.Debug("Found cached signatures", zap.Int("signatureCount", len(cachedSignatures)))
@@ -381,44 +340,27 @@ func (s *SignatureAggregator) CreateSignedMessage(
 				)
 			}
 		}
-		s.metrics.SignatureCacheHits.Add(float64(len(signatureMap)))
 	}
+	s.metrics.SignatureCacheHits.Add(float64(len(signatureMap)))
+	return signatureMap, accumulatedSignatureWeight
+}
 
-	// Only return early if we have enough signatures to meet the quorum percentage
-	// plus the buffer percentage.
-	if signedMsg, err := s.aggregateIfSufficientWeight(
-		log,
-		unsignedMessage,
-		signatureMap,
-		accumulatedSignatureWeight,
-		connectedValidators.ValidatorSet.TotalWeight,
-		requiredQuorumPercentage+quorumPercentageBuffer,
-	); err != nil {
-		return nil, err
-	} else if signedMsg != nil {
-		return signedMsg, nil
-	}
-	if len(signatureMap) > 0 {
-		s.metrics.SignatureCacheMisses.Add(float64(
-			len(connectedValidators.ValidatorSet.Validators) - len(signatureMap),
-		))
-	}
-
-	reqBytes, err := s.marshalRequest(unsignedMessage, justification, sourceSubnet)
-	if err != nil {
-		msg := "Failed to marshal request bytes"
-		log.Error(
-			msg,
-			zap.Error(err),
-		)
-		return nil, fmt.Errorf("%s: %w", msg, err)
-	}
-
+func (s *SignatureAggregator) collectSignaturesWithRetries(
+	ctx context.Context,
+	log logging.Logger,
+	unsignedMessage *avalancheWarp.UnsignedMessage,
+	reqBytes []byte,
+	sourceSubnet, signingSubnet ids.ID,
+	connectedValidators *peers.ConnectedCanonicalValidators,
+	signatureMap map[int][bls.SignatureLen]byte,
+	excludedValidators set.Set[int],
+	accumulatedSignatureWeight *big.Int,
+	requiredQuorumPercentage, quorumPercentageBuffer uint64,
+) (*avalancheWarp.Message, error) {
 	var signedMsg *avalancheWarp.Message
 	// Query the validators with retries. On each retry, query one node per unique BLS pubkey
 	operation := func() error {
 		// Construct the AppRequest
-		// Increments by two to keep the requestID odd
 		requestID := s.currentRequestID.Add(2)
 		outMsg, err := s.messageCreator.AppRequest(
 			unsignedMessage.SourceChainID,
@@ -586,7 +528,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		return errNotEnoughSignatures
 	}
 
-	err = utils.WithRetriesTimeout(log, operation, signatureRequestTimeout, "request signatures")
+	err := utils.WithRetriesTimeout(log, operation, signatureRequestTimeout, "request signatures")
 	if err != nil {
 		log.Warn(
 			"Failed to collect a threshold of signatures",
@@ -596,6 +538,139 @@ func (s *SignatureAggregator) CreateSignedMessage(
 			zap.Error(err),
 		)
 		return nil, errNotEnoughSignatures
+	}
+	return signedMsg, nil
+}
+
+func (s *SignatureAggregator) CreateSignedMessage(
+	ctx context.Context,
+	log logging.Logger,
+	unsignedMessage *avalancheWarp.UnsignedMessage,
+	justification []byte,
+	inputSigningSubnet ids.ID,
+	requiredQuorumPercentage uint64,
+	quorumPercentageBuffer uint64,
+	skipCache bool,
+) (*avalancheWarp.Message, error) {
+	// Validate quorum percentages
+	if err := validateQuorumPercentages(requiredQuorumPercentage, quorumPercentageBuffer); err != nil {
+		log.Error(
+			"Invalid quorum percentages",
+			zap.Uint64("requiredQuorumPercentage", requiredQuorumPercentage),
+			zap.Uint64("quorumPercentageBuffer", quorumPercentageBuffer),
+		)
+		return nil, err
+	}
+
+	log.Debug("Creating signed message")
+	// Select signing subnet
+	signingSubnet, sourceSubnet, err := s.selectSigningSubnet(ctx, log, unsignedMessage, inputSigningSubnet)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(
+		"Creating signed message with signing subnet",
+		zap.Stringer("signingSubnet", signingSubnet),
+	)
+
+	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
+	if err != nil {
+		log.Error(
+			"Failed to fetch quorum of connected canonical validators",
+			zap.Stringer("signingSubnet", signingSubnet),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	isL1 := false
+	if signingSubnet != constants.PrimaryNetworkID {
+		isL1, err = s.isSubnetL1(ctx, log, signingSubnet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if signing subnet is L1: %w", err)
+		}
+	}
+
+	// Tracks all collected signatures.
+	// For L1s, we must take care to *not* include inactive validators in the signature map.
+	// Inactive validator's stake weight still contributes to the total weight, but the verifying
+	// node will not be able to verify the aggregate signature if it includes an inactive validator.
+	var excludedValidators set.Set[int]
+
+	// Fetch L1 validators and find the node IDs with Balance < minimumL1ValidatorBalance
+	// Find the corresponding canonical validator set index for each of these, and add to the exclusion list
+	// if ALL of the node IDs for a validator have Balance < minimumL1ValidatorBalance
+	if isL1 {
+		log.Debug("Checking L1 validators for zero balance nodes")
+		excludedValidators, err = s.getExcludedValidators(ctx, log, signingSubnet, connectedValidators, skipCache)
+		if err != nil {
+			log.Error(
+				"Failed to get excluded validators",
+				zap.String("signingSubnetID", signingSubnet.String()),
+				zap.Error(err),
+			)
+			return nil, fmt.Errorf("failed to get excluded validators: %w", err)
+		}
+	}
+
+	// Populate signature map from cache
+	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
+		unsignedMessage, connectedValidators, excludedValidators)
+
+	// Only return early if we have enough signatures to meet the quorum percentage
+	// plus the buffer percentage.
+	if signedMsg, err := s.aggregateIfSufficientWeight(
+		log,
+		unsignedMessage,
+		signatureMap,
+		accumulatedSignatureWeight,
+		connectedValidators.ValidatorSet.TotalWeight,
+		requiredQuorumPercentage+quorumPercentageBuffer,
+	); err != nil {
+		return nil, err
+	} else if signedMsg != nil {
+		return signedMsg, nil
+	}
+	if len(signatureMap) > 0 {
+		s.metrics.SignatureCacheMisses.Add(float64(
+			len(connectedValidators.ValidatorSet.Validators) - len(signatureMap),
+		))
+	}
+
+	reqBytes, err := s.marshalRequest(unsignedMessage, justification, sourceSubnet)
+	if err != nil {
+		msg := "Failed to marshal request bytes"
+		log.Error(
+			msg,
+			zap.Error(err),
+		)
+		return nil, fmt.Errorf("%s: %w", msg, err)
+	}
+
+	// Collect signatures with retries
+	signedMsg, err := s.collectSignaturesWithRetries(
+		ctx,
+		log,
+		unsignedMessage,
+		reqBytes,
+		sourceSubnet,
+		signingSubnet,
+		connectedValidators,
+		signatureMap,
+		excludedValidators,
+		accumulatedSignatureWeight,
+		requiredQuorumPercentage,
+		quorumPercentageBuffer,
+	)
+	if err != nil {
+		log.Error(
+			"Failed to collect signatures",
+			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
+			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
+			zap.Error(err),
+		)
+		return nil, err
 	}
 	return signedMsg, nil
 }
