@@ -67,9 +67,35 @@ func ParsePayload(bytes []byte) (Payload, error) {
 		}
 	}
 	
-	// Add other payload types as needed
+	// Try L1ValidatorRegistration
+	lvr := &L1ValidatorRegistration{}
+	if err = rlp.DecodeBytes(bytes, lvr); err == nil {
+		if err = lvr.Verify(); err == nil {
+			return lvr, nil
+		}
+	}
+	
+	// Try RegisterL1Validator
+	rlv := &RegisterL1Validator{}
+	if err = rlp.DecodeBytes(bytes, rlv); err == nil {
+		if err = rlv.Verify(); err == nil {
+			return rlv, nil
+		}
+	}
 	
 	return nil, fmt.Errorf("%w: unable to decode payload", ErrInvalidPayload)
+}
+
+// ParseAddressedCall parses a payload from bytes as an AddressedCall
+func ParseAddressedCall(bytes []byte) (*AddressedCall, error) {
+	ac := &AddressedCall{}
+	if err := rlp.DecodeBytes(bytes, ac); err != nil {
+		return nil, fmt.Errorf("failed to decode addressed call: %w", err)
+	}
+	if err := ac.Verify(); err != nil {
+		return nil, err
+	}
+	return ac, nil
 }
 
 // AddressedCall is a payload for cross-VM calls
@@ -296,4 +322,26 @@ func (w *L1ValidatorWeight) Bytes() []byte {
 	return bytes
 }
 
-// init is not needed for RLP encoding
+// ParseRegisterL1Validator parses a payload from bytes as a RegisterL1Validator
+func ParseRegisterL1Validator(bytes []byte) (*RegisterL1Validator, error) {
+	rlv := &RegisterL1Validator{}
+	if err := rlp.DecodeBytes(bytes, rlv); err != nil {
+		return nil, fmt.Errorf("failed to decode register L1 validator: %w", err)
+	}
+	if err := rlv.Verify(); err != nil {
+		return nil, err
+	}
+	return rlv, nil
+}
+
+// ParseL1ValidatorRegistration parses a payload from bytes as an L1ValidatorRegistration
+func ParseL1ValidatorRegistration(bytes []byte) (*L1ValidatorRegistration, error) {
+	lvr := &L1ValidatorRegistration{}
+	if err := rlp.DecodeBytes(bytes, lvr); err != nil {
+		return nil, fmt.Errorf("failed to decode L1 validator registration: %w", err)
+	}
+	if err := lvr.Verify(); err != nil {
+		return nil, err
+	}
+	return lvr, nil
+}
