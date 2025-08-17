@@ -1,0 +1,47 @@
+# Binaries
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+warp-cli
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Security reports
+security-report.json
+
+# Profiling files
+*.prof
+
+# Temporary files
+*.tmp
+*.temp
+
+# Release artifacts
+release/
+dist/

@@ -20,12 +20,21 @@ type Signature interface {
 
 	// Equal returns true if two signatures are equal
 	Equal(other Signature) bool
+	
+	// Bytes returns the bytes representation of the signature
+	Bytes() []byte
 }
 
 // BitSetSignature is a signature that uses a bit set to indicate which validators signed
 type BitSetSignature struct {
 	Signers   Bits       `serialize:"true"`
 	Signature [bls.SignatureLen]byte `serialize:"true"`
+}
+
+// Bytes returns the bytes representation of the signature
+func (s *BitSetSignature) Bytes() []byte {
+	// For now, just return the raw signature bytes
+	return s.Signature[:]
 }
 
 // NewBitSetSignature creates a new bit set signature
