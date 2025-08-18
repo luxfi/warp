@@ -88,14 +88,32 @@ func ParsePayload(bytes []byte) (Payload, error) {
 
 // ParseAddressedCall parses a payload from bytes as an AddressedCall
 func ParseAddressedCall(bytes []byte) (*AddressedCall, error) {
-	ac := &AddressedCall{}
-	if err := rlp.DecodeBytes(bytes, ac); err != nil {
-		return nil, fmt.Errorf("failed to decode addressed call: %w", err)
-	}
-	if err := ac.Verify(); err != nil {
+	// First try to parse as generic payload
+	p, err := ParsePayload(bytes)
+	if err != nil {
 		return nil, err
 	}
+	// Type assert to AddressedCall
+	ac, ok := p.(*AddressedCall)
+	if !ok {
+		return nil, fmt.Errorf("payload is not an AddressedCall")
+	}
 	return ac, nil
+}
+
+// ParseHash parses a payload from bytes as a Hash
+func ParseHash(bytes []byte) (*Hash, error) {
+	// First try to parse as generic payload
+	p, err := ParsePayload(bytes)
+	if err != nil {
+		return nil, err
+	}
+	// Type assert to Hash
+	h, ok := p.(*Hash)
+	if !ok {
+		return nil, fmt.Errorf("payload is not a Hash")
+	}
+	return h, nil
 }
 
 // AddressedCall is a payload for cross-VM calls

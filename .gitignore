@@ -44,4 +44,7 @@ security-report.json
 
 # Release artifacts
 release/
-dist/
+dist/LLM.md
+CLAUDE.md
+AGENTS.md
+GEMINI.md
