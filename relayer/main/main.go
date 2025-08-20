@@ -221,7 +221,9 @@ func main() {
 		)
 		os.Exit(1)
 	}
-	defer deciderConnection.Close()
+	if deciderConnection != nil {
+		defer deciderConnection.Close()
+	}
 
 	messageHandlerFactories, err := createMessageHandlerFactories(
 		logger,
