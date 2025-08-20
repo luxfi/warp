@@ -26,7 +26,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.6.0
-	go.uber.org/mock v0.5.2
+	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.16.0
 	google.golang.org/grpc v1.74.2
