@@ -46,10 +46,10 @@ func (m *MockAppRequestNetwork) EXPECT() *MockAppRequestNetworkMockRecorder {
 }
 
 // GetConnectedCanonicalValidators mocks base method.
-func (m *MockAppRequestNetwork) GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (*peers.ConnectedCanonicalValidators, error) {
+func (m *MockAppRequestNetwork) GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (*peers.CanonicalValidators, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetConnectedCanonicalValidators", ctx, subnetID, skipCache)
-	ret0, _ := ret[0].(*peers.ConnectedCanonicalValidators)
+	ret0, _ := ret[0].(*peers.CanonicalValidators)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

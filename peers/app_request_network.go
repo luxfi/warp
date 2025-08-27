@@ -66,7 +66,7 @@ var (
 
 type AppRequestNetwork interface {
 	GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
-		*ConnectedCanonicalValidators,
+		*CanonicalValidators,
 		error,
 	)
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
@@ -409,15 +409,17 @@ func (n *appRequestNetwork) Shutdown() {
 // Helper struct to hold connected validator information
 // Warp Validators sharing the same BLS key may consist of multiple nodes,
 // so we need to track the node ID to validator index mapping
-type ConnectedCanonicalValidators struct {
-	ConnectedWeight       uint64
-	ConnectedNodes        set.Set[ids.NodeID]
+type CanonicalValidators struct {
+	ConnectedWeight uint64
+	ConnectedNodes  set.Set[ids.NodeID]
+	// ValidatorSet is the full canonical validator set for the subnet
+	// and not only the connected nodes.
 	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
 
 // Returns the Warp Validator and its index in the canonical Validator ordering for a given nodeID
-func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, int) {
+func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, int) {
 	return c.ValidatorSet.Validators[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
@@ -427,7 +429,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(
 	ctx context.Context,
 	subnetID ids.ID,
 	skipCache bool,
-) (*ConnectedCanonicalValidators, error) {
+) (*CanonicalValidators, error) {
 	// Get the subnet's current canonical validator set
 	fetchVdrsFunc := func(subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error) {
 		startPChainAPICall := time.Now()
@@ -463,7 +465,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(
 	// Calculate the total weight of connected validators.
 	connectedWeight := calculateConnectedWeight(validatorSet.Validators, nodeValidatorIndexMap, connectedPeers)
 
-	return &ConnectedCanonicalValidators{
+	return &CanonicalValidators{
 		ConnectedWeight:       connectedWeight,
 		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
