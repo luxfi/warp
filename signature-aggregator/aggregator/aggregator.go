@@ -118,13 +118,13 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	signingSubnet ids.ID,
 	quorumPercentage uint64,
 	skipCache bool,
-) (*peers.ConnectedCanonicalValidators, error) {
+) (*peers.CanonicalValidators, error) {
 	s.network.TrackSubnet(signingSubnet)
 
-	var connectedValidators *peers.ConnectedCanonicalValidators
+	var vdrs *peers.CanonicalValidators
 	var err error
 	connectOp := func() error {
-		connectedValidators, err = s.network.GetConnectedCanonicalValidators(ctx, signingSubnet, skipCache)
+		vdrs, err = s.network.GetCanonicalValidators(ctx, signingSubnet, skipCache)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
 			log.Error(
@@ -137,34 +137,33 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 		s.metrics.ConnectedStakeWeightPercentage.WithLabelValues(
 			signingSubnet.String(),
 		).Set(
-			float64(connectedValidators.ConnectedWeight) /
-				float64(connectedValidators.ValidatorSet.TotalWeight) * 100,
+			float64(vdrs.ConnectedWeight) /
+				float64(vdrs.ValidatorSet.TotalWeight) * 100,
 		)
 		if !utils.CheckStakeWeightExceedsThreshold(
-			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-			connectedValidators.ValidatorSet.TotalWeight,
+			big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
+			vdrs.ValidatorSet.TotalWeight,
 			quorumPercentage,
 		) {
 			// Log details of each connected validator for troubleshooting
 			if log.Enabled(logging.Debug) {
-				for _, vdr := range connectedValidators.ValidatorSet.Validators {
-					for _, nodeID := range vdr.NodeIDs {
-						log.Debug(
-							"Connected validator details",
-							zap.Stringer("signingSubnet", signingSubnet),
-							zap.String("nodeID", nodeID.String()),
-							zap.Uint64("weight", vdr.Weight),
-						)
-					}
+				for _, nodeID := range vdrs.ConnectedNodes.List() {
+					vdr, _ := vdrs.GetValidator(nodeID)
+					log.Debug(
+						"Connected validator details",
+						zap.Stringer("signingSubnet", signingSubnet),
+						zap.String("nodeID", nodeID.String()),
+						zap.Uint64("weight", vdr.Weight),
+					)
 				}
 			}
 			log.Warn(
 				"Failed to connect to a threshold of stake",
 				zap.Stringer("signingSubnet", signingSubnet),
-				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+				zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
+				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
 				zap.Uint64("quorumPercentage", quorumPercentage),
-				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
+				zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
 			)
 			s.metrics.FailuresToConnectToSufficientStake.Inc()
 			return errNotEnoughConnectedStake
@@ -175,7 +174,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	if err != nil {
 		return nil, err
 	}
-	return connectedValidators, nil
+	return vdrs, nil
 }
 
 // getUnderfundedL1Nodes fetches the set of L1 nodes that are underfunded
@@ -249,7 +248,7 @@ func (s *SignatureAggregator) getExcludedValidators(
 	ctx context.Context,
 	log logging.Logger,
 	signingSubnet ids.ID,
-	connectedValidators *peers.ConnectedCanonicalValidators,
+	vdrs *peers.CanonicalValidators,
 	skipCache bool,
 ) (set.Set[int], error) {
 	underfundedL1Nodes, err := s.getUnderfundedL1Nodes(ctx, log, signingSubnet, skipCache)
@@ -264,7 +263,7 @@ func (s *SignatureAggregator) getExcludedValidators(
 
 	excludedValidators := set.NewSet[int](0)
 	// Only exclude a canonical validator if all of its nodes are underfunded L1 validators.
-	for i, validator := range connectedValidators.ValidatorSet.Validators {
+	for i, validator := range vdrs.ValidatorSet.Validators {
 		exclude := true
 		for _, nodeID := range validator.NodeIDs {
 			// Filter out L1 validators that do not have minimumL1ValidatorBalance
@@ -322,14 +321,14 @@ func (s *SignatureAggregator) selectSigningSubnet(
 // Returns the valid cached signatures to be used, and the total weight of the validators those signatures represent.
 func (s *SignatureAggregator) getCachedSignaturesForMessage(
 	unsignedMessage *avalancheWarp.UnsignedMessage,
-	connectedValidators *peers.ConnectedCanonicalValidators,
+	vdrs *peers.CanonicalValidators,
 	excludedValidators set.Set[int],
 ) (map[int][bls.SignatureLen]byte, *big.Int) {
 	signatureMap := make(map[int][bls.SignatureLen]byte)
 	accumulatedSignatureWeight := big.NewInt(0)
 	if cachedSignatures, ok := s.signatureCache.Get(unsignedMessage.ID()); ok {
 		log.Debug("Found cached signatures", zap.Int("signatureCount", len(cachedSignatures)))
-		for i, validator := range connectedValidators.ValidatorSet.Validators {
+		for i, validator := range vdrs.ValidatorSet.Validators {
 			cachedSignature, found := cachedSignatures[PublicKeyBytes(validator.PublicKeyBytes)]
 			// Do not include explicitly excluded validators in the aggregation
 			if found && !excludedValidators.Contains(i) {
@@ -351,7 +350,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	reqBytes []byte,
 	sourceSubnet, signingSubnet ids.ID,
-	connectedValidators *peers.ConnectedCanonicalValidators,
+	vdrs *peers.CanonicalValidators,
 	signatureMap map[int][bls.SignatureLen]byte,
 	excludedValidators set.Set[int],
 	accumulatedSignatureWeight *big.Int,
@@ -383,16 +382,16 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			zap.String("signingSubnetID", signingSubnet.String()),
 		)
 
-		responsesExpected := len(connectedValidators.ValidatorSet.Validators) - len(signatureMap)
+		responsesExpected := len(vdrs.ValidatorSet.Validators) - len(signatureMap)
 		requestLogger.Debug(
 			"Aggregator collecting signatures from peers.",
-			zap.Int("validatorSetSize", len(connectedValidators.ValidatorSet.Validators)),
+			zap.Int("validatorSetSize", len(vdrs.ValidatorSet.Validators)),
 			zap.Int("signatureMapSize", len(signatureMap)),
 			zap.Int("responsesExpected", responsesExpected),
 		)
 
-		vdrSet := set.NewSet[ids.NodeID](len(connectedValidators.ValidatorSet.Validators))
-		for i, vdr := range connectedValidators.ValidatorSet.Validators {
+		vdrSet := set.NewSet[ids.NodeID](len(vdrs.ValidatorSet.Validators))
+		for i, vdr := range vdrs.ValidatorSet.Validators {
 			// If we already have the signature for this validator, do not query any of the composite nodes again
 			if _, ok := signatureMap[i]; ok {
 				continue
@@ -400,7 +399,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			// Add connected nodes to the request. We still query excludedValidators so that we may cache
 			// their signatures for future requests.
 			for _, nodeID := range vdr.NodeIDs {
-				if connectedValidators.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
+				if vdrs.ConnectedNodes.Contains(nodeID) && !vdrSet.Contains(nodeID) {
 					vdrSet.Add(nodeID)
 					requestLogger.Debug(
 						"Added node ID to query.",
@@ -467,7 +466,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 					response,
 					sentTo,
 					requestID,
-					connectedValidators,
+					vdrs,
 					unsignedMessage,
 					signatureMap,
 					excludedValidators,
@@ -490,7 +489,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 					requestLogger.Info(
 						"Created signed message.",
 						zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
-						zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+						zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
 					)
 					return nil
 				}
@@ -509,7 +508,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			unsignedMessage,
 			signatureMap,
 			accumulatedSignatureWeight,
-			connectedValidators.ValidatorSet.TotalWeight,
+			vdrs.ValidatorSet.TotalWeight,
 			requiredQuorumPercentage,
 		)
 		if err != nil {
@@ -519,7 +518,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			log.Info(
 				"Created signed message.",
 				zap.Uint64("signatureWeight", accumulatedSignatureWeight.Uint64()),
-				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
 				zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			)
 			return nil
@@ -534,7 +533,7 @@ func (s *SignatureAggregator) collectSignaturesWithRetries(
 			"Failed to collect a threshold of signatures",
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
-			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
 			zap.Error(err),
 		)
 		return nil, errNotEnoughSignatures
@@ -573,7 +572,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	connectedValidators, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
+	vdrs, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -602,7 +601,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	// if ALL of the node IDs for a validator have Balance < minimumL1ValidatorBalance
 	if isL1 {
 		log.Debug("Checking L1 validators for zero balance nodes")
-		excludedValidators, err = s.getExcludedValidators(ctx, log, signingSubnet, connectedValidators, skipCache)
+		excludedValidators, err = s.getExcludedValidators(ctx, log, signingSubnet, vdrs, skipCache)
 		if err != nil {
 			log.Error(
 				"Failed to get excluded validators",
@@ -615,7 +614,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 	// Populate signature map from cache
 	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
-		unsignedMessage, connectedValidators, excludedValidators)
+		unsignedMessage, vdrs, excludedValidators)
 
 	// Only return early if we have enough signatures to meet the quorum percentage
 	// plus the buffer percentage.
@@ -624,7 +623,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		unsignedMessage,
 		signatureMap,
 		accumulatedSignatureWeight,
-		connectedValidators.ValidatorSet.TotalWeight,
+		vdrs.ValidatorSet.TotalWeight,
 		requiredQuorumPercentage+quorumPercentageBuffer,
 	); err != nil {
 		return nil, err
@@ -633,7 +632,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	}
 	if len(signatureMap) > 0 {
 		s.metrics.SignatureCacheMisses.Add(float64(
-			len(connectedValidators.ValidatorSet.Validators) - len(signatureMap),
+			len(vdrs.ValidatorSet.Validators) - len(signatureMap),
 		))
 	}
 
@@ -655,7 +654,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		reqBytes,
 		sourceSubnet,
 		signingSubnet,
-		connectedValidators,
+		vdrs,
 		signatureMap,
 		excludedValidators,
 		accumulatedSignatureWeight,
@@ -666,7 +665,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		log.Error(
 			"Failed to collect signatures",
 			zap.Uint64("accumulatedWeight", accumulatedSignatureWeight.Uint64()),
-			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
+			zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
 			zap.String("sourceBlockchainID", unsignedMessage.SourceChainID.String()),
 			zap.Error(err),
 		)
@@ -730,7 +729,7 @@ func (s *SignatureAggregator) handleResponse(
 	response message.InboundMessage,
 	sentTo set.Set[ids.NodeID],
 	requestID uint32,
-	connectedValidators *peers.ConnectedCanonicalValidators,
+	connectedValidators *peers.CanonicalValidators,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	signatureMap map[int][bls.SignatureLen]byte,
 	excludedValidators set.Set[int],
