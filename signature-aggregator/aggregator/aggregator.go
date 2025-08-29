@@ -124,7 +124,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	var vdrs *peers.CanonicalValidators
 	var err error
 	connectOp := func() error {
-		vdrs, err = s.network.GetConnectedCanonicalValidators(ctx, signingSubnet, skipCache)
+		vdrs, err = s.network.GetCanonicalValidators(ctx, signingSubnet, skipCache)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
 			log.Error(

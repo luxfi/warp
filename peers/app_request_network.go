@@ -65,7 +65,7 @@ var (
 )
 
 type AppRequestNetwork interface {
-	GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
+	GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
 		*CanonicalValidators,
 		error,
 	)
@@ -425,7 +425,7 @@ func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, 
 
 // GetConnectedCanonicalValidators returns the validator information in canonical ordering for the given subnet
 // at the time of the call, as well as the total weight of the validators that this network is connected to
-func (n *appRequestNetwork) GetConnectedCanonicalValidators(
+func (n *appRequestNetwork) GetCanonicalValidators(
 	ctx context.Context,
 	subnetID ids.ID,
 	skipCache bool,
@@ -508,14 +508,14 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency float64) {
 func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
 	return func(ctx context.Context) error {
 		for _, subnetID := range subnetIDs {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(ctx, subnetID, false)
+			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to get connected validators: %s, %w", subnetID, err)
 			}
 			if !sharedUtils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-				connectedValidators.ValidatorSet.TotalWeight,
+				big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
+				vdrs.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
 				return ErrNotEnoughConnectedStake
