@@ -423,7 +423,7 @@ func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, 
 	return c.ValidatorSet.Validators[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
-// GetConnectedCanonicalValidators returns the validator information in canonical ordering for the given subnet
+// GetCanonicalValidators returns the validator information in canonical ordering for the given subnet
 // at the time of the call, as well as the total weight of the validators that this network is connected to
 func (n *appRequestNetwork) GetCanonicalValidators(
 	ctx context.Context,
