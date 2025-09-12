@@ -86,7 +86,7 @@ func checkSufficientConnectedStake(
 	}
 
 	checkConns := func() error {
-		connectedValidators, err := network.GetConnectedCanonicalValidators(ctx, subnetID, false)
+		vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false)
 		if err != nil {
 			logger.Error(
 				"Failed to retrieve currently connected validators",
@@ -97,29 +97,28 @@ func checkSufficientConnectedStake(
 		}
 
 		// Log details of each connected validator (nodeID and weight).
-		for _, vdr := range connectedValidators.ValidatorSet.Validators {
-			for _, nodeID := range vdr.NodeIDs {
-				logger.Debug(
-					"Connected validator details",
-					zap.Stringer("subnetID", subnetID),
-					zap.String("nodeID", nodeID.String()),
-					zap.Uint64("weight", vdr.Weight),
-				)
-			}
+		for _, nodeID := range vdrs.ConnectedNodes.List() {
+			vdr, _ := vdrs.GetValidator(nodeID)
+			logger.Debug(
+				"Connected validator details",
+				zap.Stringer("subnetID", subnetID),
+				zap.String("nodeID", nodeID.String()),
+				zap.Uint64("weight", vdr.Weight),
+			)
 		}
 
 		if !utils.CheckStakeWeightExceedsThreshold(
-			big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-			connectedValidators.ValidatorSet.TotalWeight,
+			big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
+			vdrs.ValidatorSet.TotalWeight,
 			maxQuorumNumerator,
 		) {
 			logger.Warn(
 				"Failed to connect to a threshold of stake, retrying...",
 				zap.Stringer("subnetID", subnetID),
 				zap.Uint64("quorumNumerator", maxQuorumNumerator),
-				zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-				zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
+				zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
+				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
+				zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
 			)
 			return fmt.Errorf("failed to connect to sufficient stake")
 		}
@@ -128,9 +127,9 @@ func checkSufficientConnectedStake(
 			"Connected to sufficient stake",
 			zap.Stringer("subnetID", subnetID),
 			zap.Uint64("quorumNumerator", maxQuorumNumerator),
-			zap.Uint64("connectedWeight", connectedValidators.ConnectedWeight),
-			zap.Uint64("totalValidatorWeight", connectedValidators.ValidatorSet.TotalWeight),
-			zap.Int("numConnectedPeers", connectedValidators.ConnectedNodes.Len()),
+			zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
+			zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
+			zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
 		)
 		return nil
 	}
