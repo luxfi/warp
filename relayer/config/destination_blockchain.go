@@ -38,7 +38,7 @@ type DestinationBlockchain struct {
 	KMSAWSRegion         string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
 	AccountPrivateKey    string            `mapstructure:"account-private-key" json:"account-private-key" sensitive:"true"`
 	KMSKeys              []KMSKey          `mapstructure:"kms-keys" json:"kms-keys" sensitive:"true"`
-	AccountPrivateKeys   []string          `mapstructure:"account-private-keys-list" json:"account-private-keys-list" sensitive:"true"`
+	AccountPrivateKeys   []string          `mapstructure:"account-private-keys-list" json:"account-private-keys-list" sensitive:"true"` //nolint:lll
 	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
 	MaxBaseFee           uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
 	MaxPriorityFeePerGas uint64            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
