@@ -65,8 +65,8 @@ var (
 )
 
 type AppRequestNetwork interface {
-	GetConnectedCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
-		*ConnectedCanonicalValidators,
+	GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (
+		*CanonicalValidators,
 		error,
 	)
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
@@ -409,25 +409,27 @@ func (n *appRequestNetwork) Shutdown() {
 // Helper struct to hold connected validator information
 // Warp Validators sharing the same BLS key may consist of multiple nodes,
 // so we need to track the node ID to validator index mapping
-type ConnectedCanonicalValidators struct {
-	ConnectedWeight       uint64
-	ConnectedNodes        set.Set[ids.NodeID]
+type CanonicalValidators struct {
+	ConnectedWeight uint64
+	ConnectedNodes  set.Set[ids.NodeID]
+	// ValidatorSet is the full canonical validator set for the subnet
+	// and not only the connected nodes.
 	ValidatorSet          avalancheWarp.CanonicalValidatorSet
 	NodeValidatorIndexMap map[ids.NodeID]int
 }
 
 // Returns the Warp Validator and its index in the canonical Validator ordering for a given nodeID
-func (c *ConnectedCanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, int) {
+func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, int) {
 	return c.ValidatorSet.Validators[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
-// GetConnectedCanonicalValidators returns the validator information in canonical ordering for the given subnet
+// GetCanonicalValidators returns the validator information in canonical ordering for the given subnet
 // at the time of the call, as well as the total weight of the validators that this network is connected to
-func (n *appRequestNetwork) GetConnectedCanonicalValidators(
+func (n *appRequestNetwork) GetCanonicalValidators(
 	ctx context.Context,
 	subnetID ids.ID,
 	skipCache bool,
-) (*ConnectedCanonicalValidators, error) {
+) (*CanonicalValidators, error) {
 	// Get the subnet's current canonical validator set
 	fetchVdrsFunc := func(subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error) {
 		startPChainAPICall := time.Now()
@@ -463,7 +465,7 @@ func (n *appRequestNetwork) GetConnectedCanonicalValidators(
 	// Calculate the total weight of connected validators.
 	connectedWeight := calculateConnectedWeight(validatorSet.Validators, nodeValidatorIndexMap, connectedPeers)
 
-	return &ConnectedCanonicalValidators{
+	return &CanonicalValidators{
 		ConnectedWeight:       connectedWeight,
 		ConnectedNodes:        connectedPeers,
 		ValidatorSet:          validatorSet,
@@ -506,14 +508,14 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency float64) {
 func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
 	return func(ctx context.Context) error {
 		for _, subnetID := range subnetIDs {
-			connectedValidators, err := network.GetConnectedCanonicalValidators(ctx, subnetID, false)
+			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to get connected validators: %s, %w", subnetID, err)
 			}
 			if !sharedUtils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(connectedValidators.ConnectedWeight),
-				connectedValidators.ValidatorSet.TotalWeight,
+				big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
+				vdrs.ValidatorSet.TotalWeight,
 				subnetWarp.WarpDefaultQuorumNumerator,
 			) {
 				return ErrNotEnoughConnectedStake
