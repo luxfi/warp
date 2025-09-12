@@ -831,13 +831,13 @@ func TestSanitizeSlice(t *testing.T) {
 	require.Len(t, result, 2)
 
 	// Check first element
-	firstElem, ok := result[0].(map[string]interface{})
+	firstElem, ok := result[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "value1", firstElem["value"])
 	require.Equal(t, "[REDACTED]", firstElem["secret"])
 
 	// Check second element
-	secondElem, ok := result[1].(map[string]interface{})
+	secondElem, ok := result[1].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "value2", secondElem["value"])
 	require.Equal(t, "[REDACTED]", secondElem["secret"])
