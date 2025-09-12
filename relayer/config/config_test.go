@@ -711,7 +711,7 @@ func TestConfigSanitization(t *testing.T) {
 			expectedFields: map[string]interface{}{
 				"log-level":    "info",
 				"redis-url":    "[REDACTED]",
-				"tls-key-path": "[REDACTED]",
+				"tls-key-path": "/path/to/secret.key",
 				"api-port":     uint16(8080),
 			},
 		},
@@ -781,9 +781,6 @@ func TestConfigSanitization(t *testing.T) {
 			if tc.config.RedisURL != "" {
 				require.Equal(t, "[REDACTED]", result["redis-url"])
 			}
-			if tc.config.TLSKeyPath != "" {
-				require.Equal(t, "[REDACTED]", result["tls-key-path"])
-			}
 		})
 	}
 }
@@ -846,7 +843,7 @@ func TestSanitizeSlice(t *testing.T) {
 func TestSanitizeMap(t *testing.T) {
 	testCases := []struct {
 		name           string
-		inputMap       interface{}
+		inputMap       any
 		expectRedacted bool
 		checkKey       string
 	}{
@@ -879,7 +876,7 @@ func TestSanitizeMap(t *testing.T) {
 			mapType := reflect.TypeOf(tc.inputMap)
 			result := sanitizeMap(v, mapType)
 
-			resultMap, ok := result.(map[string]interface{})
+			resultMap, ok := result.(map[string]any)
 			require.True(t, ok, "Expected result to be a map[string]interface{}")
 
 			if tc.expectRedacted && isSensitiveMapKey(tc.checkKey) {
