@@ -80,7 +80,7 @@ type Config struct {
 	ManuallyTrackedPeers            []*basecfg.PeerConfig    `mapstructure:"manually-tracked-peers" json:"manually-tracked-peers"` //nolint:lll
 	AllowPrivateIPs                 bool                     `mapstructure:"allow-private-ips" json:"allow-private-ips"`
 	TLSCertPath                     string                   `mapstructure:"tls-cert-path" json:"tls-cert-path,omitempty"` //nolint:lll
-	TLSKeyPath                      string                   `mapstructure:"tls-key-path" json:"tls-key-path,omitempty" sensitive:"true"`
+	TLSKeyPath                      string                   `mapstructure:"tls-key-path" json:"tls-key-path,omitempty"`
 	InitialConnectionTimeoutSeconds uint64                   `mapstructure:"initial-connection-timeout-seconds" json:"initial-connection-timeout-seconds,omitempty"` // nolint:lll
 	MaxConcurrentMessages           uint64                   `mapstructure:"max-concurrent-messages" json:"max-concurrent-messages,omitempty"`                       //nolint:lll
 
