@@ -379,8 +379,8 @@ func sanitizeStruct(v reflect.Value, t reflect.Type) map[string]any {
 }
 
 // sanitizeSlice handles slice types recursively
-func sanitizeSlice(v reflect.Value, t reflect.Type) []interface{} {
-	result := make([]interface{}, v.Len())
+func sanitizeSlice(v reflect.Value, t reflect.Type) []any {
+	result := make([]any, v.Len())
 	elemType := t.Elem()
 
 	for i := 0; i < v.Len(); i++ {
@@ -391,18 +391,13 @@ func sanitizeSlice(v reflect.Value, t reflect.Type) []interface{} {
 	return result
 }
 
-// sanitizeMap handles map types - marks entire map as sensitive if it contains sensitive data
-func sanitizeMap(v reflect.Value, t reflect.Type) interface{} {
-	// For maps like HTTPHeaders and QueryParams that might contain sensitive data,
-	// we'll redact the entire map. You could make this more granular if needed.
-
+// sanitizeMap handles map types
+func sanitizeMap(v reflect.Value, t reflect.Type) any {
 	// Check if this is a string map that might contain sensitive data
 	if t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.String {
-		// For HTTP headers and query params, it's safer to redact the whole map
-		mapResult := make(map[string]interface{})
+		mapResult := make(map[string]any)
 		for _, key := range v.MapKeys() {
 			keyStr := key.String()
-			// You can add logic here to selectively redact certain keys
 			if isSensitiveMapKey(keyStr) {
 				mapResult[keyStr] = "[REDACTED]"
 			} else {
