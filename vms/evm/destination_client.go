@@ -47,13 +47,14 @@ type destinationClient struct {
 
 	readonlyConcurrentSigners []*readonlyConcurrentSigner
 
-	destinationBlockchainID ids.ID
-	evmChainID              *big.Int
-	blockGasLimit           uint64
-	maxBaseFee              *big.Int
-	maxPriorityFeePerGas    *big.Int
-	logger                  logging.Logger
-	txInclusionTimeout      time.Duration
+	destinationBlockchainID    ids.ID
+	evmChainID                 *big.Int
+	blockGasLimit              uint64
+	maxBaseFee                 *big.Int
+	suggestedPriorityFeeBuffer *big.Int
+	maxPriorityFeePerGas       *big.Int
+	logger                     logging.Logger
+	txInclusionTimeout         time.Duration
 }
 
 // Type alias for the destinationClient to have access to the fields but not the methods of the concurrentSigner.
@@ -204,15 +205,16 @@ func NewDestinationClient(
 	)
 
 	destClient = destinationClient{
-		client:                    client,
-		readonlyConcurrentSigners: readonlyConcurrentSigners,
-		destinationBlockchainID:   destinationID,
-		evmChainID:                evmChainID,
-		logger:                    logger,
-		blockGasLimit:             destinationBlockchain.BlockGasLimit,
-		maxBaseFee:                new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
-		maxPriorityFeePerGas:      new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
-		txInclusionTimeout:        time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
+		client:                     client,
+		readonlyConcurrentSigners:  readonlyConcurrentSigners,
+		destinationBlockchainID:    destinationID,
+		evmChainID:                 evmChainID,
+		logger:                     logger,
+		blockGasLimit:              destinationBlockchain.BlockGasLimit,
+		maxBaseFee:                 new(big.Int).SetUint64(destinationBlockchain.MaxBaseFee),
+		suggestedPriorityFeeBuffer: new(big.Int).SetUint64(destinationBlockchain.SuggestedPriorityFeeBuffer),
+		maxPriorityFeePerGas:       new(big.Int).SetUint64(destinationBlockchain.MaxPriorityFeePerGas),
+		txInclusionTimeout:         time.Duration(destinationBlockchain.TxInclusionTimeoutSeconds) * time.Second,
 	}
 
 	return &destClient, nil
@@ -263,6 +265,7 @@ func (c *destinationClient) SendTx(
 		)
 		return nil, err
 	}
+	gasTipCap = new(big.Int).Add(gasTipCap, c.suggestedPriorityFeeBuffer)
 	if gasTipCap.Cmp(c.maxPriorityFeePerGas) > 0 {
 		gasTipCap = c.maxPriorityFeePerGas
 	}
