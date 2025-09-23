@@ -18,7 +18,7 @@ const (
 	// The block gas limit that can be specified for a Teleporter message
 	// Based on the C-Chain 15_000_000 gas limit per block, with other Warp message gas overhead conservatively estimated.
 	defaultBlockGasLimit             = 12_000_000
-	defaultMaxPriorityFeePerGas      = 25000000000 // 25 gwei
+	defaultMaxPriorityFeePerGas      = 2500000000 // 2.5 gwei
 	defaultTxInclusionTimeoutSeconds = 30
 )
 
