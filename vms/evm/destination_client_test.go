@@ -113,13 +113,14 @@ func TestSendTx(t *testing.T) {
 				readonlyConcurrentSigners: []*readonlyConcurrentSigner{
 					(*readonlyConcurrentSigner)(signer),
 				},
-				logger:               logging.NoLog{},
-				client:               mockClient,
-				evmChainID:           big.NewInt(5),
-				maxBaseFee:           test.maxBaseFee,
-				maxPriorityFeePerGas: big.NewInt(0),
-				blockGasLimit:        0,
-				txInclusionTimeout:   30 * time.Second,
+				logger:                     logging.NoLog{},
+				client:                     mockClient,
+				evmChainID:                 big.NewInt(5),
+				maxBaseFee:                 test.maxBaseFee,
+				suggestedPriorityFeeBuffer: big.NewInt(0),
+				maxPriorityFeePerGas:       big.NewInt(0),
+				blockGasLimit:              0,
+				txInclusionTimeout:         30 * time.Second,
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
