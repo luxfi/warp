@@ -220,6 +220,12 @@ func NewDestinationClient(
 	return &destClient, nil
 }
 
+// getFeePerGas returns the gas fee cap and gas tip cap for the destination chain.
+// If the maximum base fee value is not configured, the maximum base is calculated as the current base
+// fee multiplied by the default base fee factor. The maximum priority fee per gas is set the minimum
+// of the suggested gas tip cap plus the configured suggested priority fee buffer and the configured
+// maximum priority fee per gas. The max fee per gas is set to the sum of the max base fee and the
+// max priority fee per gas.
 func (c *destinationClient) getFeePerGas() (*big.Int, *big.Int, error) {
 	// If the max base fee isn't explicitly set, then default to fetching the
 	// current base fee estimate and multiply it by `BaseFeeFactor` to allow for
@@ -264,11 +270,7 @@ func (c *destinationClient) getFeePerGas() (*big.Int, *big.Int, error) {
 }
 
 // SendTx constructs, signs, and broadcast a transaction to deliver the given {signedMessage}
-// to this chain with the provided {callData}. If the maximum base fee value is not configured, the
-// maximum base is calculated as the current base fee multiplied by the default base fee factor.
-// The maximum priority fee per gas is set the minimum of the suggested gas tip cap and the configured
-// maximum priority fee per gas. The max fee per gas is set to the sum of the max base fee and the
-// max priority fee per gas.
+// to this chain with the provided {callData}.
 func (c *destinationClient) SendTx(
 	signedMessage *avalancheWarp.Message,
 	deliverers set.Set[common.Address],
