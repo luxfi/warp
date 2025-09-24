@@ -1,6 +1,6 @@
 module github.com/luxfi/warp
 
-go 1.24.5
+go 1.25
 
 require (
 	github.com/holiman/uint256 v1.3.2
