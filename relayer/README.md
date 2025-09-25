@@ -382,9 +382,13 @@ The relayer is configured via a JSON file, the path to which is passed in via th
 
   - The maximum base fee gas price (in WEI) the relayer is willing to pay on this blockchain. If zero or left unset, the relayer will use a multiple of the current base fee estimation, and not have an explicit maximum.
 
+  `"suggested-priority-fee-buffer": unsigned integer`
+
+  - The fee per gas (in WEI) that will be added to the priority fee rate on top of the suggested priority fee fetched via RPC. A higher suggested priority fee buffer will make transaction inclusion more likely in cases where a chain's capacity is being exhausted, but also results in higher effective gas prices for transactions when potentially not necessary. The maximum priority fee per gas is also capped by `max-priority-fee-per-gas`, as described below.
+
   `"max-priority-fee-per-gas": unsigned integer`
 
-  - The maximum priority fee per gas (in WEI) that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain, up to a maximum of this configured value. Defaults to 2.5 GWEI.
+  - The maximum priority fee per gas (in WEI) that the relayer is willing to pay to incentivize transactions being included on this blockchain. The relayer will use the current estimation of the required gas tip cap for this blockchain plus the `suggested-priority-fee-buffer`, up to a maximum of this configured value. Defaults to 2.5 GWEI.
 
   `"tx-inclusion-timeout-seconds": unisgned integer`
 
