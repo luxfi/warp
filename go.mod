@@ -10,7 +10,7 @@ require (
 	github.com/ava-labs/subnet-evm v0.7.8
 	github.com/aws/aws-sdk-go-v2 v1.39.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.10
-	github.com/aws/aws-sdk-go-v2/service/kms v1.45.4
+	github.com/aws/aws-sdk-go-v2/service/kms v1.45.5
 	github.com/bufbuild/buf v1.57.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/golangci/golangci-lint v1.64.8
