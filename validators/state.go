@@ -1,12 +1,13 @@
-// (c) 2023, Lux Industries, Inc. All rights reserved.
+// (c) 2022-2025, Lux Industries, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package validators
 
 import (
 	"context"
-	"github.com/luxfi/geth/common"
+
 	"github.com/luxfi/evm/iface"
+	"github.com/luxfi/geth/common"
 )
 
 // State wraps the validator state to provide special handling for the Primary Network
