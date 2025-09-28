@@ -43,6 +43,10 @@ type AggregateSignatureRequest struct {
 	// a large percentage of the Subnet weight are less prone to become invalid due to validator weight changes.
 	// Defaults to 0 if omitted.
 	QuorumPercentageBuffer uint64 `json:"quorum-percentage-buffer"`
+	// Optional hex or cb58 encoded destination blockchain ID. If provided and ACP-181 (Granite) is activated,
+	// epoched validators will be used for signature aggregation to ensure compatibility with the destination chain's
+	// current epoch view. If omitted, standard (non-epoched) validators will be used.
+	DestinationBlockchainID string `json:"destination-blockchain-id"`
 }
 
 type AggregateSignatureResponse struct {
@@ -195,6 +199,23 @@ func signatureAggregationAPIHandler(
 			}
 		}
 
+		var destinationBlockchainID ids.ID
+		if req.DestinationBlockchainID != "" {
+			destinationBlockchainID, err = utils.HexOrCB58ToID(
+				req.DestinationBlockchainID,
+			)
+			if err != nil {
+				msg := "Error parsing destination blockchain ID"
+				logger.Warn(
+					msg,
+					zap.Error(err),
+					zap.String("input", req.DestinationBlockchainID),
+				)
+				writeJSONError(logger, w, http.StatusBadRequest, msg)
+				return
+			}
+		}
+
 		ctx, cancel := context.WithTimeout(r.Context(), utils.DefaultCreateSignedMessageTimeout)
 		defer cancel()
 
@@ -207,6 +228,7 @@ func signatureAggregationAPIHandler(
 			quorumPercentage,
 			req.QuorumPercentageBuffer,
 			false,
+			destinationBlockchainID, // ACP-181: Use destination blockchain ID for epoched validator support
 		)
 		if err != nil {
 			logger.Warn("Failed to aggregate signatures", zap.Error(err))

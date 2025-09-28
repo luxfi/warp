@@ -238,6 +238,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler, ski
 			r.warpConfig.QuorumNumerator,
 			quorumPercentageBuffer,
 			skipCache,
+			r.relayerID.DestinationBlockchainID,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
