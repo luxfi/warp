@@ -159,6 +159,7 @@ func TestCreateSignedMessageFailsInvalidQuorumPercentage(t *testing.T) {
 				tc.requiredQuorumPercentage,
 				tc.quorumPercentageBuffer,
 				false,
+				ids.Empty,
 			)
 			require.Nil(t, signedMsg)
 			require.ErrorIs(t, err, errInvalidQuorumPercentage)
@@ -182,7 +183,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 		},
 		nil,
 	)
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false, ids.Empty)
 	require.ErrorContains(t, err, "no signatures")
 }
 
@@ -202,7 +203,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 		},
 		nil,
 	).AnyTimes()
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, ids.Empty, 80, 0, false, ids.Empty)
 	require.ErrorContains(
 		t,
 		err,
@@ -292,7 +293,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	).Times(1)
 
-	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0, false)
+	_, err = aggregator.CreateSignedMessage(context.Background(), logging.NoLog{}, msg, nil, subnetID, 80, 0, false, ids.Empty)
 	require.ErrorIs(
 		t,
 		err,
@@ -417,6 +418,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 				tc.requiredQuorumPercentage,
 				tc.quorumPercentageBuffer,
 				false,
+				ids.Empty,
 			)
 			require.NoError(t, err)
 
