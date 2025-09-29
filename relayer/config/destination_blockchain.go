@@ -30,18 +30,19 @@ type KMSKey struct {
 // Destination blockchain configuration. Specifies how to connect to and issue
 // transactions on the destination blockchain.
 type DestinationBlockchain struct {
-	SubnetID             string            `mapstructure:"subnet-id" json:"subnet-id"`
-	BlockchainID         string            `mapstructure:"blockchain-id" json:"blockchain-id"`
-	VM                   string            `mapstructure:"vm" json:"vm"`
-	RPCEndpoint          basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
-	KMSKeyID             string            `mapstructure:"kms-key-id" json:"kms-key-id"`
-	KMSAWSRegion         string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
-	AccountPrivateKey    string            `mapstructure:"account-private-key" json:"account-private-key"`
-	KMSKeys              []KMSKey          `mapstructure:"kms-keys" json:"kms-keys"`
-	AccountPrivateKeys   []string          `mapstructure:"account-private-keys-list" json:"account-private-keys-list"`
-	BlockGasLimit        uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
-	MaxBaseFee           uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
-	MaxPriorityFeePerGas uint64            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
+	SubnetID                   string            `mapstructure:"subnet-id" json:"subnet-id"`
+	BlockchainID               string            `mapstructure:"blockchain-id" json:"blockchain-id"`
+	VM                         string            `mapstructure:"vm" json:"vm"`
+	RPCEndpoint                basecfg.APIConfig `mapstructure:"rpc-endpoint" json:"rpc-endpoint"`
+	KMSKeyID                   string            `mapstructure:"kms-key-id" json:"kms-key-id"`
+	KMSAWSRegion               string            `mapstructure:"kms-aws-region" json:"kms-aws-region"`
+	AccountPrivateKey          string            `mapstructure:"account-private-key" json:"account-private-key" sensitive:"true"` //nolint:lll
+	KMSKeys                    []KMSKey          `mapstructure:"kms-keys" json:"kms-keys" sensitive:"true"`
+	AccountPrivateKeys         []string          `mapstructure:"account-private-keys-list" json:"account-private-keys-list" sensitive:"true"` //nolint:lll
+	BlockGasLimit              uint64            `mapstructure:"block-gas-limit" json:"block-gas-limit"`
+	MaxBaseFee                 uint64            `mapstructure:"max-base-fee" json:"max-base-fee"`
+	SuggestedPriorityFeeBuffer uint64            `mapstructure:"suggested-priority-fee-buffer" json:"suggested-priority-fee-buffer"` //nolint:lll
+	MaxPriorityFeePerGas       uint64            `mapstructure:"max-priority-fee-per-gas" json:"max-priority-fee-per-gas"`
 
 	TxInclusionTimeoutSeconds uint64 `mapstructure:"tx-inclusion-timeout-seconds" json:"tx-inclusion-timeout-seconds"`
 
