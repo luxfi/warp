@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 
 	"github.com/ava-labs/icm-services/database"
@@ -229,6 +230,17 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler, ski
 			r.warpConfig.QuorumNumerator,
 			defaultQuorumPercentageBuffer,
 		)
+		// Determine the appropriate P-Chain height for validator set selection
+		pchainHeight, err := r.getPChainHeightForValidatorSet(ctx)
+		if err != nil {
+			r.logger.Error(
+				"Failed to determine P-Chain height for validator set",
+				zap.Error(err),
+			)
+			r.incFailedRelayMessageCount("failed to determine P-Chain height")
+			return common.Hash{}, err
+		}
+
 		signedMessage, err = r.signatureAggregator.CreateSignedMessage(
 			ctx,
 			handler.LoggerWithContext(r.logger),
@@ -238,7 +250,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler, ski
 			r.warpConfig.QuorumNumerator,
 			quorumPercentageBuffer,
 			skipCache,
-			r.relayerID.DestinationBlockchainID,
+			pchainHeight,
 		)
 		r.incFetchSignatureAppRequestCount()
 		if err != nil {
@@ -316,6 +328,22 @@ func (r *ApplicationRelayer) ProcessMessage(handler messages.MessageHandler) (co
 
 func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 	return r.relayerID
+}
+
+// getPChainHeightForValidatorSet determines the appropriate P-Chain height for validator set selection
+// Returns ProposedHeight for current validators if Granite is not activated, or the epoch P-Chain height if activated
+func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context) (uint64, error) {
+	// TODO: Check if Granite is activated for the destination blockchain
+	// TODO: If activated, get epoch information from ProposerVM API and return epoch.PChainHeight
+	// TODO: If not activated, return ProposedHeight for current validators
+
+	// For now, always return ProposedHeight (current validators) until Granite detection
+	// and ProposerVM API are implemented
+	r.logger.Debug("Using current validators (ProposedHeight) - Granite epoch detection not yet implemented",
+		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
+		zap.Uint64("pchainHeight", pchainapi.ProposedHeight),
+	)
+	return pchainapi.ProposedHeight, nil
 }
 
 // createSignedMessage fetches the signed Warp message from the source chain via RPC.

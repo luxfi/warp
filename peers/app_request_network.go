@@ -34,12 +34,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/sampler"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
+	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/cache"
 	"github.com/ava-labs/icm-services/peers/utils"
 	"github.com/ava-labs/icm-services/peers/validators"
-	"github.com/ava-labs/libevm/common/lru"
 	subnetWarp "github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 
 	sharedUtils "github.com/ava-labs/icm-services/utils"
@@ -61,6 +61,7 @@ const (
 
 	// The size of the LRU cache for epoched validator sets per subnet
 	// Each subnet gets its own LRU cache of (P-chain height -> validator set)
+	// This handles both current validators (ProposedHeight) and epoched validators (specific heights)
 	epochedValidatorSetCacheSizePerSubnet = 100
 )
 
@@ -70,7 +71,7 @@ var (
 )
 
 type AppRequestNetwork interface {
-	GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool, destinationBlockchainID ids.ID) (
+	GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool, pchainHeight uint64) (
 		*CanonicalValidators,
 		error,
 	)
@@ -110,7 +111,7 @@ type appRequestNetwork struct {
 
 	manager                    vdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet]
-	epochedValidatorSetCache   map[ids.ID]*lru.Cache[uint64, avalancheWarp.CanonicalValidatorSet]
+	epochedValidatorSetCache   map[ids.ID]*cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet]
 	epochedCacheLock           sync.RWMutex // protects epochedValidatorSetCache map
 }
 
@@ -297,7 +298,7 @@ func NewNetwork(
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
-		epochedValidatorSetCache:   make(map[ids.ID]*lru.Cache[uint64, avalancheWarp.CanonicalValidatorSet]),
+		epochedValidatorSetCache:   make(map[ids.ID]*cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet]),
 	}
 
 	go arNetwork.startUpdateValidators(ctx)
@@ -434,39 +435,28 @@ func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*warp.Validator, 
 }
 
 // GetCanonicalValidators returns the validator information in canonical ordering for the given subnet
-// at the time of the call, as well as the total weight of the validators that this network is connected to
-// If destinationBlockchainID is provided and Granite is activated on that chain, epoched validators will be used
+// at the specified P-Chain height, as well as the total weight of the validators that this network is connected to
+// The caller determines the appropriate P-Chain height (ProposedHeight for current, specific height for epoched)
 func (n *appRequestNetwork) GetCanonicalValidators(
 	ctx context.Context,
 	subnetID ids.ID,
 	skipCache bool,
-	destinationBlockchainID ids.ID,
+	pchainHeight uint64,
 ) (*CanonicalValidators, error) {
+	n.logger.Debug("Getting validator set at P-Chain height",
+		zap.Stringer("subnetID", subnetID),
+		zap.Uint64("pchainHeight", pchainHeight),
+		zap.Bool("isProposedHeight", pchainHeight == pchainapi.ProposedHeight),
+	)
+
 	var validatorSet avalancheWarp.CanonicalValidatorSet
 	var err error
 
-	upgradeConfig := upgrade.GetConfig(n.networkID)
-	if upgradeConfig.IsGraniteActivated(time.Now()) && destinationBlockchainID != ids.Empty {
-		n.logger.Debug("Granite activated, attempting to use epoched validator set",
-			zap.Stringer("subnetID", subnetID),
-			zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-		)
-
-		// Try to get epoched validator set for the destination chain
-		validatorSet, err = n.getEpochedValidatorSet(ctx, subnetID, destinationBlockchainID, skipCache)
-		if err != nil {
-			n.logger.Warn("Failed to get epoched validator set, falling back to current validator set",
-				zap.Stringer("subnetID", subnetID),
-				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-				zap.Error(err),
-			)
-			return nil, fmt.Errorf("failed to get epoched validator set: %w", err)
-		}
-	} else {
-		// Get the subnet's current canonical validator set (default path)
+	if pchainHeight == pchainapi.ProposedHeight {
+		// Get the subnet's current canonical validator set
 		fetchVdrsFunc := func(subnetID ids.ID) (avalancheWarp.CanonicalValidatorSet, error) {
 			startPChainAPICall := time.Now()
-			validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
+			validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID, pchainHeight)
 			n.setPChainAPICallLatencyMS(float64(time.Since(startPChainAPICall).Milliseconds()))
 			return validatorSet, err
 		}
@@ -474,91 +464,47 @@ func (n *appRequestNetwork) GetCanonicalValidators(
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		// Use LRU cache for epoched validators (specific heights) - immutable historical data
+		// LRU cache key is pchainHeight, fetch function uses the passed height
+		epochedCache := n.getOrCreateEpochedCache(subnetID)
+		fetchVdrsFunc := func(height uint64) (avalancheWarp.CanonicalValidatorSet, error) {
+			startPChainAPICall := time.Now()
+			validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID, height)
+			n.setPChainAPICallLatencyMS(float64(time.Since(startPChainAPICall).Milliseconds()))
+			return validatorSet, err
+		}
+		validatorSet, err = epochedCache.Get(pchainHeight, fetchVdrsFunc, skipCache)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator set at P-Chain height %d: %w", pchainHeight, err)
 	}
 
 	return n.buildCanonicalValidators(validatorSet)
 }
 
-// getEpochedValidatorSet retrieves the validator set using epoched P-Chain height for Granite-activated subnets
-func (n *appRequestNetwork) getEpochedValidatorSet(
-	ctx context.Context,
+// getOrCreateEpochedCache returns or creates the LRU cache for a specific subnet
+func (n *appRequestNetwork) getOrCreateEpochedCache(
 	subnetID ids.ID,
-	destinationBlockchainID ids.ID,
-	skipCache bool,
-) (avalancheWarp.CanonicalValidatorSet, error) {
-	// TODO: Get epoch information from ProposerVM API
-	// This API is not ready yet, so we use placeholder logic for now
+) *cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet] {
+	n.epochedCacheLock.Lock()
+	defer n.epochedCacheLock.Unlock()
+	lruCache, exists := n.epochedValidatorSetCache[subnetID]
 
-	epoch, err := n.getCurrentEpochFromProposerVM(ctx, destinationBlockchainID)
-	if err != nil {
-		return avalancheWarp.CanonicalValidatorSet{}, fmt.Errorf("failed to get current epoch from ProposerVM: %w", err)
-	}
-
-	n.logger.Debug("Retrieved epoch information",
-		zap.Stringer("subnetID", subnetID),
-		zap.Uint64("epochNumber", epoch.Number),
-		zap.Uint64("pchainHeight", epoch.PChainHeight),
-	)
-
-	// Check epoched validator cache if not skipping cache
-	if !skipCache {
-		if cachedValidatorSet, found := n.getFromEpochedCache(destinationBlockchainID, epoch.PChainHeight); found {
-			n.logger.Debug("Using cached epoched validator set",
-				zap.Stringer("subnetID", subnetID),
-				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-				zap.Uint64("pchainHeight", epoch.PChainHeight),
-				zap.Int("numValidators", len(cachedValidatorSet.Validators)),
-			)
-			return cachedValidatorSet, nil
+	if !exists {
+		// Double check after acquiring write lock
+		lruCache, exists = n.epochedValidatorSetCache[subnetID]
+		if !exists {
+			lruCache = cache.NewLRUCache[uint64, avalancheWarp.CanonicalValidatorSet](epochedValidatorSetCacheSizePerSubnet)
+			n.epochedValidatorSetCache[subnetID] = lruCache
 		}
 	}
 
-	// Use the epoch's P-Chain height to get the canonical validator set
-	startPChainAPICall := time.Now()
-	validatorSet, err := avalancheWarp.GetCanonicalValidatorSetFromSubnetID(
-		ctx,
-		n.validatorClient,  // ValidatorState
-		epoch.PChainHeight, // Use the epoched P-Chain height
-		subnetID,           // subnetID
-	)
-	n.setPChainAPICallLatencyMS(float64(time.Since(startPChainAPICall).Milliseconds()))
-
-	if err != nil {
-		return avalancheWarp.CanonicalValidatorSet{}, fmt.Errorf("failed to get canonical validator set at epoched height %d: %w", epoch.PChainHeight, err)
-	}
-
-	// Cache the result for future use
-	n.putInEpochedCache(subnetID, epoch.PChainHeight, validatorSet)
-
-	n.logger.Debug("Fetched and cached epoched validator set",
-		zap.Stringer("subnetID", subnetID),
-		zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-		zap.Uint64("pchainHeight", epoch.PChainHeight),
-		zap.Int("numValidators", len(validatorSet.Validators)),
-	)
-
-	return validatorSet, nil
-}
-
-// getCurrentEpochFromProposerVM gets the current epoch information from ProposerVM
-// TODO: This is a placeholder until the ProposerVM API is ready
-func (n *appRequestNetwork) getCurrentEpochFromProposerVM(
-	ctx context.Context,
-	destinationBlockchainID ids.ID,
-) (*EpochInfo, error) {
-	// TODO: Implement actual ProposerVM API call when ready
-
-	// For now, return a placeholder error since the API is not ready
-	return nil, fmt.Errorf("ProposerVM epoch API not yet implemented - placeholder for ACP-181 epoched validator support")
-}
-
-// EpochInfo represents epoch information from ProposerVM
-// TODO: This struct should match the actual ProposerVM API response when ready
-type EpochInfo struct {
-	Number       uint64        `json:"epochNumber"`
-	PChainHeight uint64        `json:"pchainHeight"`
-	StartTime    time.Time     `json:"startTime"`
-	Duration     time.Duration `json:"duration"`
+	return lruCache
 }
 
 // buildCanonicalValidators builds the CanonicalValidators struct from a validator set
@@ -631,7 +577,7 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency float64) {
 func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
 	return func(ctx context.Context) error {
 		for _, subnetID := range subnetIDs {
-			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, ids.Empty)
+			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, pchainapi.ProposedHeight)
 			if err != nil {
 				return fmt.Errorf(
 					"failed to get connected validators: %s, %w", subnetID, err)
@@ -646,42 +592,6 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 		}
 		return nil
 	}
-}
-
-// getFromEpochedCache retrieves a validator set from the epoched cache
-func (n *appRequestNetwork) getFromEpochedCache(
-	subnetID ids.ID,
-	pchainHeight uint64,
-) (avalancheWarp.CanonicalValidatorSet, bool) {
-	n.epochedCacheLock.RLock()
-	defer n.epochedCacheLock.RUnlock()
-
-	subnetCache, exists := n.epochedValidatorSetCache[subnetID]
-	if !exists {
-		return avalancheWarp.CanonicalValidatorSet{}, false
-	}
-
-	return subnetCache.Get(pchainHeight)
-}
-
-// putInEpochedCache stores a validator set in the epoched cache
-func (n *appRequestNetwork) putInEpochedCache(
-	subnetID ids.ID,
-	pchainHeight uint64,
-	validatorSet avalancheWarp.CanonicalValidatorSet,
-) {
-	n.epochedCacheLock.Lock()
-	defer n.epochedCacheLock.Unlock()
-
-	// Get or create the subnet cache
-	subnetCache, exists := n.epochedValidatorSetCache[subnetID]
-	if !exists {
-		subnetCache = lru.NewCache[uint64, avalancheWarp.CanonicalValidatorSet](epochedValidatorSetCacheSizePerSubnet)
-		n.epochedValidatorSetCache[subnetID] = subnetCache
-	}
-
-	// Store the validator set
-	subnetCache.Add(pchainHeight, validatorSet)
 }
 
 func calculateConnectedWeight(
