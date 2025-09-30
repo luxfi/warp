@@ -92,7 +92,6 @@ type AppRequestNetwork interface {
 }
 
 type appRequestNetwork struct {
-	networkID        uint32
 	network          network.Network
 	handler          *RelayerExternalHandler
 	infoAPI          *InfoAPI
@@ -285,7 +284,6 @@ func NewNetwork(
 	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 
 	arNetwork := &appRequestNetwork{
-		networkID:                  networkID,
 		network:                    testNetwork,
 		handler:                    handler,
 		infoAPI:                    infoAPI,
