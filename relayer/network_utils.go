@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/icm-services/peers"
@@ -64,85 +63,74 @@ func checkSufficientConnectedStake(
 	sourceBlockchain *config.SourceBlockchain,
 ) error {
 	subnetID := sourceBlockchain.GetSubnetID()
+	// Loop over destination blockchains here to confirm connections to a threshold of stake
+	// which is determined by the Warp Quorum configs of the destination blockchains.
+	var maxQuorumNumerator uint64
 
-	checkConns := func() error {
-		// ACP-181: Check connectivity for each destination's specific validator requirements
-		// This ensures we have sufficient stake for both epoched and standard validator sets
-		for _, destination := range sourceBlockchain.SupportedDestinations {
-			destinationBlockchainID := destination.GetBlockchainID()
-			// Ensure we have a valid blockchain ID (type ids.ID)
-			if destinationBlockchainID == ids.Empty {
-				logger.Debug("Skipping empty destination blockchain ID")
-				continue
-			}
-			warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
-			logger.Debug("Checking connectivity for destination",
+	for _, destination := range sourceBlockchain.SupportedDestinations {
+		destinationBlockchainID := destination.GetBlockchainID()
+		warpConfig, err := cfg.GetWarpConfig(destinationBlockchainID)
+		logger.Debug("Fetched warp config for destination",
+			zap.Stringer("destinationBlockchainID", destinationBlockchainID),
+			zap.Any("warpConfig", warpConfig),
+			zap.Error(err),
+		)
+		if err != nil {
+			logger.Error(
+				"Failed to get warp config from chain config",
 				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-				zap.Any("warpConfig", warpConfig),
 				zap.Error(err),
 			)
-			if err != nil {
-				logger.Error(
-					"Failed to get warp config from chain config",
-					zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-					zap.Error(err),
-				)
-				return err
-			}
+			return err
+		}
+		maxQuorumNumerator = max(maxQuorumNumerator, warpConfig.QuorumNumerator)
+	}
 
-			// Get current validators (ProposedHeight) for this destination
-			// TODO: Consider using epoched validators based on destination blockchain context
-			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, pchainapi.ProposedHeight)
-			if err != nil {
-				logger.Error(
-					"Failed to retrieve validators for destination",
-					zap.Stringer("subnetID", subnetID),
-					zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-					zap.Error(err),
-				)
-				return err
-			}
-
-			// Log details of connected validators for this destination
-			logger.Debug("Connected validators for destination",
-				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-				zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
-				zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
-			)
-
-			// Check if we have sufficient stake for this destination's requirements
-			if !utils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
-				vdrs.ValidatorSet.TotalWeight,
-				warpConfig.QuorumNumerator,
-			) {
-				logger.Warn(
-					"Failed to connect to sufficient stake for destination, retrying...",
-					zap.Stringer("subnetID", subnetID),
-					zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-					zap.Uint64("quorumNumerator", warpConfig.QuorumNumerator),
-					zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
-					zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
-					zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
-				)
-				return fmt.Errorf("failed to connect to sufficient stake for destination %s", destinationBlockchainID)
-			}
-
-			logger.Info(
-				"Connected to sufficient stake for destination",
+	checkConns := func() error {
+		vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, uint64(pchainapi.ProposedHeight))
+		if err != nil {
+			logger.Error(
+				"Failed to retrieve currently connected validators",
 				zap.Stringer("subnetID", subnetID),
-				zap.Stringer("destinationBlockchainID", destinationBlockchainID),
-				zap.Uint64("quorumNumerator", warpConfig.QuorumNumerator),
-				zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
-				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
-				zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
+				zap.Error(err),
+			)
+			return err
+		}
+
+		// Log details of each connected validator (nodeID and weight).
+		for _, nodeID := range vdrs.ConnectedNodes.List() {
+			vdr, _ := vdrs.GetValidator(nodeID)
+			logger.Debug(
+				"Connected validator details",
+				zap.Stringer("subnetID", subnetID),
+				zap.String("nodeID", nodeID.String()),
+				zap.Uint64("weight", vdr.Weight),
 			)
 		}
 
+		if !utils.CheckStakeWeightExceedsThreshold(
+			big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
+			vdrs.ValidatorSet.TotalWeight,
+			maxQuorumNumerator,
+		) {
+			logger.Warn(
+				"Failed to connect to a threshold of stake, retrying...",
+				zap.Stringer("subnetID", subnetID),
+				zap.Uint64("quorumNumerator", maxQuorumNumerator),
+				zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
+				zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
+				zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
+			)
+			return fmt.Errorf("failed to connect to sufficient stake")
+		}
+
 		logger.Info(
-			"Connected to sufficient stake for all destinations",
+			"Connected to sufficient stake",
 			zap.Stringer("subnetID", subnetID),
+			zap.Uint64("quorumNumerator", maxQuorumNumerator),
+			zap.Uint64("connectedWeight", vdrs.ConnectedWeight),
+			zap.Uint64("totalValidatorWeight", vdrs.ValidatorSet.TotalWeight),
+			zap.Int("numConnectedPeers", vdrs.ConnectedNodes.Len()),
 		)
 		return nil
 	}
