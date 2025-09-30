@@ -4,6 +4,7 @@
 package evm
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
@@ -28,6 +29,114 @@ var destinationSubnet = config.DestinationBlockchain{
 		BaseURL: "https://subnets.avax.network/mysubnet/rpc",
 	},
 	AccountPrivateKeys: []string{"56289e99c94b6912bfc12adc093c9b51124f0dc54ac7a766b2bc5ccf558d8027"},
+}
+
+func TestGetFeePerGas(t *testing.T) {
+	testCases := []struct {
+		name                       string
+		maxBaseFee                 *big.Int
+		suggestedPriorityFeeBuffer *big.Int
+		maxPriorityFeePerGas       *big.Int
+		estimateBaseFee            *big.Int
+		estimateBaseFeeErr         error
+		suggestGasTipCap           *big.Int
+		suggestGasTipCapErr        error
+		expectedGasFeeCap          *big.Int
+		expectedGasTipCap          *big.Int
+		expectedError              error
+	}{
+		{
+			name:                       "use configured max base fee",
+			maxBaseFee:                 big.NewInt(1),
+			suggestedPriorityFeeBuffer: big.NewInt(0),
+			maxPriorityFeePerGas:       big.NewInt(0),
+			suggestGasTipCap:           big.NewInt(0),
+			expectedGasFeeCap:          big.NewInt(1),
+			expectedGasTipCap:          big.NewInt(0),
+		},
+		{
+			name:                       "error estimate base fee",
+			maxBaseFee:                 big.NewInt(0),
+			suggestedPriorityFeeBuffer: big.NewInt(0),
+			maxPriorityFeePerGas:       big.NewInt(0),
+			estimateBaseFee:            nil,
+			estimateBaseFeeErr:         context.DeadlineExceeded,
+			expectedError:              context.DeadlineExceeded,
+		},
+		{
+			name:                       "use base fee estimate multiple",
+			maxBaseFee:                 big.NewInt(0),
+			suggestedPriorityFeeBuffer: big.NewInt(0),
+			maxPriorityFeePerGas:       big.NewInt(0),
+			estimateBaseFee:            big.NewInt(1),
+			suggestGasTipCap:           big.NewInt(0),
+			expectedGasFeeCap:          big.NewInt(1 * defaultBaseFeeFactor),
+			expectedGasTipCap:          big.NewInt(0),
+		},
+		{
+			name:                "error suggest gas tip cap",
+			maxBaseFee:          big.NewInt(1),
+			suggestGasTipCapErr: context.DeadlineExceeded,
+			expectedError:       context.DeadlineExceeded,
+		},
+		{
+			name:                       "suggest gas tip cap + buffer > max priority fee per gas",
+			maxBaseFee:                 big.NewInt(1),
+			suggestedPriorityFeeBuffer: big.NewInt(2),
+			maxPriorityFeePerGas:       big.NewInt(3),
+			suggestGasTipCap:           big.NewInt(2),
+			expectedGasFeeCap:          big.NewInt(4),
+			expectedGasTipCap:          big.NewInt(3),
+		},
+		{
+			name:                       "suggest gas tip cap + buffer < max priority fee per gas",
+			maxBaseFee:                 big.NewInt(1),
+			suggestedPriorityFeeBuffer: big.NewInt(2),
+			maxPriorityFeePerGas:       big.NewInt(10),
+			suggestGasTipCap:           big.NewInt(2),
+			expectedGasFeeCap:          big.NewInt(5),
+			expectedGasTipCap:          big.NewInt(4),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockClient := mock_ethclient.NewMockClient(ctrl)
+			destClient := destinationClient{
+				logger:                     logging.NoLog{},
+				client:                     mockClient,
+				maxBaseFee:                 test.maxBaseFee,
+				suggestedPriorityFeeBuffer: test.suggestedPriorityFeeBuffer,
+				maxPriorityFeePerGas:       test.maxPriorityFeePerGas,
+			}
+
+			estimatedBaseFeeTimes := 0
+			if test.maxBaseFee.Cmp(big.NewInt(0)) == 0 {
+				estimatedBaseFeeTimes = 1
+			}
+			suggestGasTipCapTimes := 0
+			if test.estimateBaseFeeErr == nil {
+				suggestGasTipCapTimes = 1
+			}
+
+			gomock.InOrder(
+				mockClient.EXPECT().EstimateBaseFee(gomock.Any()).Return(
+					test.estimateBaseFee,
+					test.estimateBaseFeeErr,
+				).Times(estimatedBaseFeeTimes),
+				mockClient.EXPECT().SuggestGasTipCap(gomock.Any()).Return(
+					test.suggestGasTipCap,
+					test.suggestGasTipCapErr,
+				).Times(suggestGasTipCapTimes),
+			)
+
+			gasFeeCap, gasTipCap, err := destClient.getFeePerGas()
+			require.ErrorIs(t, test.expectedError, err)
+			require.Equal(t, test.expectedGasFeeCap, gasFeeCap)
+			require.Equal(t, test.expectedGasTipCap, gasTipCap)
+		})
+	}
 }
 
 func TestSendTx(t *testing.T) {
@@ -113,13 +222,14 @@ func TestSendTx(t *testing.T) {
 				readonlyConcurrentSigners: []*readonlyConcurrentSigner{
 					(*readonlyConcurrentSigner)(signer),
 				},
-				logger:               logging.NoLog{},
-				client:               mockClient,
-				evmChainID:           big.NewInt(5),
-				maxBaseFee:           test.maxBaseFee,
-				maxPriorityFeePerGas: big.NewInt(0),
-				blockGasLimit:        0,
-				txInclusionTimeout:   30 * time.Second,
+				logger:                     logging.NoLog{},
+				client:                     mockClient,
+				evmChainID:                 big.NewInt(5),
+				maxBaseFee:                 test.maxBaseFee,
+				suggestedPriorityFeeBuffer: big.NewInt(0),
+				maxPriorityFeePerGas:       big.NewInt(0),
+				blockGasLimit:              0,
+				txInclusionTimeout:         30 * time.Second,
 			}
 			warpMsg := &avalancheWarp.Message{}
 			toAddress := "0x27aE10273D17Cd7e80de8580A51f476960626e5f"
