@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/relayer/config"
 	"github.com/ava-labs/icm-services/utils"
@@ -89,8 +90,9 @@ func checkSufficientConnectedStake(
 				return err
 			}
 
-			// Get validators for this specific destination (epoched if Granite activated, standard otherwise)
-			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, destinationBlockchainID)
+			// Get current validators (ProposedHeight) for this destination
+			// TODO: Consider using epoched validators based on destination blockchain context
+			vdrs, err := network.GetCanonicalValidators(ctx, subnetID, false, pchainapi.ProposedHeight)
 			if err != nil {
 				logger.Error(
 					"Failed to retrieve validators for destination",
