@@ -46,18 +46,18 @@ func (m *MockAppRequestNetwork) EXPECT() *MockAppRequestNetworkMockRecorder {
 }
 
 // GetCanonicalValidators mocks base method.
-func (m *MockAppRequestNetwork) GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool) (*peers.CanonicalValidators, error) {
+func (m *MockAppRequestNetwork) GetCanonicalValidators(ctx context.Context, subnetID ids.ID, skipCache bool, pchainHeight uint64) (*peers.CanonicalValidators, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCanonicalValidators", ctx, subnetID, skipCache)
+	ret := m.ctrl.Call(m, "GetCanonicalValidators", ctx, subnetID, skipCache, pchainHeight)
 	ret0, _ := ret[0].(*peers.CanonicalValidators)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCanonicalValidators indicates an expected call of GetCanonicalValidators.
-func (mr *MockAppRequestNetworkMockRecorder) GetCanonicalValidators(ctx, subnetID, skipCache any) *gomock.Call {
+func (mr *MockAppRequestNetworkMockRecorder) GetCanonicalValidators(ctx, subnetID, skipCache, pchainHeight any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCanonicalValidators", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetCanonicalValidators), ctx, subnetID, skipCache)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCanonicalValidators", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetCanonicalValidators), ctx, subnetID, skipCache, pchainHeight)
 }
 
 // GetSubnetID mocks base method.
