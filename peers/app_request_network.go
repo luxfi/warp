@@ -27,7 +27,6 @@ import (
 	vdrs "github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/subnets"
-	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/linked"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -89,9 +88,11 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
+	GetNetworkID() uint32
 }
 
 type appRequestNetwork struct {
+	networkID        uint32
 	network          network.Network
 	handler          *RelayerExternalHandler
 	infoAPI          *InfoAPI
@@ -168,7 +169,6 @@ func NewNetwork(
 		networkID,
 		manager,
 		trackedSubnets,
-		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -194,14 +194,12 @@ func NewNetwork(
 	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
 	// Set the activation time for the latest network upgrade
-	upgradeTime := upgrade.GetConfig(networkID).FortunaTime
 
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		upgradeTime,
 	)
 	if err != nil {
 		logger.Error(
@@ -284,6 +282,7 @@ func NewNetwork(
 	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 
 	arNetwork := &appRequestNetwork{
+		networkID:                  networkID,
 		network:                    testNetwork,
 		handler:                    handler,
 		infoAPI:                    infoAPI,
@@ -302,6 +301,10 @@ func NewNetwork(
 	go arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
+}
+
+func (n *appRequestNetwork) GetNetworkID() uint32 {
+	return n.networkID
 }
 
 // Helper to scope lock acquisition
