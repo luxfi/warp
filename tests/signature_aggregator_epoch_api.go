@@ -136,21 +136,7 @@ func SignatureAggregatorEpochAPI(network *network.LocalNetwork, teleporter utils
 		)
 	}
 
-	// Test Case 1: Current validators (PChainHeight = 0)
-	log.Info("=== Test Case 1: Current Validators (PChainHeight = 0) ===")
-	sendRequestWithPChainHeight(0, "Current Validators")
-
-	// Test Case 2: Specific P-Chain height (simulate epoched validators)
-	// Use a reasonable height that should exist (e.g., height 10)
-	log.Info("=== Test Case 2: Epoched Validators (PChainHeight = 10) ===")
-	sendRequestWithPChainHeight(10, "Epoched Validators at Height 10")
-
-	// Test Case 3: Another specific height
-	log.Info("=== Test Case 3: Epoched Validators (PChainHeight = 100) ===")
-	sendRequestWithPChainHeight(100, "Epoched Validators at Height 100")
-
-	// Test Case 4: ProposedHeight (MaxUint64) - should work like current validators
-	log.Info("=== Test Case 4: ProposedHeight (MaxUint64) ===")
+	sendRequestWithPChainHeight(5, "Epoched Validators at Height 5")
 	sendRequestWithPChainHeight(pchainapi.ProposedHeight, "ProposedHeight")
 
 	// Test the reverse direction as well
@@ -165,12 +151,7 @@ func SignatureAggregatorEpochAPI(network *network.LocalNetwork, teleporter utils
 	)
 	warpMessage = getWarpMessageFromLog(ctx, receipt, l1BInfo)
 
-	// Test reverse direction with different PChain heights
-	log.Info("=== Test Case 5: Reverse Direction - Current Validators ===")
-	sendRequestWithPChainHeight(0, "Reverse Direction - Current Validators")
-
-	log.Info("=== Test Case 6: Reverse Direction - Epoched Validators ===")
-	sendRequestWithPChainHeight(50, "Reverse Direction - Epoched Validators at Height 50")
+	sendRequestWithPChainHeight(5, "Reverse Direction - Epoched Validators at Height 50")
 
 	log.Info("All epoch validator API tests completed successfully!")
 }

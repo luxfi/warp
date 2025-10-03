@@ -6,6 +6,7 @@ package relayer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -344,17 +345,18 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 // Returns ProposedHeight for current validators if Granite is not activated, or the epoch P-Chain height if activated
 func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context) (uint64, error) {
 	// Get upgrade configuration based on network
+	fmt.Println("network_ID", r.network.GetNetworkID())
 	upgradeConfig := upgrade.GetConfig(r.network.GetNetworkID())
 	if !upgradeConfig.IsGraniteActivated(time.Now()) {
 		// Granite is not activated, use current validators
-		r.logger.Debug("Granite not activated, using current validators (ProposedHeight)",
+		r.logger.Info("Granite not activated, using current validators (ProposedHeight)",
 			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 			zap.Uint64("pchainHeight", pchainapi.ProposedHeight),
 		)
 		return pchainapi.ProposedHeight, nil
 	}
 
-	r.logger.Debug("Granite is activated, fetching current epoch from ProposerVM",
+	r.logger.Info("Granite is activated, fetching current epoch from ProposerVM",
 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 	)
 
@@ -366,11 +368,11 @@ func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context)
 			zap.Error(err),
 		)
 		// Fallback to current validators if ProposerVM API fails
-		r.logger.Debug("Falling back to current validators (ProposedHeight) due to ProposerVM API error")
+		r.logger.Info("Falling back to current validators (ProposedHeight) due to ProposerVM API error")
 		return pchainapi.ProposedHeight, nil
 	}
 
-	r.logger.Debug("Successfully retrieved epoch from ProposerVM",
+	r.logger.Info("Successfully retrieved epoch from ProposerVM",
 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 		zap.Uint64("epochNumber", epoch.Number),
 		zap.Uint64("epochPChainHeight", epoch.PChainHeight),
