@@ -4,7 +4,7 @@ Version: 2.0
 
 ## Abstract
 
-Warp V2 is an enhanced cross-chain messaging (XCM) format building upon the original Warp protocol developed by the Avalanche team. This version introduces post-quantum safety through random ringtail validation and other cryptographic improvements while maintaining backward compatibility with Warp V1.
+Warp V2 is an enhanced cross-chain messaging (XCM) format building upon the original Warp protocol developed by the Lux team. This version introduces post-quantum safety through random ringtail validation and other cryptographic improvements while maintaining backward compatibility with Warp V1.
 
 ## Improvements over Warp V1
 
