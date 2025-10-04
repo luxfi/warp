@@ -4,7 +4,7 @@ An enhanced cross-chain messaging (XCM) format with post-quantum safety and priv
 
 ## Overview
 
-Warp V2 builds upon the original Warp protocol developed by the Avalanche team, adding post-quantum cryptography through random ringtail validation and private messaging via Z-chain FHE. It defines a message format and cryptographic standard for secure cross-chain communication that is:
+Warp V2 builds upon the original Warp protocol developed by the Lux team, adding post-quantum cryptography through random ringtail validation and private messaging via Z-chain FHE. It defines a message format and cryptographic standard for secure cross-chain communication that is:
 
 - **Protocol-First**: Clean separation between protocol definitions and implementations
 - **Language-Agnostic**: Core protocol can be implemented in any language (Go, Rust, C++, etc.)
