@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"time"
 
+	"connectrpc.com/connect"
+	"github.com/ava-labs/avalanchego/api/connectclient"
+	pbproposervm "github.com/ava-labs/avalanchego/connectproto/pb/proposervm"
+	pb "github.com/ava-labs/avalanchego/connectproto/pb/proposervm/proposervmconnect"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
@@ -68,8 +71,8 @@ type ApplicationRelayer struct {
 	relayerID                 database.RelayerID
 	warpConfig                config.WarpConfig
 	checkpointManager         CheckpointManager
-	sourceWarpSignatureClient *rpc.Client        // nil if configured to fetch signatures via AppRequest for the source blockchain
-	proposerClient            *proposervm.Client // ProposerVM client for epoch information when Granite is activated
+	sourceWarpSignatureClient *rpc.Client         // nil if configured to fetch signatures via AppRequest for the source blockchain
+	proposerClient            pb.ProposerVMClient // ProposerVM client for epoch information when Granite is activated
 	signatureAggregator       *aggregator.SignatureAggregator
 	processMessageSemaphore   chan struct{}
 }
@@ -133,9 +136,17 @@ func NewApplicationRelayer(
 	}
 
 	// Create ProposerVM client for epoch information (used when Granite is activated)
-	proposerClient := proposervm.NewClient(
+	proposerClient := pb.NewProposerVMClient(
+		connectclient.New(),
 		destinationClient.GetRPCEndpointURL(),
-		relayerID.DestinationBlockchainID.String(),
+		connect.WithInterceptors(
+			connectclient.SetRouteHeaderInterceptor{
+				Route: []string{
+					relayerID.DestinationBlockchainID.String(),
+					proposervm.HTTPHeaderRoute,
+				},
+			},
+		),
 	)
 
 	ar := ApplicationRelayer{
@@ -346,22 +357,22 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context) (uint64, error) {
 	// Get upgrade configuration based on network
 	fmt.Println("network_ID", r.network.GetNetworkID())
-	upgradeConfig := upgrade.GetConfig(r.network.GetNetworkID())
-	if !upgradeConfig.IsGraniteActivated(time.Now()) {
-		// Granite is not activated, use current validators
-		r.logger.Info("Granite not activated, using current validators (ProposedHeight)",
-			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
-			zap.Uint64("pchainHeight", pchainapi.ProposedHeight),
-		)
-		return pchainapi.ProposedHeight, nil
-	}
+	// upgradeConfig := upgrade.GetConfig(r.network.GetNetworkID())
+	// if !upgradeConfig.IsGraniteActivated(time.Now()) {
+	// 	// Granite is not activated, use current validators
+	// 	r.logger.Info("Granite not activated, using current validators (ProposedHeight)",
+	// 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
+	// 		zap.Uint64("pchainHeight", pchainapi.ProposedHeight),
+	// 	)
+	// 	return pchainapi.ProposedHeight, nil
+	// }
 
 	r.logger.Info("Granite is activated, fetching current epoch from ProposerVM",
 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 	)
 
 	// Granite is activated, get epoch information from ProposerVM API
-	epoch, err := r.proposerClient.GetCurrentEpoch(ctx)
+	response, err := r.proposerClient.GetCurrentEpoch(ctx, &connect.Request[pbproposervm.GetCurrentEpochRequest]{})
 	if err != nil {
 		r.logger.Error("Failed to get current epoch from ProposerVM",
 			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
@@ -371,6 +382,8 @@ func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context)
 		r.logger.Info("Falling back to current validators (ProposedHeight) due to ProposerVM API error")
 		return pchainapi.ProposedHeight, nil
 	}
+
+	epoch := response.Msg
 
 	r.logger.Info("Successfully retrieved epoch from ProposerVM",
 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
