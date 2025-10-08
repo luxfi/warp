@@ -96,7 +96,7 @@ func main() {
 
 	// Initialize the Warp Config values and trackedSubnets by fetching via RPC
 	// We do this here so that BuildConfig doesn't need to make RPC calls
-	if err = cfg.Initialize(); err != nil {
+	if err = cfg.Initialize(parentCtx); err != nil {
 		logger.Fatal("couldn't initialize config", zap.Error(err))
 		os.Exit(1)
 	}
