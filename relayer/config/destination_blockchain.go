@@ -152,7 +152,7 @@ func (s *DestinationBlockchain) GetBlockchainID() ids.ID {
 	return s.blockchainID
 }
 
-func (s *DestinationBlockchain) initializeWarpConfigs() error {
+func (s *DestinationBlockchain) initializeWarpConfigs(ctx context.Context) error {
 	blockchainID, err := ids.FromString(s.BlockchainID)
 	if err != nil {
 		return fmt.Errorf("invalid blockchainID in configuration. error: %w", err)
@@ -171,7 +171,7 @@ func (s *DestinationBlockchain) initializeWarpConfigs() error {
 	}
 
 	client, err := utils.NewEthClientWithConfig(
-		context.Background(),
+		ctx,
 		s.RPCEndpoint.BaseURL,
 		s.RPCEndpoint.HTTPHeaders,
 		s.RPCEndpoint.QueryParams,
