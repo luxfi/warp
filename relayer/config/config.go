@@ -254,7 +254,7 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 func (c *Config) initializeWarpConfigs(ctx context.Context) error {
 	// Fetch the Warp config values for each destination subnet.
 	for _, destinationSubnet := range c.DestinationBlockchains {
-		err := destinationSubnet.initializeWarpConfigs(context.Background())
+		err := destinationSubnet.initializeWarpConfigs(ctx)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to initialize Warp config for destination subnet %s: %w",
