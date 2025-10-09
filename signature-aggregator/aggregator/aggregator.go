@@ -553,7 +553,11 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	skipCache bool,
 	pchainHeight uint64,
 ) (*avalancheWarp.Message, error) {
-	// Validate quorum percentages
+	log.Info("Creating signed message",
+		zap.Uint64("requiredQuorumPercentage", requiredQuorumPercentage),
+		zap.Uint64("quorumPercentageBuffer", quorumPercentageBuffer),
+		zap.Uint64("pchainHeight", pchainHeight),
+	)
 	if err := validateQuorumPercentages(requiredQuorumPercentage, quorumPercentageBuffer); err != nil {
 		log.Error(
 			"Invalid quorum percentages",
