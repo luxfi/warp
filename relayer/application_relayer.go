@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"connectrpc.com/connect"
@@ -135,14 +136,34 @@ func NewApplicationRelayer(
 		}
 	}
 
-	// Create ProposerVM client for epoch information (used when Granite is activated)
+	rpcEndpoint := destinationClient.GetRPCEndpointURL()
+	blockchainID := relayerID.DestinationBlockchainID.String()
+
+	endpoint, err := url.Parse(rpcEndpoint)
+	if err != nil {
+		logger.Error(
+			"Failed to parse rpc endpoint",
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	baseURL := fmt.Sprintf("%s://%s", endpoint.Scheme, endpoint.Host)
+
+	logger.Info("Creating ProposerVM client for destination chain",
+		zap.String("originalRpcEndpoint", rpcEndpoint),
+		zap.String("baseURL", baseURL),
+		zap.String("destinationBlockchainID", blockchainID),
+		zap.String("route", proposervm.HTTPHeaderRoute),
+	)
+
 	proposerClient := pb.NewProposerVMClient(
 		connectclient.New(),
-		destinationClient.GetRPCEndpointURL(),
+		baseURL,
 		connect.WithInterceptors(
 			connectclient.SetRouteHeaderInterceptor{
 				Route: []string{
-					relayerID.DestinationBlockchainID.String(),
+					blockchainID,
 					proposervm.HTTPHeaderRoute,
 				},
 			},
@@ -355,26 +376,9 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 // getPChainHeightForValidatorSet determines the appropriate P-Chain height for validator set selection
 // Returns ProposedHeight for current validators if Granite is not activated, or the epoch P-Chain height if activated
 func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context) (uint64, error) {
-	// Get upgrade configuration based on network
-	fmt.Println("network_ID", r.network.GetNetworkID())
-	// upgradeConfig := upgrade.GetConfig(r.network.GetNetworkID())
-	// if !upgradeConfig.IsGraniteActivated(time.Now()) {
-	// 	// Granite is not activated, use current validators
-	// 	r.logger.Info("Granite not activated, using current validators (ProposedHeight)",
-	// 		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
-	// 		zap.Uint64("pchainHeight", pchainapi.ProposedHeight),
-	// 	)
-	// 	return pchainapi.ProposedHeight, nil
-	// }
-
-	r.logger.Info("Granite is activated, fetching current epoch from ProposerVM",
-		zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
-	)
-
-	// Granite is activated, get epoch information from ProposerVM API
 	response, err := r.proposerClient.GetCurrentEpoch(ctx, &connect.Request[pbproposervm.GetCurrentEpochRequest]{})
 	if err != nil {
-		r.logger.Error("Failed to get current epoch from ProposerVM",
+		r.logger.Warn("Failed to get current epoch from destination chain ProposerVM",
 			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 			zap.Error(err),
 		)
@@ -391,6 +395,12 @@ func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context)
 		zap.Uint64("epochPChainHeight", epoch.PChainHeight),
 		zap.Int64("epochStartTime", epoch.StartTime),
 	)
+
+	// TODO: check the grinate activation
+	if epoch.Number == 0 {
+		r.logger.Info("Epoch number is 0, using current validators (ProposedHeight)")
+		return pchainapi.ProposedHeight, nil
+	}
 
 	return epoch.PChainHeight, nil
 }
