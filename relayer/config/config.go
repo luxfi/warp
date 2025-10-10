@@ -11,12 +11,15 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
 	"go.uber.org/zap"
 
+	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 
@@ -88,6 +91,8 @@ type Config struct {
 	tlsCert                *tls.Certificate
 	blockchainIDToSubnetID map[ids.ID]ids.ID
 	trackedSubnets         set.Set[ids.ID]
+
+	networkUpgradeConfig *upgrade.Config
 }
 
 func DisplayUsageText() {
@@ -246,10 +251,10 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 }
 
 // Initializes Warp configurations (quorum and self-signing settings) for each destination subnet
-func (c *Config) initializeWarpConfigs() error {
+func (c *Config) initializeWarpConfigs(ctx context.Context) error {
 	// Fetch the Warp config values for each destination subnet.
 	for _, destinationSubnet := range c.DestinationBlockchains {
-		err := destinationSubnet.initializeWarpConfigs()
+		err := destinationSubnet.initializeWarpConfigs(ctx)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to initialize Warp config for destination subnet %s: %w",
@@ -276,8 +281,21 @@ func (c *Config) initializeTrackedSubnets() error {
 	return nil
 }
 
-func (c *Config) Initialize() error {
-	if err := c.initializeWarpConfigs(); err != nil {
+func (c *Config) initializeNetworkUpgradeConfig(ctx context.Context) error {
+	infoClient := info.NewClient(c.InfoAPI.BaseURL)
+	upgradeConfig, err := infoClient.Upgrades(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get network upgrade config: %w", err)
+	}
+	c.networkUpgradeConfig = upgradeConfig
+	return nil
+}
+
+func (c *Config) Initialize(ctx context.Context) error {
+	if err := c.initializeNetworkUpgradeConfig(ctx); err != nil {
+		return err
+	}
+	if err := c.initializeWarpConfigs(ctx); err != nil {
 		return err
 	}
 	return c.initializeTrackedSubnets()
@@ -320,6 +338,10 @@ func (c *Config) GetTLSCert() *tls.Certificate {
 
 func (c *Config) LogSafeField() zap.Field {
 	return zap.Any("config", c.sanitizeForLogging())
+}
+
+func (c *Config) IsGraniteActivated() bool {
+	return c.networkUpgradeConfig.IsGraniteActivated(time.Now())
 }
 
 func (c *Config) sanitizeForLogging() map[string]any {
