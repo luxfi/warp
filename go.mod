@@ -1,6 +1,6 @@
 module github.com/ava-labs/icm-services
 
-go 1.24.7
+go 1.24.8
 
 require (
 	github.com/alexliesenfeld/health v0.8.1
