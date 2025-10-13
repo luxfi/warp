@@ -5,7 +5,7 @@ go 1.24.8
 require (
 	connectrpc.com/connect v1.18.1
 	github.com/alexliesenfeld/health v0.8.1
-	github.com/ava-labs/avalanchego v1.13.6-rc.1.0.20251013184242-946ea96c2844 // branch icm-services-patch-v1.13.4
+	github.com/ava-labs/avalanchego v1.13.6-rc.1.0.20251013184242-946ea96c2844 // branch icm-services-patch-v1.13.6
 	github.com/ava-labs/icm-contracts v1.0.10-0.20251013183254-551a111edd7c
 	github.com/ava-labs/libevm v1.13.15-0.20251002164226-35926db4d661
 	github.com/ava-labs/subnet-evm v0.7.10-0.20251013155523-47a1ce400863
