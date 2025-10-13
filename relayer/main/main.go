@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/icm-services/vms"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/subnet-evm/ethclient"
+	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -56,6 +57,8 @@ const (
 )
 
 func main() {
+	// Register all libevm extras in order to be able to get pre-compile information from the genesis block
+	evm.RegisterAllLibEVMExtras()
 	cfg := buildConfig()
 
 	// Create parent context with cancel function
