@@ -61,7 +61,7 @@ go build -v -o tests/cmd/decider/decider ./tests/cmd/decider/
 # Run the tests
 echo "Running e2e tests $RUN_E2E"
 RUN_E2E=true LOG_LEVEL=${LOG_LEVEL} SIG_AGG_PATH=${SIG_AGG_PATH:-"$BASEDIR/icm-services/signature-aggregator"} ./tests/tests.test \
-  --activate-granite=${ACTIVATE_GRANITE} \
+  --activate-granite=${ACTIVATE_GRANITE:-"false"} \
   --ginkgo.vv \
   --ginkgo.label-filter=${GINKGO_LABEL_FILTER:-""} \
   --ginkgo.focus=${GINKGO_FOCUS:-""} 
