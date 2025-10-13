@@ -3,6 +3,7 @@ module github.com/ava-labs/icm-services
 go 1.24.8
 
 require (
+	connectrpc.com/connect v1.18.1
 	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.13.6-rc.1.0.20251013184242-946ea96c2844 // branch icm-services-patch-v1.13.4
 	github.com/ava-labs/icm-contracts v1.0.10-0.20251013183254-551a111edd7c
@@ -32,8 +33,6 @@ require (
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
 )
-
-require connectrpc.com/connect v1.18.1
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
