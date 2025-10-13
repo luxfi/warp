@@ -29,5 +29,5 @@ function extract_commit() {
 # This needs to be exported to be picked up by the dockerfile.
 export GO_VERSION=${GO_VERSION:-$(getDepVersion go)}
 # Don't export them as they're used in the context of other calls
-AVALANCHEGO_VERSION=${AVALANCHEGO_VERSION:-'63cc1a166a56e749f3c02856babbde596757f1e1'}
+AVALANCHEGO_VERSION=${AVALANCHEGO_VERSION:-'8564a57d3ca61f976c90b4ad96e41640a2a3cdc4'}
 SUBNET_EVM_VERSION=${SUBNET_EVM_VERSION:-$(extract_commit "$(getDepVersion github.com/ava-labs/subnet-evm)")}
