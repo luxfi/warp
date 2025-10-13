@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/subnet-evm/params"
 	"github.com/ava-labs/subnet-evm/params/extras"
+	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/ava-labs/subnet-evm/precompile/contracts/warp"
 	"github.com/ava-labs/subnet-evm/precompile/precompileconfig"
 	"github.com/stretchr/testify/require"
@@ -355,6 +356,8 @@ func TestIndividualSignersConfig(t *testing.T) {
 }
 
 func TestGetWarpConfig(t *testing.T) {
+	// This is necessary to support fetching warp config from the genesis block
+	evm.RegisterAllLibEVMExtras()
 	blockchainID, err := ids.FromString("p433wpuXyJiDhyazPYyZMJeaoPSW76CBZ2x7wrVPLgvokotXz")
 	require.NoError(t, err)
 	subnetID, err := ids.FromString("2PsShLjrFFwR51DMcAh8pyuwzLn1Ym3zRhuXLTmLCR1STk2mL6")
