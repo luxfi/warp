@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/config"
 	"github.com/ava-labs/icm-services/signature-aggregator/healthcheck"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
+	"github.com/ava-labs/subnet-evm/plugin/evm"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -40,6 +41,8 @@ const (
 )
 
 func main() {
+	// Register all libevm extras in order to be able to get pre-compile information from the genesis block
+	evm.RegisterAllLibEVMExtras()
 	cfg := buildConfig()
 
 	logLevel, err := logging.ToLevel(cfg.LogLevel)

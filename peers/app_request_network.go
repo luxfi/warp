@@ -27,6 +27,7 @@ import (
 	vdrs "github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/subnets"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/linked"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -169,6 +170,7 @@ func NewNetwork(
 		networkID,
 		manager,
 		trackedSubnets,
+		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -195,11 +197,13 @@ func NewNetwork(
 
 	// Set the activation time for the latest network upgrade
 
+	upgradeTime := upgrade.GetConfig(networkID).GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
+		upgradeTime,
 	)
 	if err != nil {
 		logger.Error(
@@ -379,15 +383,10 @@ func (n *appRequestNetwork) updateValidatorSet(
 		return err
 	}
 
-	validatorsMap := make(map[ids.NodeID]*vdrs.GetValidatorOutput)
-	for _, vdr := range validators {
-		validatorsMap[vdr.NodeID] = vdr
-	}
-
 	// Remove any elements from the manager that are not in the new validator set
 	currentVdrs := n.manager.GetValidatorIDs(subnetID)
 	for _, nodeID := range currentVdrs {
-		if _, ok := validatorsMap[nodeID]; !ok {
+		if _, ok := validators[nodeID]; !ok {
 			n.logger.Debug("Removing validator", zap.Stringer("nodeID", nodeID), zap.Stringer("subnetID", subnetID))
 			weight := n.manager.GetWeight(subnetID, nodeID)
 			if err := n.manager.RemoveWeight(subnetID, nodeID, weight); err != nil {
