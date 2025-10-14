@@ -131,7 +131,6 @@ func NewNetwork(
 	timeoutManagerRegistry prometheus.Registerer,
 	trackedSubnets set.Set[ids.ID],
 	manuallyTrackedPeers []info.Peer,
-	maxPChainLookback int64,
 	cfg Config,
 ) (AppRequestNetwork, error) {
 	metrics := newAppRequestNetworkMetrics(relayerRegistry)
@@ -308,7 +307,7 @@ func NewNetwork(
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
 		epochedValidatorSetCache:   epochedVdrsCache,
-		maxPChainLookback:          maxPChainLookback,
+		maxPChainLookback:          cfg.GetMaxPChainLookback(),
 	}
 
 	go arNetwork.startUpdateValidators(ctx)

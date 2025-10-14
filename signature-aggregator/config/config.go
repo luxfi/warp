@@ -102,3 +102,7 @@ func (c *Config) GetTrackedSubnets() set.Set[ids.ID] {
 func (c *Config) GetTLSCert() *tls.Certificate {
 	return c.tlsCert
 }
+
+func (c *Config) GetMaxPChainLookback() int64 {
+	return c.MaxPChainLookback
+}

@@ -131,7 +131,6 @@ func main() {
 		registries[timeoutManagerMetricsPrefix],
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
-		cfg.MaxPChainLookback,
 		&cfg,
 	)
 	if err != nil {
