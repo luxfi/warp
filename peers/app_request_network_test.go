@@ -187,7 +187,7 @@ func TestTrackSubnets(t *testing.T) {
 	}
 	require.Zero(t, arNetwork.trackedSubnets.Len())
 	require.Zero(t, arNetwork.lruSubnets.Len())
-	mockValidatorClient.EXPECT().GetProposedValidators(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mockValidatorClient.EXPECT().GetCurrentCanonicalValidatorSet(gomock.Any(), gomock.Any()).Return(validators.WarpSet{}, nil).AnyTimes()
 	for range maxNumSubnets {
 		arNetwork.TrackSubnet(context.Background(), ids.GenerateTestID())
 	}
