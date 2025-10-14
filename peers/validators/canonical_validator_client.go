@@ -39,7 +39,6 @@ type CanonicalValidatorState interface {
 		ctx context.Context,
 		pchainHeight uint64,
 	) (map[ids.ID]validators.WarpSet, error)
-	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
 // CanonicalValidatorClient wraps [platformvm.Client] and implements [CanonicalValidatorState]
