@@ -494,14 +494,9 @@ func (n *appRequestNetwork) getOrCreateEpochedCache(
 	n.epochedCacheLock.Lock()
 	defer n.epochedCacheLock.Unlock()
 	lruCache, exists := n.epochedValidatorSetCache[subnetID]
-
 	if !exists {
-		// Double check after acquiring write lock
-		lruCache, exists = n.epochedValidatorSetCache[subnetID]
-		if !exists {
-			lruCache = cache.NewLRUCache[uint64, avalancheWarp.CanonicalValidatorSet](epochedValidatorSetCacheSizePerSubnet)
-			n.epochedValidatorSetCache[subnetID] = lruCache
-		}
+		lruCache = cache.NewLRUCache[uint64, avalancheWarp.CanonicalValidatorSet](epochedValidatorSetCacheSizePerSubnet)
+		n.epochedValidatorSetCache[subnetID] = lruCache
 	}
 
 	return lruCache
