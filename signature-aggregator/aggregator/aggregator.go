@@ -28,14 +28,15 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/icm-services/cache"
-	"github.com/ava-labs/icm-services/peers"
-	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
-	"github.com/ava-labs/icm-services/utils"
 	"github.com/ava-labs/libevm/log"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/ava-labs/icm-services/cache"
+	"github.com/ava-labs/icm-services/peers"
+	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
+	"github.com/ava-labs/icm-services/utils"
 )
 
 type blsSignatureBuf [bls.SignatureLen]byte
@@ -120,7 +121,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	skipCache bool,
 	pchainHeight uint64,
 ) (*peers.CanonicalValidators, error) {
-	s.network.TrackSubnet(signingSubnet)
+	s.network.TrackSubnet(ctx, signingSubnet)
 
 	var vdrs *peers.CanonicalValidators
 	var err error
@@ -578,7 +579,14 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	vdrs, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache, pchainHeight)
+	vdrs, err := s.connectToQuorumValidators(
+		ctx,
+		log,
+		signingSubnet,
+		requiredQuorumPercentage,
+		skipCache,
+		pchainHeight,
+	)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -620,7 +628,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 	// Populate signature map from cache
 	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
-		unsignedMessage, vdrs, excludedValidators)
+		unsignedMessage,
+		vdrs,
+		excludedValidators,
+	)
 
 	// Only return early if we have enough signatures to meet the quorum percentage
 	// plus the buffer percentage.
@@ -645,10 +656,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	reqBytes, err := s.marshalRequest(unsignedMessage, justification, sourceSubnet)
 	if err != nil {
 		msg := "Failed to marshal request bytes"
-		log.Error(
-			msg,
-			zap.Error(err),
-		)
+		log.Error(msg, zap.Error(err))
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 
