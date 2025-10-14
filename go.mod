@@ -33,6 +33,8 @@ require (
 	google.golang.org/protobuf v1.36.10
 )
 
+require connectrpc.com/connect v1.19.1
+
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
@@ -49,12 +51,7 @@ require (
 	buf.build/go/spdx v0.2.0 // indirect
 	buf.build/go/standard v0.1.0 // indirect
 	cel.dev/expr v0.24.0 // indirect
-<<<<<<< HEAD
-	connectrpc.com/connect v1.18.1 // indirect
 	connectrpc.com/grpcreflect v1.3.0 // indirect
-=======
-	connectrpc.com/connect v1.19.1 // indirect
->>>>>>> 7cee4de (Bump github.com/bufbuild/buf from 1.57.2 to 1.58.0)
 	connectrpc.com/otelconnect v0.8.0 // indirect
 	github.com/4meepo/tagalign v1.4.2 // indirect
 	github.com/Abirdcfly/dupword v0.1.3 // indirect
@@ -394,5 +391,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/ava-labs/icm-contracts v1.0.10-0.20251002150420-fd11b460d362 => ../icm-contracts
