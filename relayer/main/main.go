@@ -190,6 +190,7 @@ func main() {
 		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
+		-1, // No max lookback for relayer
 		&cfg,
 	)
 	if err != nil {
@@ -198,7 +199,7 @@ func main() {
 	}
 	defer network.Shutdown()
 
-	err = relayer.InitializeConnectionsAndCheckStake(logger, network, &cfg)
+	err = relayer.InitializeConnectionsAndCheckStake(ctx, logger, network, &cfg)
 	if err != nil {
 		logger.Fatal("Failed to initialize connections and check stake", zap.Error(err))
 		os.Exit(1)

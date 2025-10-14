@@ -18,6 +18,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
+	"github.com/ava-labs/subnet-evm/plugin/evm"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
 	metricsServer "github.com/ava-labs/icm-services/metrics"
 	"github.com/ava-labs/icm-services/peers"
 	peerUtils "github.com/ava-labs/icm-services/peers/utils"
@@ -26,10 +31,6 @@ import (
 	"github.com/ava-labs/icm-services/signature-aggregator/config"
 	"github.com/ava-labs/icm-services/signature-aggregator/healthcheck"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
-	"github.com/ava-labs/subnet-evm/plugin/evm"
-	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 var version = "v0.0.0-dev"
@@ -130,6 +131,7 @@ func main() {
 		registries[timeoutManagerMetricsPrefix],
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
+		cfg.MaxPChainLookback,
 		&cfg,
 	)
 	if err != nil {
