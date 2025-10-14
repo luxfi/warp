@@ -34,11 +34,16 @@ type CanonicalValidatorState interface {
 	GetCurrentCanonicalValidatorSet(
 		ctx context.Context,
 		subnetID ids.ID,
+<<<<<<< HEAD
 	) (validators.WarpSet, error)
 	GetAllValidatorSets(
 		ctx context.Context,
 		pchainHeight uint64,
 	) (map[ids.ID]validators.WarpSet, error)
+=======
+		pchainHeight uint64,
+	) (avalancheWarp.CanonicalValidatorSet, error)
+>>>>>>> epoching
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
