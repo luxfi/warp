@@ -383,15 +383,10 @@ func (n *appRequestNetwork) updateValidatorSet(
 		return err
 	}
 
-	validatorsMap := make(map[ids.NodeID]*vdrs.GetValidatorOutput)
-	for _, vdr := range validators {
-		validatorsMap[vdr.NodeID] = vdr
-	}
-
 	// Remove any elements from the manager that are not in the new validator set
 	currentVdrs := n.manager.GetValidatorIDs(subnetID)
 	for _, nodeID := range currentVdrs {
-		if _, ok := validatorsMap[nodeID]; !ok {
+		if _, ok := validators[nodeID]; !ok {
 			n.logger.Debug("Removing validator", zap.Stringer("nodeID", nodeID), zap.Stringer("subnetID", subnetID))
 			weight := n.manager.GetWeight(subnetID, nodeID)
 			if err := n.manager.RemoveWeight(subnetID, nodeID, weight); err != nil {
