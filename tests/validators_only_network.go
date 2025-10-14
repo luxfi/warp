@@ -270,7 +270,7 @@ func getUnderfundedNodeIndexes(
 	validatorClient := validators.NewCanonicalValidatorClient(logging.NoLog{}, &config.APIConfig{
 		BaseURL: primaryNetworkURI,
 	})
-	canonicalSet, err := validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
+	canonicalSet, err := validatorClient.GetCurrentValidatorSet(ctx, subnetID)
 	Expect(err).Should(BeNil(), "Failed to get current canonical validator set")
 	for i, validator := range canonicalSet.Validators {
 		for _, nodeID := range validator.NodeIDs {

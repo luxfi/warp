@@ -31,14 +31,8 @@ type CanonicalValidatorState interface {
 
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
 	GetLatestHeight(ctx context.Context) (uint64, error)
-	GetCurrentCanonicalValidatorSet(
-		ctx context.Context,
-		subnetID ids.ID,
-	) (validators.WarpSet, error)
-	GetAllValidatorSets(
-		ctx context.Context,
-		pchainHeight uint64,
-	) (map[ids.ID]validators.WarpSet, error)
+	GetCurrentValidatorSet(ctx context.Context, subnetID ids.ID) (validators.WarpSet, error)
+	GetAllValidatorSets(ctx context.Context, pchainHeight uint64) (map[ids.ID]validators.WarpSet, error)
 }
 
 // CanonicalValidatorClient wraps [platformvm.Client] and implements [CanonicalValidatorState]
@@ -69,7 +63,7 @@ func (v *CanonicalValidatorClient) GetLatestHeight(ctx context.Context) (uint64,
 	return height, nil
 }
 
-func (v *CanonicalValidatorClient) GetCurrentCanonicalValidatorSet(
+func (v *CanonicalValidatorClient) GetCurrentValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) (validators.WarpSet, error) {

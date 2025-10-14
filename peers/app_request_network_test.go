@@ -147,7 +147,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 			for _, vdr := range testCase.validators {
 				totalWeight += vdr.Weight
 			}
-			mockValidatorClient.EXPECT().GetCurrentCanonicalValidatorSet(gomock.Any(), subnetID).Return(
+			mockValidatorClient.EXPECT().GetCurrentValidatorSet(gomock.Any(), subnetID).Return(
 				validators.WarpSet{
 					Validators:  testCase.validators,
 					TotalWeight: testCase.expectedTotalWeight,
@@ -187,7 +187,7 @@ func TestTrackSubnets(t *testing.T) {
 	}
 	require.Zero(t, arNetwork.trackedSubnets.Len())
 	require.Zero(t, arNetwork.lruSubnets.Len())
-	mockValidatorClient.EXPECT().GetCurrentCanonicalValidatorSet(
+	mockValidatorClient.EXPECT().GetCurrentValidatorSet(
 		gomock.Any(), gomock.Any(),
 	).Return(validators.WarpSet{}, nil).AnyTimes()
 	for range maxNumSubnets {
