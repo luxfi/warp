@@ -44,7 +44,7 @@ type AggregateSignatureRequest struct {
 	// a large percentage of the Subnet weight are less prone to become invalid due to validator weight changes.
 	// Defaults to 0 if omitted.
 	QuorumPercentageBuffer uint64 `json:"quorum-percentage-buffer"`
-	// Optional P-Chain height for validator set selection. If 0 (default), current validators will be used.
+	// Optional P-Chain height for validator set selection. If 0 (default), validators at proposed height will be used.
 	// If non-zero, validators at the specified P-Chain height will be used for signature aggregation.
 	PChainHeight uint64 `json:"pchain-height"`
 }
