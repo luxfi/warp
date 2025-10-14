@@ -320,14 +320,14 @@ func (n *appRequestNetwork) GetNetworkID() uint32 {
 	return n.networkID
 }
 
-// Helper to scope lock acquisition
-func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) {
+// trackSubnet adds the subnetID to the set of tracked subnets. Returns true iff the subnet was already being tracked.
+func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) bool {
 	n.trackedSubnetsLock.Lock()
 	defer n.trackedSubnetsLock.Unlock()
 	if n.trackedSubnets.Contains(subnetID) {
 		// update the access to keep it in the LRU
 		n.lruSubnets.Put(subnetID, nil)
-		return
+		return true
 	}
 	if n.lruSubnets.Len() >= maxNumSubnets {
 		oldestSubnetID, _, _ := n.lruSubnets.Oldest()
@@ -341,13 +341,16 @@ func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) {
 	n.logger.Info("Tracking subnet", zap.Stringer("subnetID", subnetID))
 	n.lruSubnets.Put(subnetID, nil)
 	n.trackedSubnets.Add(subnetID)
+	return false
 }
 
 // TrackSubnet adds the subnet to the list of tracked subnets
 // and initiates the connections to the subnet's validators asynchronously
 func (n *appRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
-	n.trackSubnet(subnetID)
-	n.updateValidatorSet(ctx, subnetID)
+	// Track the subnet. Update the validator set if we weren't already tracking it.
+	if !n.trackSubnet(subnetID) {
+		n.updateValidatorSet(ctx, subnetID)
+	}
 }
 
 func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
@@ -479,10 +482,9 @@ func (n *appRequestNetwork) updateValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) error {
-	// Fetch the subnet validators from the P-Chain
 	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
-	validators, err := n.validatorClient.GetCurrentCanonicalValidatorSet(cctx, subnetID)
+	validators, err := n.validatorClient.GetCurrentValidatorSet(cctx, subnetID)
 	if err != nil {
 		return err
 	}
@@ -572,7 +574,7 @@ func (n *appRequestNetwork) GetCanonicalValidators(
 		// Get the subnet's current canonical validator set
 		fetchVdrsFunc := func(subnetID ids.ID) (snowVdrs.WarpSet, error) {
 			startPChainAPICall := time.Now()
-			validatorSet, err := n.validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID)
+			validatorSet, err := n.validatorClient.GetCurrentValidatorSet(ctx, subnetID)
 			n.setPChainAPICallLatencyMS(time.Since(startPChainAPICall).Milliseconds())
 			return validatorSet, err
 		}
@@ -612,7 +614,11 @@ func (n *appRequestNetwork) buildCanonicalValidators(
 	}
 
 	// Calculate the total weight of connected validators.
-	connectedWeight := calculateConnectedWeight(validatorSet.Validators, nodeValidatorIndexMap, connectedPeers)
+	connectedWeight := calculateConnectedWeight(
+		validatorSet.Validators,
+		nodeValidatorIndexMap,
+		connectedPeers,
+	)
 
 	return &CanonicalValidators{
 		ConnectedWeight:       connectedWeight,
