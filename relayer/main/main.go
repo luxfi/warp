@@ -190,7 +190,6 @@ func main() {
 		timeoutManagerMetricsRegistry,
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
-		-1, // No max lookback for relayer
 		&cfg,
 	)
 	if err != nil {
