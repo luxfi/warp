@@ -31,7 +31,10 @@ type CanonicalValidatorState interface {
 
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
 	GetCurrentCanonicalValidatorSet(
-		ctx context.Context, subnetID ids.ID, pchainHeight uint64) (avalancheWarp.CanonicalValidatorSet, error)
+		ctx context.Context,
+		subnetID ids.ID,
+		pchainHeight uint64,
+	) (avalancheWarp.CanonicalValidatorSet, error)
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
