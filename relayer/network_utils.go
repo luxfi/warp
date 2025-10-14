@@ -27,12 +27,13 @@ const retryPeriodSeconds = 5
 // Sufficient stake is determined by the Warp quora of the configured supported destinations,
 // or if the subnet supports all destinations, by the quora of all configured destinations.
 func InitializeConnectionsAndCheckStake(
+	ctx context.Context,
 	logger logging.Logger,
 	network peers.AppRequestNetwork,
 	cfg *config.Config,
 ) error {
 	for _, subnet := range cfg.GetTrackedSubnets().List() {
-		network.TrackSubnet(subnet)
+		network.TrackSubnet(ctx, subnet)
 	}
 	ctx, cancel := context.WithTimeout(
 		context.Background(),

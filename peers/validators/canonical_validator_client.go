@@ -13,13 +13,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
+	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	"go.uber.org/zap"
+
 	"github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers/utils"
 	sharedUtils "github.com/ava-labs/icm-services/utils"
-	"go.uber.org/zap"
-
-	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 )
 
 var _ CanonicalValidatorState = &CanonicalValidatorClient{}
@@ -30,8 +30,15 @@ type CanonicalValidatorState interface {
 	avalancheWarp.ValidatorState
 
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
+	GetLatestHeight(ctx context.Context) (uint64, error)
 	GetCurrentCanonicalValidatorSet(
-		ctx context.Context, subnetID ids.ID, pchainHeight uint64) (avalancheWarp.CanonicalValidatorSet, error)
+		ctx context.Context,
+		subnetID ids.ID,
+	) (validators.WarpSet, error)
+	GetAllValidatorSets(
+		ctx context.Context,
+		pchainHeight uint64,
+	) (map[ids.ID]validators.WarpSet, error)
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
@@ -52,28 +59,37 @@ func NewCanonicalValidatorClient(logger logging.Logger, apiConfig *config.APICon
 	}
 }
 
+func (v *CanonicalValidatorClient) GetLatestHeight(ctx context.Context) (uint64, error) {
+	ctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	defer cancel()
+	height, err := v.client.GetHeight(ctx, v.options...)
+	if err != nil {
+		v.logger.Error("Failed to get latest height", zap.Error(err))
+		return 0, err
+	}
+	return height, nil
+}
+
 func (v *CanonicalValidatorClient) GetCurrentCanonicalValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
-	pchainHeight uint64,
-) (avalancheWarp.CanonicalValidatorSet, error) {
+) (validators.WarpSet, error) {
 	// Get the canonical validator set at the specified P-Chain height
 	ctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
 	canonicalSubnetValidators, err := avalancheWarp.GetCanonicalValidatorSetFromSubnetID(
 		ctx,
 		v,
-		pchainHeight,
+		pchainapi.ProposedHeight,
 		subnetID,
 	)
 	if err != nil {
 		v.logger.Error(
 			"Failed to get the canonical subnet validator set",
 			zap.String("subnetID", subnetID.String()),
-			zap.Uint64("pchainHeight", pchainHeight),
 			zap.Error(err),
 		)
-		return avalancheWarp.CanonicalValidatorSet{}, err
+		return validators.WarpSet{}, err
 	}
 
 	return canonicalSubnetValidators, nil
@@ -92,7 +108,8 @@ func (v *CanonicalValidatorClient) GetProposedValidators(
 		v.logger.Debug(
 			"Error fetching proposed validators",
 			zap.String("subnetID", subnetID.String()),
-			zap.Error(err))
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	return res, nil
@@ -111,7 +128,26 @@ func (v *CanonicalValidatorClient) GetValidatorSet(
 			"Error fetching validators at height",
 			zap.String("subnetID", subnetID.String()),
 			zap.Uint64("pChainHeight", height),
-			zap.Error(err))
+			zap.Error(err),
+		)
+		return nil, err
+	}
+	return res, nil
+}
+
+// Gets the validator set of the given subnet at the given P-chain block height.
+// Uses [platform.getValidatorsAt] with supplied height
+func (v *CanonicalValidatorClient) GetAllValidatorSets(
+	ctx context.Context,
+	height uint64,
+) (map[ids.ID]validators.WarpSet, error) {
+	res, err := v.client.GetAllValidatorsAt(ctx, pchainapi.Height(height), v.options...)
+	if err != nil {
+		v.logger.Debug(
+			"Error fetching validators at height",
+			zap.Uint64("pChainHeight", height),
+			zap.Error(err),
+		)
 		return nil, err
 	}
 	return res, nil

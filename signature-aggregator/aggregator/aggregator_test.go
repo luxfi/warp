@@ -173,7 +173,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
-	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
+	mockNetwork.EXPECT().TrackSubnet(gomock.Any(), ids.Empty)
 	mockNetwork.EXPECT().GetCanonicalValidators(gomock.Any(), ids.Empty, false, uint64(pchainapi.ProposedHeight)).Return(
 		&peers.CanonicalValidators{
 			ConnectedWeight: 0,
@@ -194,7 +194,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 	msg, err := warp.NewUnsignedMessage(0, ids.Empty, []byte{})
 	require.NoError(t, err)
 	mockNetwork.EXPECT().GetSubnetID(gomock.Any(), ids.Empty).Return(ids.Empty, nil)
-	mockNetwork.EXPECT().TrackSubnet(ids.Empty)
+	mockNetwork.EXPECT().TrackSubnet(gomock.Any(), ids.Empty)
 	mockNetwork.EXPECT().GetCanonicalValidators(gomock.Any(), ids.Empty, false, uint64(pchainapi.ProposedHeight)).Return(
 		&peers.CanonicalValidators{
 			ConnectedWeight: 0,
@@ -257,7 +257,7 @@ func TestCreateSignedMessageRetriesAndFailsWithoutP2PResponses(t *testing.T) {
 		nil,
 	)
 
-	mockNetwork.EXPECT().TrackSubnet(subnetID)
+	mockNetwork.EXPECT().TrackSubnet(gomock.Any(), subnetID)
 	mockNetwork.EXPECT().GetCanonicalValidators(
 		gomock.Any(), subnetID, false, uint64(pchainapi.ProposedHeight),
 	).Return(
@@ -351,7 +351,7 @@ func TestCreateSignedMessageSucceeds(t *testing.T) {
 				nil,
 			)
 
-			mockNetwork.EXPECT().TrackSubnet(subnetID)
+			mockNetwork.EXPECT().TrackSubnet(gomock.Any(), subnetID)
 			mockNetwork.EXPECT().GetCanonicalValidators(gomock.Any(), subnetID, false, uint64(pchainapi.ProposedHeight)).Return(
 				connectedValidators,
 				nil,

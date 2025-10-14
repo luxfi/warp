@@ -15,7 +15,6 @@ import (
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	validators "github.com/ava-labs/avalanchego/snow/validators"
-	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -43,19 +42,49 @@ func (m *MockCanonicalValidatorState) EXPECT() *MockCanonicalValidatorStateMockR
 	return m.recorder
 }
 
-// GetCurrentCanonicalValidatorSet mocks base method.
-func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID, pchainHeight uint64) (warp.CanonicalValidatorSet, error) {
+// GetAllValidatorSets mocks base method.
+func (m *MockCanonicalValidatorState) GetAllValidatorSets(ctx context.Context, pchainHeight uint64) (map[ids.ID]validators.WarpSet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", ctx, subnetID, pchainHeight)
-	ret0, _ := ret[0].(warp.CanonicalValidatorSet)
+	ret := m.ctrl.Call(m, "GetAllValidatorSets", ctx, pchainHeight)
+	ret0, _ := ret[0].(map[ids.ID]validators.WarpSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllValidatorSets indicates an expected call of GetAllValidatorSets.
+func (mr *MockCanonicalValidatorStateMockRecorder) GetAllValidatorSets(ctx, pchainHeight any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllValidatorSets", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetAllValidatorSets), ctx, pchainHeight)
+}
+
+// GetCurrentCanonicalValidatorSet mocks base method.
+func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID) (validators.WarpSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", ctx, subnetID)
+	ret0, _ := ret[0].(validators.WarpSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCurrentCanonicalValidatorSet indicates an expected call of GetCurrentCanonicalValidatorSet.
-func (mr *MockCanonicalValidatorStateMockRecorder) GetCurrentCanonicalValidatorSet(ctx, subnetID, pchainHeight any) *gomock.Call {
+func (mr *MockCanonicalValidatorStateMockRecorder) GetCurrentCanonicalValidatorSet(ctx, subnetID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentCanonicalValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetCurrentCanonicalValidatorSet), ctx, subnetID, pchainHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentCanonicalValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetCurrentCanonicalValidatorSet), ctx, subnetID)
+}
+
+// GetLatestHeight mocks base method.
+func (m *MockCanonicalValidatorState) GetLatestHeight(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestHeight", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestHeight indicates an expected call of GetLatestHeight.
+func (mr *MockCanonicalValidatorStateMockRecorder) GetLatestHeight(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeight", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetLatestHeight), ctx)
 }
 
 // GetProposedValidators mocks base method.
