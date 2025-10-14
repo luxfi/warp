@@ -340,6 +340,10 @@ func (c *Config) IsGraniteActivated() bool {
 	return c.networkUpgradeConfig.IsGraniteActivated(time.Now())
 }
 
+func (c *Config) GetMaxPChainLookback() int64 {
+	return -1 // No max lookback for relayer
+}
+
 func (c *Config) sanitizeForLogging() map[string]any {
 	return sanitizeValue(reflect.ValueOf(c), reflect.TypeOf(c)).(map[string]any)
 }
