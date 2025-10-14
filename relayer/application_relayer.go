@@ -72,7 +72,7 @@ type ApplicationRelayer struct {
 	relayerID                 database.RelayerID
 	warpConfig                config.WarpConfig
 	checkpointManager         CheckpointManager
-	sourceWarpSignatureClient *rpc.Client         // nil if configured to fetch signatures via AppRequest for the source blockchain
+	sourceWarpSignatureClient *rpc.Client         // nil if configured to fetch signatures via AppRequest
 	proposerClient            pb.ProposerVMClient // ProposerVM client for epoch information when Granite is activated
 	signatureAggregator       *aggregator.SignatureAggregator
 	processMessageSemaphore   chan struct{}
