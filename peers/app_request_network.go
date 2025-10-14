@@ -110,7 +110,8 @@ type appRequestNetwork struct {
 	trackedSubnetsLock *sync.RWMutex
 
 	latestPChainHeight uint64
-	maxPChainLookback  int64
+	// Used by the signature aggregator to limit how far back in P-Chain history it will look
+	maxPChainLookback int64
 
 	manager                    snowVdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, snowVdrs.WarpSet]
@@ -383,26 +384,28 @@ func (n *appRequestNetwork) updateValidatorSetsPostGranite(ctx context.Context) 
 		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", n.latestPChainHeight))
 	}
 
-	var allValidators map[ids.ID]snowVdrs.WarpSet
 	for n.latestPChainHeight < latestPChainHeight {
 		n.latestPChainHeight++
-		allValidators, err = n.getAllCanonicalValidatorsGranite(ctx, n.latestPChainHeight)
+		allValidators, err := n.getAllCanonicalValidatorsGranite(ctx, n.latestPChainHeight)
 		if err != nil {
-			n.logger.Error("Failed to get canonical validators", zap.Error(err))
-			continue
-		}
-	}
-	// Update the validators for each tracked subnet for the most recent height
-	for _, subnetID := range append(n.trackedSubnets.List(), constants.PrimaryNetworkID) {
-		vdrs, ok := allValidators[subnetID]
-		if !ok {
-			n.logger.Warn("No validator set found for tracked subnet",
-				zap.Stringer("subnetID", subnetID),
-				zap.Uint64("pchainHeight", n.latestPChainHeight),
+			n.logger.Error("Failed to get canonical validators",
+				zap.Uint64("height", n.latestPChainHeight),
+				zap.Error(err),
 			)
 			continue
 		}
-		n.updatedTrackedValidators(subnetID, vdrs)
+		// Update the validators for each tracked subnet for the most recent height
+		for _, subnetID := range append(n.trackedSubnets.List(), constants.PrimaryNetworkID) {
+			vdrs, ok := allValidators[subnetID]
+			if !ok {
+				n.logger.Warn("No validator set found for tracked subnet",
+					zap.Stringer("subnetID", subnetID),
+					zap.Uint64("pchainHeight", n.latestPChainHeight),
+				)
+				continue
+			}
+			n.updatedTrackedValidators(subnetID, vdrs)
+		}
 	}
 }
 
