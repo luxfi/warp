@@ -42,8 +42,7 @@ func (c *LRUCache[K, V]) Get(key K, fetchFunc func(K) (V, error), invalidate boo
 	// Fetch new value
 	newValue, err := fetchFunc(key)
 	if err != nil {
-		var zero V
-		return zero, err
+		return *new(V), err
 	}
 
 	// Cache the result
