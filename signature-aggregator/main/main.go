@@ -123,6 +123,13 @@ func main() {
 	// Create errgroup with parent context
 	errGroup, ctx := errgroup.WithContext(parentCtx)
 
+	// Initialize the Warp Config values and trackedSubnets by fetching via RPC
+	// We do this here so that BuildConfig doesn't need to make RPC calls
+	if err = cfg.Initialize(ctx); err != nil {
+		logger.Fatal("couldn't initialize config", zap.Error(err))
+		os.Exit(1)
+	}
+
 	network, err := peers.NewNetwork(
 		ctx,
 		networkLogger,

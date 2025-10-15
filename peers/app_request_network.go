@@ -206,13 +206,12 @@ func NewNetwork(
 
 	// Set the activation time for the latest network upgrade
 
-	upgradeTime := upgrade.GetConfig(networkID).GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		upgradeTime,
+		cfg.GetUpgradeConfig().GraniteTime,
 	)
 	if err != nil {
 		logger.Error(
