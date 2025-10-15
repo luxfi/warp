@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
-	"time"
 
 	basecfg "github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers"
@@ -340,8 +339,8 @@ func (c *Config) LogSafeField() zap.Field {
 	return zap.Any("config", c.sanitizeForLogging())
 }
 
-func (c *Config) IsGraniteActivated() bool {
-	return c.networkUpgradeConfig.IsGraniteActivated(time.Now())
+func (c *Config) GetUpgradeConfig() *upgrade.Config {
+	return c.networkUpgradeConfig
 }
 
 func (c *Config) GetMaxPChainLookback() int64 {
