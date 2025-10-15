@@ -65,6 +65,8 @@ const (
 	epochedValidatorSetCacheSizePerSubnet = 100
 )
 
+var _ AppRequestNetwork = (*appRequestNetwork)(nil)
+
 var (
 	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 	errTrackingTooManySubnets  = fmt.Errorf("cannot track more than %d subnets", maxNumSubnets)
@@ -90,6 +92,7 @@ type AppRequestNetwork interface {
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
 	GetNetworkID() uint32
+	IsGraniteActivated() bool
 }
 
 type appRequestNetwork struct {
@@ -114,6 +117,8 @@ type appRequestNetwork struct {
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet]
 	epochedValidatorSetCache   map[ids.ID]*cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet]
 	epochedCacheLock           sync.RWMutex // protects epochedValidatorSetCache map
+
+	networkUpgradeConfig *upgrade.Config
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
@@ -147,12 +152,17 @@ func NewNetwork(
 		)
 		return nil, err
 	}
-	networkID, err := infoAPI.GetNetworkID(context.Background())
+	networkID, err := infoAPI.GetNetworkID(ctx)
 	if err != nil {
 		logger.Error(
 			"Failed to get network ID",
 			zap.Error(err),
 		)
+		return nil, err
+	}
+
+	upgradeConfig, err := infoAPI.Upgrades(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -300,6 +310,8 @@ func NewNetwork(
 		lruSubnets:                 lruSubnets,
 		canonicalValidatorSetCache: vdrsCache,
 		epochedValidatorSetCache:   make(map[ids.ID]*cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet]),
+		epochedCacheLock:           sync.RWMutex{},
+		networkUpgradeConfig:       upgradeConfig,
 	}
 
 	go arNetwork.startUpdateValidators(ctx)
@@ -309,6 +321,10 @@ func NewNetwork(
 
 func (n *appRequestNetwork) GetNetworkID() uint32 {
 	return n.networkID
+}
+
+func (n *appRequestNetwork) IsGraniteActivated() bool {
+	return n.networkUpgradeConfig.IsGraniteActivated(time.Now())
 }
 
 // Helper to scope lock acquisition
