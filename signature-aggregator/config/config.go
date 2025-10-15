@@ -4,10 +4,13 @@
 package config
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	basecfg "github.com/ava-labs/icm-services/config"
@@ -48,6 +51,8 @@ type Config struct {
 	// convenience fields
 	trackedSubnets set.Set[ids.ID]
 	tlsCert        *tls.Certificate
+
+	networkUpgradeConfig *upgrade.Config
 }
 
 func DisplayUsageText() {
@@ -81,6 +86,18 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// Any configuration initialization that requires network calls
+// should be done here to separate it from input validation
+func (c *Config) Initialize(ctx context.Context) error {
+	infoClient := info.NewClient(c.InfoAPI.BaseURL)
+	upgradeConfig, err := infoClient.Upgrades(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get network upgrade config: %w", err)
+	}
+	c.networkUpgradeConfig = upgradeConfig
+	return nil
+}
+
 var _ peers.Config = &Config{}
 
 func (c *Config) GetPChainAPI() *basecfg.APIConfig {
@@ -105,4 +122,8 @@ func (c *Config) GetTLSCert() *tls.Certificate {
 
 func (c *Config) GetMaxPChainLookback() int64 {
 	return c.MaxPChainLookback
+}
+
+func (c *Config) GetUpgradeConfig() *upgrade.Config {
+	return c.networkUpgradeConfig
 }
