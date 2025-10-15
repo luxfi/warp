@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/icm-services/config"
 )
@@ -18,4 +19,5 @@ type Config interface {
 	GetAllowPrivateIPs() bool
 	GetTrackedSubnets() set.Set[ids.ID]
 	GetTLSCert() *tls.Certificate
+	GetUpgradeConfig() *upgrade.Config
 }
