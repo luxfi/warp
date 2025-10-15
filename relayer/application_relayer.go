@@ -15,7 +15,6 @@ import (
 	pbproposervm "github.com/ava-labs/avalanchego/connectproto/pb/proposervm"
 	pb "github.com/ava-labs/avalanchego/connectproto/pb/proposervm/proposervmconnect"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
@@ -77,7 +76,6 @@ type ApplicationRelayer struct {
 	proposerClient            pb.ProposerVMClient // ProposerVM client for epoch information when Granite is activated
 	signatureAggregator       *aggregator.SignatureAggregator
 	processMessageSemaphore   chan struct{}
-	upgradeConfig             *upgrade.Config
 }
 
 func NewApplicationRelayer(
@@ -101,8 +99,6 @@ func NewApplicationRelayer(
 		)
 		return nil, err
 	}
-
-	upgradeConfig := cfg.GetUpgradeConfig()
 
 	var signingSubnet ids.ID
 	if sourceBlockchain.GetSubnetID() == constants.PrimaryNetworkID && !warpConfig.RequirePrimaryNetworkSigners {
@@ -188,7 +184,6 @@ func NewApplicationRelayer(
 		proposerClient:            proposerClient,
 		signatureAggregator:       signatureAggregator,
 		processMessageSemaphore:   processMessageSemaphore,
-		upgradeConfig:             upgradeConfig,
 	}
 
 	return &ar, nil
@@ -381,7 +376,7 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 // getPChainHeightForDestination determines the appropriate P-Chain height for validator set selection
 // Returns ProposedHeight for current validators if Granite is not activated, or the epoch P-Chain height if activated
 func (r *ApplicationRelayer) getPChainHeightForDestination(ctx context.Context) (uint64, error) {
-	if !r.upgradeConfig.IsGraniteActivated(time.Now()) {
+	if !r.network.IsGraniteActivated() {
 		r.logger.Debug("Granite is not activated, using ProposedHeight")
 		return pchainapi.ProposedHeight, nil
 	}
