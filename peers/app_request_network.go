@@ -113,6 +113,8 @@ type appRequestNetwork struct {
 	// Used by the signature aggregator to limit how far back in P-Chain history it will look
 	maxPChainLookback int64
 
+	upgradeConfig *upgrade.Config
+
 	manager                    snowVdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, snowVdrs.WarpSet]
 	// The FIFO cache is internally thread-safe, so no need for an additional lock
@@ -309,6 +311,7 @@ func NewNetwork(
 		canonicalValidatorSetCache: vdrsCache,
 		epochedValidatorSetCache:   epochedVdrsCache,
 		maxPChainLookback:          cfg.GetMaxPChainLookback(),
+		upgradeConfig:              cfg.GetUpgradeConfig(),
 	}
 
 	go arNetwork.startUpdateValidators(ctx)
@@ -318,6 +321,10 @@ func NewNetwork(
 
 func (n *appRequestNetwork) GetNetworkID() uint32 {
 	return n.networkID
+}
+
+func (n *appRequestNetwork) isGraniteActive() bool {
+	return n.upgradeConfig.GraniteTime.Before(time.Now())
 }
 
 // trackSubnet adds the subnetID to the set of tracked subnets. Returns true iff the subnet was already being tracked.
@@ -356,15 +363,14 @@ func (n *appRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 	ticker := time.NewTicker(ValidatorRefreshPeriod)
-	graniteTime := upgrade.GetConfig(n.networkID).GraniteTime
 
 	for {
 		select {
 		case <-ticker.C:
-			if time.Now().Before(graniteTime) {
-				n.updateValidatorSetsPreGranite(ctx)
-			} else {
+			if n.isGraniteActive() {
 				n.updateValidatorSetsPostGranite(ctx)
+			} else {
+				n.updateValidatorSetsPreGranite(ctx)
 			}
 		case <-ctx.Done():
 			n.logger.Info("Stopping updating validator process...")
