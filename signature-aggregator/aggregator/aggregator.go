@@ -28,15 +28,14 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/libevm/log"
-	"github.com/cenkalti/backoff/v4"
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/ava-labs/icm-services/cache"
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
+	"github.com/ava-labs/libevm/log"
+	"github.com/cenkalti/backoff/v4"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type blsSignatureBuf [bls.SignatureLen]byte
