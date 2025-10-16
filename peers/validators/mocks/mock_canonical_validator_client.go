@@ -15,7 +15,6 @@ import (
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	validators "github.com/ava-labs/avalanchego/snow/validators"
-	warp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -44,10 +43,10 @@ func (m *MockCanonicalValidatorState) EXPECT() *MockCanonicalValidatorStateMockR
 }
 
 // GetCurrentCanonicalValidatorSet mocks base method.
-func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID, pchainHeight uint64) (warp.CanonicalValidatorSet, error) {
+func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID, pchainHeight uint64) (validators.WarpSet, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", ctx, subnetID, pchainHeight)
-	ret0, _ := ret[0].(warp.CanonicalValidatorSet)
+	ret0, _ := ret[0].(validators.WarpSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
