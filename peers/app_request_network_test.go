@@ -10,7 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/peer"
-	"github.com/ava-labs/avalanchego/snow/validators"
+	snowVdrs "github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/linked"
@@ -31,7 +31,7 @@ func TestCalculateConnectedWeight(t *testing.T) {
 	vdr1 := makeValidator(t, 10, 1)
 	vdr2 := makeValidator(t, 20, 1)
 	vdr3 := makeValidator(t, 30, 2)
-	vdrs := []*validators.Warp{&vdr1, &vdr2, &vdr3}
+	vdrs := []*snowVdrs.Warp{&vdr1, &vdr2, &vdr3}
 	nodeValidatorIndexMap := map[ids.NodeID]int{
 		vdr1.NodeIDs[0]: 0,
 		vdr2.NodeIDs[0]: 1,
@@ -72,21 +72,21 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 
 	testCases := []struct {
 		name                    string
-		validators              []*validators.Warp
+		validators              []*snowVdrs.Warp
 		connectedNodes          []ids.NodeID
 		expectedConnectedWeight uint64
 		expectedTotalWeight     uint64
 	}{
 		{
 			name:                    "no connected nodes, one validator",
-			validators:              []*validators.Warp{&validator1_1},
+			validators:              []*snowVdrs.Warp{&validator1_1},
 			connectedNodes:          []ids.NodeID{},
 			expectedConnectedWeight: 0,
 			expectedTotalWeight:     1,
 		},
 		{
 			name:       "all validators, missing one nodeID",
-			validators: []*validators.Warp{&validator1_1, &validator2_1, &validator3_2},
+			validators: []*snowVdrs.Warp{&validator1_1, &validator2_1, &validator3_2},
 			connectedNodes: []ids.NodeID{
 				validator1_1.NodeIDs[0],
 				validator2_1.NodeIDs[0],
@@ -98,7 +98,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		},
 		{
 			name:       "fully connected",
-			validators: []*validators.Warp{&validator1_1, &validator2_1, &validator3_2},
+			validators: []*snowVdrs.Warp{&validator1_1, &validator2_1, &validator3_2},
 			connectedNodes: []ids.NodeID{
 				validator1_1.NodeIDs[0],
 				validator2_1.NodeIDs[0],
@@ -110,7 +110,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		},
 		{
 			name:       "missing conn to double node validator",
-			validators: []*validators.Warp{&validator1_1, &validator2_1, &validator3_2},
+			validators: []*snowVdrs.Warp{&validator1_1, &validator2_1, &validator3_2},
 			connectedNodes: []ids.NodeID{
 				validator1_1.NodeIDs[0],
 				validator2_1.NodeIDs[0],
@@ -120,7 +120,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		},
 		{
 			name:       "irrelevant nodes",
-			validators: []*validators.Warp{&validator1_1, &validator2_1},
+			validators: []*snowVdrs.Warp{&validator1_1, &validator2_1},
 			connectedNodes: []ids.NodeID{
 				validator1_1.NodeIDs[0],
 				validator2_1.NodeIDs[0],
@@ -134,21 +134,21 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockNetwork := avago_mocks.NewMockNetwork(ctrl)
 			mockValidatorClient := validator_mocks.NewMockCanonicalValidatorState(ctrl)
-			vdrsCache := cache.NewTTLCache[ids.ID, validators.WarpSet](canonicalValidatorSetCacheTTL)
+			vdrsCache := cache.NewTTLCache[ids.ID, snowVdrs.WarpSet](canonicalValidatorSetCacheTTL)
 			arNetwork := appRequestNetwork{
 				network:                    mockNetwork,
 				validatorClient:            mockValidatorClient,
 				metrics:                    metrics,
 				logger:                     logging.NoLog{},
 				canonicalValidatorSetCache: vdrsCache,
-				epochedValidatorSetCache:   cache.NewFIFOCache[uint64, map[ids.ID]validators.WarpSet](100),
+				epochedValidatorSetCache:   cache.NewFIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet](100),
 			}
 			var totalWeight uint64
 			for _, vdr := range testCase.validators {
 				totalWeight += vdr.Weight
 			}
 			mockValidatorClient.EXPECT().GetCurrentValidatorSet(gomock.Any(), subnetID).Return(
-				validators.WarpSet{
+				snowVdrs.WarpSet{
 					Validators:  testCase.validators,
 					TotalWeight: testCase.expectedTotalWeight,
 				},
@@ -180,7 +180,7 @@ func TestTrackSubnets(t *testing.T) {
 		logger:             logging.NoLog{},
 		validatorClient:    mockValidatorClient,
 		metrics:            metrics,
-		manager:            validators.NewManager(),
+		manager:            snowVdrs.NewManager(),
 		lruSubnets:         linked.NewHashmapWithSize[ids.ID, interface{}](maxNumSubnets),
 		validatorSetLock:   new(sync.Mutex),
 		trackedSubnetsLock: new(sync.RWMutex),
@@ -189,9 +189,9 @@ func TestTrackSubnets(t *testing.T) {
 	require.Zero(t, arNetwork.lruSubnets.Len())
 	mockValidatorClient.EXPECT().GetCurrentValidatorSet(
 		gomock.Any(), gomock.Any(),
-	).Return(validators.WarpSet{}, nil).AnyTimes()
+	).Return(snowVdrs.WarpSet{}, nil).AnyTimes()
 	for range maxNumSubnets {
-		arNetwork.TrackSubnet(context.Background(), ids.GenerateTestID())
+		arNetwork.TrackSubnet(t.Context(), ids.GenerateTestID())
 	}
 	require.Equal(t, arNetwork.trackedSubnets.Len(), arNetwork.lruSubnets.Len())
 	require.Equal(t, arNetwork.trackedSubnets.Len(), maxNumSubnets)
@@ -200,7 +200,8 @@ func TestTrackSubnets(t *testing.T) {
 	newSubnetID := ids.GenerateTestID()
 	oldestSubnetID, _, ok := arNetwork.lruSubnets.Oldest()
 	require.True(t, ok)
-	arNetwork.TrackSubnet(context.Background(), newSubnetID)
+
+	arNetwork.TrackSubnet(t.Context(), newSubnetID)
 	require.Equal(t, maxNumSubnets, arNetwork.trackedSubnets.Len())
 	require.Equal(t, maxNumSubnets, arNetwork.lruSubnets.Len())
 	require.False(t, arNetwork.trackedSubnets.Contains(oldestSubnetID))
@@ -219,7 +220,7 @@ func TestTrackSubnets(t *testing.T) {
 	require.False(t, it.Next())
 }
 
-func makeValidator(t *testing.T, weight uint64, numNodeIDs int) validators.Warp {
+func makeValidator(t *testing.T, weight uint64, numNodeIDs int) snowVdrs.Warp {
 	localSigner, err := localsigner.New()
 	require.NoError(t, err)
 	pk := localSigner.PublicKey()
@@ -228,7 +229,7 @@ func makeValidator(t *testing.T, weight uint64, numNodeIDs int) validators.Warp 
 	for i := 0; i < numNodeIDs; i++ {
 		nodeIDs[i] = ids.GenerateTestNodeID()
 	}
-	return validators.Warp{
+	return snowVdrs.Warp{
 		PublicKey:      pk,
 		PublicKeyBytes: bls.PublicKeyToUncompressedBytes(pk),
 		Weight:         weight,

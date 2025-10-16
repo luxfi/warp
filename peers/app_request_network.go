@@ -90,12 +90,10 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(ctx context.Context, subnetID ids.ID)
-	GetNetworkID() uint32
 	IsGraniteActivated() bool
 }
 
 type appRequestNetwork struct {
-	networkID        uint32
 	network          network.Network
 	handler          *RelayerExternalHandler
 	infoAPI          *InfoAPI
@@ -209,12 +207,13 @@ func NewNetwork(
 
 	// Set the activation time for the latest network upgrade
 
+	upgradeTime := upgradeConfig.GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		upgradeConfig.GraniteTime,
+		upgradeTime,
 	)
 	if err != nil {
 		logger.Error(
@@ -250,7 +249,13 @@ func NewNetwork(
 
 	pClient := platformvm.NewClient(cfg.GetPChainAPI().BaseURL)
 	options := utils.InitializeOptions(cfg.GetPChainAPI())
-	vdrs, err := pClient.GetCurrentValidators(ctx, constants.PrimaryNetworkID, nil, options...)
+
+	vdrs, err := pClient.GetCurrentValidators(
+		ctx,
+		constants.PrimaryNetworkID,
+		nil,
+		options...,
+	)
 	if err != nil {
 		logger.Error("Failed to get current validators", zap.Error(err))
 		return nil, err
@@ -298,7 +303,6 @@ func NewNetwork(
 	epochedVdrsCache := cache.NewFIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet](epochedValidatorSetCacheSize)
 
 	arNetwork := &appRequestNetwork{
-		networkID:                  networkID,
 		network:                    testNetwork,
 		handler:                    handler,
 		infoAPI:                    infoAPI,
@@ -319,10 +323,6 @@ func NewNetwork(
 	go arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
-}
-
-func (n *appRequestNetwork) GetNetworkID() uint32 {
-	return n.networkID
 }
 
 func (n *appRequestNetwork) IsGraniteActivated() bool {
@@ -665,7 +665,6 @@ func (n *appRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID
 //
 
 func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency int64) {
-	n.logger.Debug("pChain API Latency", zap.Int64("milliseconds", latency))
 	n.metrics.pChainAPICallLatencyMS.Observe(float64(latency))
 }
 

@@ -35,20 +35,21 @@ func InitializeConnectionsAndCheckStake(
 	for _, subnet := range cfg.GetTrackedSubnets().List() {
 		network.TrackSubnet(ctx, subnet)
 	}
-	ctx, cancel := context.WithTimeout(
+
+	cctx, cancel := context.WithTimeout(
 		ctx,
 		time.Duration(cfg.InitialConnectionTimeoutSeconds)*time.Second,
 	)
 	defer cancel()
 
-	eg, cctx := errgroup.WithContext(ctx)
+	eg, ectx := errgroup.WithContext(cctx)
 	for _, sourceBlockchain := range cfg.SourceBlockchains {
 		eg.Go(func() error {
 			logger.Info("Checking sufficient stake for source blockchain",
 				zap.Stringer("subnetID", sourceBlockchain.GetSubnetID()),
 				zap.String("blockchainID", sourceBlockchain.GetBlockchainID().String()),
 			)
-			return checkSufficientConnectedStake(cctx, logger, network, cfg, sourceBlockchain)
+			return checkSufficientConnectedStake(ectx, logger, network, cfg, sourceBlockchain)
 		})
 	}
 	return eg.Wait()
