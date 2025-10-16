@@ -108,8 +108,8 @@ github.com/ava-labs/coreth v0.15.4-rc.4 h1:ze7/IwDptWG1u2d32uUZz9Ix9ycVUtlB8Jufu
 github.com/ava-labs/coreth v0.15.4-rc.4/go.mod h1:yVwuMyPkZ48xzZ0y2OdIwaoUqvSsgPYoodyX9BZJ2uo=
 github.com/ava-labs/firewood-go-ethhash/ffi v0.0.12 h1:aMcrLbpJ/dyu2kZDf/Di/4JIWsUcYPyTDKymiHpejt0=
 github.com/ava-labs/firewood-go-ethhash/ffi v0.0.12/go.mod h1:cq89ua3iiZ5wPBALTEQS5eG8DIZcs7ov6OiL4YR1BVY=
-github.com/ava-labs/icm-contracts v1.0.10-0.20251016045813-a42672a4e254 h1:K/TJ4zFSWg4eHrEAjWwoSuuIPAH/yqYblx9TUym5/8Q=
-github.com/ava-labs/icm-contracts v1.0.10-0.20251016045813-a42672a4e254/go.mod h1:kfXYVp8GRi64zlrq22eF7JRZHYPTPgWv9yU6SZGeUuU=
+github.com/ava-labs/icm-contracts v1.0.10-0.20251016202108-cabdb44d0e67 h1:/0CZcLgfAuZmTkwxoR5+QuPslmcmVd10SAR6/neQtko=
+github.com/ava-labs/icm-contracts v1.0.10-0.20251016202108-cabdb44d0e67/go.mod h1:kfXYVp8GRi64zlrq22eF7JRZHYPTPgWv9yU6SZGeUuU=
 github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3 h1:1YeVupq12lUT9FJh7kH5InEVIeGWyAAoTBfyqYpNJaM=
 github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3/go.mod h1:ivRC/KojP8sai7j8WnpXIReQpcRklL2bIzoysnjpARQ=
 github.com/ava-labs/subnet-evm v0.7.10-0.20251013155523-47a1ce400863 h1:0SBzgikdV78A9nPEytYnKBjMlzEp1MsrPXYAHVslqY4=
