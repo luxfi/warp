@@ -62,6 +62,8 @@ const (
 	epochedValidatorSetCacheSize = 750
 )
 
+var _ AppRequestNetwork = (*appRequestNetwork)(nil)
+
 var (
 	ErrNotEnoughConnectedStake = errors.New("failed to connect to a threshold of stake")
 	errTrackingTooManySubnets  = fmt.Errorf("cannot track more than %d subnets", maxNumSubnets)
@@ -89,6 +91,7 @@ type AppRequestNetwork interface {
 	Shutdown()
 	TrackSubnet(ctx context.Context, subnetID ids.ID)
 	GetNetworkID() uint32
+	IsGraniteActivated() bool
 }
 
 type appRequestNetwork struct {
@@ -113,16 +116,11 @@ type appRequestNetwork struct {
 	// Used by the signature aggregator to limit how far back in P-Chain history it will look
 	maxPChainLookback int64
 
-	upgradeConfig *upgrade.Config
-
 	manager                    snowVdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, snowVdrs.WarpSet]
-	// The FIFO cache is internally thread-safe, so no need for an additional lock
-	// Currently, only one only one in-flight request per height can occur at a time.
-	// If multiple requests for the same height come in concurrently, they will wait for the first to complete, and
-	// return the value/error from that request. If subsequent requests are made, they will trigger a new fetch iff
-	// the first request failed.
-	epochedValidatorSetCache *cache.FIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet]
+	epochedValidatorSetCache  *cache.FIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet]
+
+	networkUpgradeConfig *upgrade.Config
 }
 
 // NewNetwork creates a P2P network client for interacting with validators
@@ -162,6 +160,11 @@ func NewNetwork(
 			"Failed to get network ID",
 			zap.Error(err),
 		)
+		return nil, err
+	}
+
+	upgradeConfig, err := infoAPI.Upgrades(ctx)
+	if err != nil {
 		return nil, err
 	}
 
@@ -211,7 +214,7 @@ func NewNetwork(
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		cfg.GetUpgradeConfig().GraniteTime,
+		upgradeConfig.GraniteTime,
 	)
 	if err != nil {
 		logger.Error(
@@ -310,7 +313,7 @@ func NewNetwork(
 		canonicalValidatorSetCache: vdrsCache,
 		epochedValidatorSetCache:   epochedVdrsCache,
 		maxPChainLookback:          cfg.GetMaxPChainLookback(),
-		upgradeConfig:              cfg.GetUpgradeConfig(),
+		networkUpgradeConfig:       upgradeConfig,
 	}
 
 	go arNetwork.startUpdateValidators(ctx)
@@ -322,8 +325,8 @@ func (n *appRequestNetwork) GetNetworkID() uint32 {
 	return n.networkID
 }
 
-func (n *appRequestNetwork) isGraniteActive() bool {
-	return n.upgradeConfig.GraniteTime.Before(time.Now())
+func (n *appRequestNetwork) IsGraniteActivated() bool {
+	return n.networkUpgradeConfig.IsGraniteActivated(time.Now())
 }
 
 // trackSubnet adds the subnetID to the set of tracked subnets. Returns true iff the subnet was already being tracked.
@@ -366,7 +369,7 @@ func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if n.isGraniteActive() {
+			if n.IsGraniteActivated() {
 				n.updateValidatorSetsPostGranite(ctx)
 			} else {
 				n.updateValidatorSetsPreGranite(ctx)
