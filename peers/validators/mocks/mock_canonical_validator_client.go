@@ -87,6 +87,21 @@ func (mr *MockCanonicalValidatorStateMockRecorder) GetLatestHeight(ctx any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeight", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetLatestHeight), ctx)
 }
 
+// GetProposedValidators mocks base method.
+func (m *MockCanonicalValidatorState) GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProposedValidators", ctx, subnetID)
+	ret0, _ := ret[0].(map[ids.NodeID]*validators.GetValidatorOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProposedValidators indicates an expected call of GetProposedValidators.
+func (mr *MockCanonicalValidatorStateMockRecorder) GetProposedValidators(ctx, subnetID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposedValidators", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetProposedValidators), ctx, subnetID)
+}
+
 // GetSubnetID mocks base method.
 func (m *MockCanonicalValidatorState) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	m.ctrl.T.Helper()
