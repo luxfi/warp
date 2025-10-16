@@ -34,7 +34,7 @@ type CanonicalValidatorState interface {
 		ctx context.Context,
 		subnetID ids.ID,
 		pchainHeight uint64,
-	) (avalancheWarp.CanonicalValidatorSet, error)
+	) (validators.WarpSet, error)
 	GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error)
 }
 
@@ -59,7 +59,7 @@ func (v *CanonicalValidatorClient) GetCurrentCanonicalValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 	pchainHeight uint64,
-) (avalancheWarp.CanonicalValidatorSet, error) {
+) (validators.WarpSet, error) {
 	// Get the canonical validator set at the specified P-Chain height
 	ctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
@@ -76,7 +76,7 @@ func (v *CanonicalValidatorClient) GetCurrentCanonicalValidatorSet(
 			zap.Uint64("pchainHeight", pchainHeight),
 			zap.Error(err),
 		)
-		return avalancheWarp.CanonicalValidatorSet{}, err
+		return validators.WarpSet{}, err
 	}
 
 	return canonicalSubnetValidators, nil
