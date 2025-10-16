@@ -89,7 +89,7 @@ type AppRequestNetwork interface {
 		allower subnets.Allower,
 	) set.Set[ids.NodeID]
 	Shutdown()
-	TrackSubnet(subnetID ids.ID)
+	TrackSubnet(ctx context.Context, subnetID ids.ID)
 	GetNetworkID() uint32
 	IsGraniteActivated() bool
 }
@@ -248,7 +248,12 @@ func NewNetwork(
 
 	pClient := platformvm.NewClient(cfg.GetPChainAPI().BaseURL)
 	options := utils.InitializeOptions(cfg.GetPChainAPI())
-	vdrs, err := pClient.GetCurrentValidators(context.Background(), constants.PrimaryNetworkID, nil, options...)
+	vdrs, err := pClient.GetCurrentValidators(
+		ctx,
+		constants.PrimaryNetworkID,
+		nil,
+		options...,
+	)
 	if err != nil {
 		logger.Error("Failed to get current validators", zap.Error(err))
 		return nil, err
@@ -351,9 +356,9 @@ func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) {
 
 // TrackSubnet adds the subnet to the list of tracked subnets
 // and initiates the connections to the subnet's validators asynchronously
-func (n *appRequestNetwork) TrackSubnet(subnetID ids.ID) {
+func (n *appRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 	n.trackSubnet(subnetID)
-	n.updateValidatorSet(context.Background(), subnetID)
+	n.updateValidatorSet(ctx, subnetID)
 }
 
 func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
@@ -391,9 +396,9 @@ func (n *appRequestNetwork) updateValidatorSet(
 	defer n.validatorSetLock.Unlock()
 
 	// Fetch the subnet validators from the P-Chain
-	getProposedValidatorsCtx, getProposedValidatorsCtxCancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
-	defer getProposedValidatorsCtxCancel()
-	validators, err := n.validatorClient.GetProposedValidators(getProposedValidatorsCtx, subnetID)
+	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	defer cancel()
+	validators, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
 	if err != nil {
 		return err
 	}
@@ -402,7 +407,10 @@ func (n *appRequestNetwork) updateValidatorSet(
 	currentVdrs := n.manager.GetValidatorIDs(subnetID)
 	for _, nodeID := range currentVdrs {
 		if _, ok := validators[nodeID]; !ok {
-			n.logger.Debug("Removing validator", zap.Stringer("nodeID", nodeID), zap.Stringer("subnetID", subnetID))
+			n.logger.Debug("Removing validator",
+				zap.Stringer("nodeID", nodeID),
+				zap.Stringer("subnetID", subnetID),
+			)
 			weight := n.manager.GetWeight(subnetID, nodeID)
 			if err := n.manager.RemoveWeight(subnetID, nodeID, weight); err != nil {
 				return err
@@ -413,7 +421,10 @@ func (n *appRequestNetwork) updateValidatorSet(
 	// Add any elements from the new validator set that are not in the manager
 	for _, vdr := range validators {
 		if _, ok := n.manager.GetValidator(subnetID, vdr.NodeID); !ok {
-			n.logger.Debug("Adding validator", zap.Stringer("nodeID", vdr.NodeID), zap.Stringer("subnetID", subnetID))
+			n.logger.Debug("Adding validator",
+				zap.Stringer("nodeID", vdr.NodeID),
+				zap.Stringer("subnetID", subnetID),
+			)
 			if err := n.manager.AddStaker(
 				subnetID,
 				vdr.NodeID,
