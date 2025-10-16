@@ -90,10 +90,7 @@ func NewSignatureAggregator(
 ) (*SignatureAggregator, error) {
 	signatureCache, err := NewSignatureCache(signatureCacheSize)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to create signature cache: %w",
-			err,
-		)
+		return nil, fmt.Errorf("failed to create signature cache: %w", err)
 	}
 	sa := SignatureAggregator{
 		network:                 network,
@@ -120,7 +117,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	skipCache bool,
 	pchainHeight uint64,
 ) (*peers.CanonicalValidators, error) {
-	s.network.TrackSubnet(signingSubnet)
+	s.network.TrackSubnet(ctx, signingSubnet)
 
 	var vdrs *peers.CanonicalValidators
 	var err error
@@ -128,10 +125,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 		vdrs, err = s.network.GetCanonicalValidators(ctx, signingSubnet, skipCache, pchainHeight)
 		if err != nil {
 			msg := "Failed to fetch connected canonical validators"
-			log.Error(
-				msg,
-				zap.Error(err),
-			)
+			log.Error(msg, zap.Error(err))
 			s.metrics.FailuresToGetValidatorSet.Inc()
 			return fmt.Errorf("%s: %w", msg, err)
 		}
@@ -187,7 +181,12 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 	skipCache bool,
 ) (set.Set[ids.NodeID], error) {
 	fetchUnderfundedL1Nodes := func(subnetID ids.ID) (set.Set[ids.NodeID], error) {
-		validators, err := s.pChainClient.GetCurrentValidators(ctx, subnetID, nil, s.pChainClientOptions...)
+		validators, err := s.pChainClient.GetCurrentValidators(
+			ctx,
+			subnetID,
+			nil,
+			s.pChainClientOptions...,
+		)
 		if err != nil {
 			log.Error(
 				"Failed to fetch current L1 validators",
@@ -232,7 +231,11 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 		return underfundedL1Nodes, nil
 	}
 
-	underfundedL1Nodes, err := s.underfundedL1NodeCache.Get(signingSubnet, fetchUnderfundedL1Nodes, skipCache)
+	underfundedL1Nodes, err := s.underfundedL1NodeCache.Get(
+		signingSubnet,
+		fetchUnderfundedL1Nodes,
+		skipCache,
+	)
 	if err != nil {
 		log.Error(
 			"Failed to get underfunded L1 nodes",
@@ -578,7 +581,14 @@ func (s *SignatureAggregator) CreateSignedMessage(
 		zap.Stringer("signingSubnet", signingSubnet),
 	)
 
-	vdrs, err := s.connectToQuorumValidators(ctx, log, signingSubnet, requiredQuorumPercentage, skipCache, pchainHeight)
+	vdrs, err := s.connectToQuorumValidators(
+		ctx,
+		log,
+		signingSubnet,
+		requiredQuorumPercentage,
+		skipCache,
+		pchainHeight,
+	)
 	if err != nil {
 		log.Error(
 			"Failed to fetch quorum of connected canonical validators",
@@ -620,7 +630,10 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 	// Populate signature map from cache
 	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
-		unsignedMessage, vdrs, excludedValidators)
+		unsignedMessage,
+		vdrs,
+		excludedValidators,
+	)
 
 	// Only return early if we have enough signatures to meet the quorum percentage
 	// plus the buffer percentage.
@@ -645,10 +658,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 	reqBytes, err := s.marshalRequest(unsignedMessage, justification, sourceSubnet)
 	if err != nil {
 		msg := "Failed to marshal request bytes"
-		log.Error(
-			msg,
-			zap.Error(err),
-		)
+		log.Error(msg, zap.Error(err))
 		return nil, fmt.Errorf("%s: %w", msg, err)
 	}
 

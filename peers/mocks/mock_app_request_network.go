@@ -142,13 +142,13 @@ func (mr *MockAppRequestNetworkMockRecorder) Shutdown() *gomock.Call {
 }
 
 // TrackSubnet mocks base method.
-func (m *MockAppRequestNetwork) TrackSubnet(subnetID ids.ID) {
+func (m *MockAppRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TrackSubnet", subnetID)
+	m.ctrl.Call(m, "TrackSubnet", ctx, subnetID)
 }
 
 // TrackSubnet indicates an expected call of TrackSubnet.
-func (mr *MockAppRequestNetworkMockRecorder) TrackSubnet(subnetID any) *gomock.Call {
+func (mr *MockAppRequestNetworkMockRecorder) TrackSubnet(ctx, subnetID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackSubnet", reflect.TypeOf((*MockAppRequestNetwork)(nil).TrackSubnet), subnetID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrackSubnet", reflect.TypeOf((*MockAppRequestNetwork)(nil).TrackSubnet), ctx, subnetID)
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-services/cache"
 	"github.com/ava-labs/icm-services/peers/avago_mocks"
 	validator_mocks "github.com/ava-labs/icm-services/peers/validators/mocks"
@@ -136,14 +135,14 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			mockNetwork := avago_mocks.NewMockNetwork(ctrl)
 			mockValidatorClient := validator_mocks.NewMockCanonicalValidatorState(ctrl)
-			vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
+			vdrsCache := cache.NewTTLCache[ids.ID, snowVdrs.WarpSet](canonicalValidatorSetCacheTTL)
 			arNetwork := appRequestNetwork{
 				network:                    mockNetwork,
 				validatorClient:            mockValidatorClient,
 				metrics:                    metrics,
 				logger:                     logging.NoLog{},
 				canonicalValidatorSetCache: vdrsCache,
-				epochedValidatorSetCache:   make(map[ids.ID]*cache.LRUCache[uint64, avalancheWarp.CanonicalValidatorSet]),
+				epochedValidatorSetCache:   make(map[ids.ID]*cache.LRUCache[uint64, snowVdrs.WarpSet]),
 				epochedCacheLock:           sync.RWMutex{},
 			}
 			var totalWeight uint64
@@ -152,7 +151,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 			}
 			mockValidatorClient.EXPECT().GetCurrentCanonicalValidatorSet(
 				gomock.Any(), subnetID, uint64(pchainapi.ProposedHeight)).Return(
-				avalancheWarp.CanonicalValidatorSet{
+				snowVdrs.WarpSet{
 					Validators:  testCase.validators,
 					TotalWeight: testCase.expectedTotalWeight,
 				},
@@ -193,7 +192,7 @@ func TestTrackSubnets(t *testing.T) {
 	require.Zero(t, arNetwork.lruSubnets.Len())
 	mockValidatorClient.EXPECT().GetProposedValidators(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	for range maxNumSubnets {
-		arNetwork.TrackSubnet(ids.GenerateTestID())
+		arNetwork.TrackSubnet(t.Context(), ids.GenerateTestID())
 	}
 	require.Equal(t, arNetwork.trackedSubnets.Len(), arNetwork.lruSubnets.Len())
 	require.Equal(t, arNetwork.trackedSubnets.Len(), maxNumSubnets)
@@ -202,7 +201,7 @@ func TestTrackSubnets(t *testing.T) {
 	newSubnetID := ids.GenerateTestID()
 	oldestSubnetID, _, ok := arNetwork.lruSubnets.Oldest()
 	require.True(t, ok)
-	arNetwork.TrackSubnet(newSubnetID)
+	arNetwork.TrackSubnet(t.Context(), newSubnetID)
 	require.Equal(t, maxNumSubnets, arNetwork.trackedSubnets.Len())
 	require.Equal(t, maxNumSubnets, arNetwork.lruSubnets.Len())
 	require.False(t, arNetwork.trackedSubnets.Contains(oldestSubnetID))
