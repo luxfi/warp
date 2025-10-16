@@ -182,7 +182,8 @@ func (s *SignatureAggregator) getUnderfundedL1Nodes(
 ) (set.Set[ids.NodeID], error) {
 	fetchUnderfundedL1Nodes := func(subnetID ids.ID) (set.Set[ids.NodeID], error) {
 		validators, err := s.pChainClient.GetCurrentValidators(
-			ctx, subnetID,
+			ctx,
+			subnetID,
 			nil,
 			s.pChainClientOptions...,
 		)
