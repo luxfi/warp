@@ -35,7 +35,6 @@ func InitializeConnectionsAndCheckStake(
 	for _, subnet := range cfg.GetTrackedSubnets().List() {
 		network.TrackSubnet(ctx, subnet)
 	}
-
 	cctx, cancel := context.WithTimeout(
 		ctx,
 		time.Duration(cfg.InitialConnectionTimeoutSeconds)*time.Second,
