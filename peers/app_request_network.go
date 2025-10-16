@@ -118,7 +118,7 @@ type appRequestNetwork struct {
 
 	manager                    snowVdrs.Manager
 	canonicalValidatorSetCache *cache.TTLCache[ids.ID, snowVdrs.WarpSet]
-	epochedValidatorSetCache  *cache.FIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet]
+	epochedValidatorSetCache   *cache.FIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet]
 
 	networkUpgradeConfig *upgrade.Config
 }
