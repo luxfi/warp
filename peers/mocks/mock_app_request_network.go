@@ -60,20 +60,6 @@ func (mr *MockAppRequestNetworkMockRecorder) GetCanonicalValidators(ctx, subnetI
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCanonicalValidators", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetCanonicalValidators), ctx, subnetID, skipCache, pchainHeight)
 }
 
-// GetNetworkID mocks base method.
-func (m *MockAppRequestNetwork) GetNetworkID() uint32 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNetworkID")
-	ret0, _ := ret[0].(uint32)
-	return ret0
-}
-
-// GetNetworkID indicates an expected call of GetNetworkID.
-func (mr *MockAppRequestNetworkMockRecorder) GetNetworkID() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkID", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetNetworkID))
-}
-
 // GetSubnetID mocks base method.
 func (m *MockAppRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	m.ctrl.T.Helper()
