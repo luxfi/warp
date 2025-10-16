@@ -274,7 +274,7 @@ func (r *ApplicationRelayer) processMessage(handler messages.MessageHandler, ski
 			defaultQuorumPercentageBuffer,
 		)
 		// Determine the appropriate P-Chain height for validator set selection
-		pchainHeight, err := r.getPChainHeightForValidatorSet(ctx)
+		pchainHeight, err := r.getPChainHeightForDestination(ctx)
 		if err != nil {
 			r.logger.Error(
 				"Failed to determine P-Chain height for validator set",
@@ -373,18 +373,20 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 	return r.relayerID
 }
 
-// getPChainHeightForValidatorSet determines the appropriate P-Chain height for validator set selection
+// getPChainHeightForDestination determines the appropriate P-Chain height for validator set selection
 // Returns ProposedHeight for current validators if Granite is not activated, or the epoch P-Chain height if activated
-func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context) (uint64, error) {
+func (r *ApplicationRelayer) getPChainHeightForDestination(ctx context.Context) (uint64, error) {
+	if !r.network.IsGraniteActivated() {
+		r.logger.Debug("Granite is not activated, using ProposedHeight")
+		return pchainapi.ProposedHeight, nil
+	}
 	response, err := r.proposerClient.GetCurrentEpoch(ctx, &connect.Request[pbproposervm.GetCurrentEpochRequest]{})
 	if err != nil {
 		r.logger.Warn("Failed to get current epoch from destination chain ProposerVM",
 			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 			zap.Error(err),
 		)
-		// Fallback to current validators if ProposerVM API fails
-		r.logger.Info("Falling back to current validators (ProposedHeight) due to ProposerVM API error")
-		return pchainapi.ProposedHeight, nil
+		return 0, err
 	}
 
 	epoch := response.Msg
@@ -396,7 +398,8 @@ func (r *ApplicationRelayer) getPChainHeightForValidatorSet(ctx context.Context)
 		zap.Int64("epochStartTime", epoch.StartTime),
 	)
 
-	// TODO: check the grinate activation
+	// This should only be the case around activation time
+	// but should be safe to keep this as a failsafe.
 	if epoch.Number == 0 {
 		r.logger.Info("Epoch number is 0, using current validators (ProposedHeight)")
 		return pchainapi.ProposedHeight, nil
