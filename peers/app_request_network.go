@@ -91,12 +91,10 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(subnetID ids.ID)
-	GetNetworkID() uint32
 	IsGraniteActivated() bool
 }
 
 type appRequestNetwork struct {
-	networkID        uint32
 	network          network.Network
 	handler          *RelayerExternalHandler
 	infoAPI          *InfoAPI
@@ -207,7 +205,7 @@ func NewNetwork(
 
 	// Set the activation time for the latest network upgrade
 
-	upgradeTime := upgrade.GetConfig(networkID).GraniteTime
+	upgradeTime := upgradeConfig.GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
@@ -296,7 +294,6 @@ func NewNetwork(
 	vdrsCache := cache.NewTTLCache[ids.ID, avalancheWarp.CanonicalValidatorSet](canonicalValidatorSetCacheTTL)
 
 	arNetwork := &appRequestNetwork{
-		networkID:                  networkID,
 		network:                    testNetwork,
 		handler:                    handler,
 		infoAPI:                    infoAPI,
@@ -317,10 +314,6 @@ func NewNetwork(
 	go arNetwork.startUpdateValidators(ctx)
 
 	return arNetwork, nil
-}
-
-func (n *appRequestNetwork) GetNetworkID() uint32 {
-	return n.networkID
 }
 
 func (n *appRequestNetwork) IsGraniteActivated() bool {
