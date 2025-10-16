@@ -382,7 +382,7 @@ func (r *ApplicationRelayer) getPChainHeightForDestination(ctx context.Context) 
 	}
 	response, err := r.proposerClient.GetCurrentEpoch(ctx, &connect.Request[pbproposervm.GetCurrentEpochRequest]{})
 	if err != nil {
-		r.logger.Warn("Failed to get current epoch from destination chain ProposerVM",
+		r.logger.Error("Failed to get current epoch from destination chain ProposerVM",
 			zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
 			zap.Error(err),
 		)
