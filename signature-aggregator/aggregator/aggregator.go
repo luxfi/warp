@@ -90,10 +90,7 @@ func NewSignatureAggregator(
 ) (*SignatureAggregator, error) {
 	signatureCache, err := NewSignatureCache(signatureCacheSize)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to create signature cache: %w",
-			err,
-		)
+		return nil, fmt.Errorf("failed to create signature cache: %w", err)
 	}
 	sa := SignatureAggregator{
 		network:                 network,
@@ -120,7 +117,7 @@ func (s *SignatureAggregator) connectToQuorumValidators(
 	skipCache bool,
 	pchainHeight uint64,
 ) (*peers.CanonicalValidators, error) {
-	s.network.TrackSubnet(signingSubnet)
+	s.network.TrackSubnet(ctx, signingSubnet)
 
 	var vdrs *peers.CanonicalValidators
 	var err error
