@@ -20,7 +20,6 @@ import (
 
 	"github.com/ava-labs/icm-services/config"
 	"github.com/ava-labs/icm-services/peers/utils"
-	sharedUtils "github.com/ava-labs/icm-services/utils"
 )
 
 var _ CanonicalValidatorState = &CanonicalValidatorClient{}
@@ -54,8 +53,6 @@ func NewCanonicalValidatorClient(logger logging.Logger, apiConfig *config.APICon
 }
 
 func (v *CanonicalValidatorClient) GetLatestHeight(ctx context.Context) (uint64, error) {
-	ctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
-	defer cancel()
 	height, err := v.client.GetHeight(ctx, v.options...)
 	if err != nil {
 		v.logger.Error("Failed to get latest height", zap.Error(err))
