@@ -110,7 +110,7 @@ type appRequestNetwork struct {
 	lruSubnets         *linked.Hashmap[ids.ID, interface{}]
 	trackedSubnetsLock *sync.RWMutex
 
-	latestPChainHeight uint64
+	latestSyncedPChainHeight uint64
 	// Used by the signature aggregator to limit how far back in P-Chain history it will look
 	maxPChainLookback int64
 
@@ -389,44 +389,43 @@ func (n *appRequestNetwork) updateTrackedValidatorSetsPostGranite(ctx context.Co
 		return
 	}
 
-	if n.latestPChainHeight == 0 {
+	if n.latestSyncedPChainHeight == 0 {
 		// First time initialization
-		n.latestPChainHeight = latestPChainHeight - 1
-		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", n.latestPChainHeight))
+		n.latestSyncedPChainHeight = latestPChainHeight - 1
+		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", n.latestSyncedPChainHeight))
 	}
 
-	for n.latestPChainHeight < latestPChainHeight {
-		n.latestPChainHeight++
-		allValidators, err := n.getAllValidatorSetsGranite(ctx, n.latestPChainHeight)
-		// If we fail to get the validator sets for this height, log and continue to the next height
+	allValidators, err := n.getAllValidatorSets(ctx, n.latestSyncedPChainHeight)
+	// If we fail to get the validator sets for this height, log and return
+	if err != nil {
+		n.logger.Error("Failed to get canonical validators",
+			zap.Uint64("height", latestPChainHeight),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Update the validators for each tracked subnet for the most recent height
+	for _, subnetID := range append(n.trackedSubnets.List(), constants.PrimaryNetworkID) {
+		vdrs, ok := allValidators[subnetID]
+		if !ok {
+			n.logger.Warn("No validator set found for tracked subnet",
+				zap.Stringer("subnetID", subnetID),
+				zap.Uint64("pchainHeight", n.latestSyncedPChainHeight),
+			)
+			continue
+		}
+		// If we fail to get the validator sets for this subnet, log and continue to the next subnet
+		err := n.updatedTrackedValidators(ctx, subnetID, vdrs)
 		if err != nil {
-			n.logger.Error("Failed to get canonical validators",
-				zap.Uint64("height", n.latestPChainHeight),
+			n.logger.Error("Failed to update tracked validators",
+				zap.Stringer("subnetID", subnetID),
 				zap.Error(err),
 			)
 			continue
 		}
-		// Update the validators for each tracked subnet for the most recent height
-		for _, subnetID := range append(n.trackedSubnets.List(), constants.PrimaryNetworkID) {
-			vdrs, ok := allValidators[subnetID]
-			if !ok {
-				n.logger.Warn("No validator set found for tracked subnet",
-					zap.Stringer("subnetID", subnetID),
-					zap.Uint64("pchainHeight", n.latestPChainHeight),
-				)
-				continue
-			}
-			// If we fail to get the validator sets for this subnet, log and continue to the next subnet
-			err := n.updatedTrackedValidators(ctx, subnetID, vdrs)
-			if err != nil {
-				n.logger.Error("Failed to update tracked validators",
-					zap.Stringer("subnetID", subnetID),
-					zap.Error(err),
-				)
-				continue
-			}
-		}
 	}
+	n.latestSyncedPChainHeight = latestPChainHeight
 }
 
 func (n *appRequestNetwork) updateTrackedValidatorSetsPreGranite(ctx context.Context) {
@@ -536,7 +535,7 @@ func (n *appRequestNetwork) getValidatorSetGranite(
 	subnetID ids.ID,
 	pchainHeight uint64,
 ) (snowVdrs.WarpSet, error) {
-	allValidators, err := n.getAllValidatorSetsGranite(ctx, pchainHeight)
+	allValidators, err := n.getAllValidatorSets(ctx, pchainHeight)
 	if err != nil {
 		return snowVdrs.WarpSet{}, fmt.Errorf("failed to get all validators at P-Chain height %d: %w", pchainHeight, err)
 	}
@@ -548,16 +547,16 @@ func (n *appRequestNetwork) getValidatorSetGranite(
 	return validatorSet, nil
 }
 
-func (n *appRequestNetwork) getAllValidatorSetsGranite(
+func (n *appRequestNetwork) getAllValidatorSets(
 	ctx context.Context,
 	pchainHeight uint64,
 ) (map[ids.ID]snowVdrs.WarpSet, error) {
 	// Use FIFO cache for epoched validators (specific heights) - immutable historical data
 	// FIFO cache key is pchainHeight, fetch function uses the passed height
 	fetchVdrsFunc := func(height uint64) (map[ids.ID]snowVdrs.WarpSet, error) {
-		if n.maxPChainLookback >= 0 && int64(height) < int64(n.latestPChainHeight)-n.maxPChainLookback {
+		if n.maxPChainLookback >= 0 && int64(height) < int64(n.latestSyncedPChainHeight)-n.maxPChainLookback {
 			return nil, fmt.Errorf("requested P-Chain height %d is beyond the max lookback of %d from latest height %d",
-				height, n.maxPChainLookback, n.latestPChainHeight,
+				height, n.maxPChainLookback, n.latestSyncedPChainHeight,
 			)
 		}
 
