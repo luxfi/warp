@@ -392,15 +392,17 @@ func (n *appRequestNetwork) updateValidatorSet(
 	// Fetch the subnet validators from the P-Chain
 	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
-	validators, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
+	vdrs, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
 	if err != nil {
 		return err
 	}
 
+	nodeIDs := validators.NodeIDs(vdrs)
+
 	// Remove any elements from the manager that are not in the new validator set
 	currentVdrs := n.manager.GetValidatorIDs(subnetID)
 	for _, nodeID := range currentVdrs {
-		if _, ok := validators[nodeID]; !ok {
+		if !nodeIDs.Contains(nodeID) {
 			n.logger.Debug("Removing validator",
 				zap.Stringer("nodeID", nodeID),
 				zap.Stringer("subnetID", subnetID),
@@ -413,20 +415,22 @@ func (n *appRequestNetwork) updateValidatorSet(
 	}
 
 	// Add any elements from the new validator set that are not in the manager
-	for _, vdr := range validators {
-		if _, ok := n.manager.GetValidator(subnetID, vdr.NodeID); !ok {
-			n.logger.Debug("Adding validator",
-				zap.Stringer("nodeID", vdr.NodeID),
-				zap.Stringer("subnetID", subnetID),
-			)
-			if err := n.manager.AddStaker(
-				subnetID,
-				vdr.NodeID,
-				vdr.PublicKey,
-				ids.Empty,
-				vdr.Weight,
-			); err != nil {
-				return err
+	for _, vdr := range vdrs.Validators {
+		for _, nodeID := range vdr.NodeIDs {
+			if _, ok := n.manager.GetValidator(subnetID, nodeID); !ok {
+				n.logger.Debug("Adding validator",
+					zap.Stringer("nodeID", nodeID),
+					zap.Stringer("subnetID", subnetID),
+				)
+				if err := n.manager.AddStaker(
+					subnetID,
+					nodeID,
+					vdr.PublicKey,
+					ids.Empty,
+					vdr.Weight,
+				); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -476,9 +480,12 @@ func (n *appRequestNetwork) GetCanonicalValidators(
 		// Get the subnet's current canonical validator set
 		fetchVdrsFunc := func(subnetID ids.ID) (snowVdrs.WarpSet, error) {
 			startPChainAPICall := time.Now()
-			validatorSet, err := n.validatorClient.GetCurrentValidatorSet(ctx, subnetID)
+			validatorSet, err := n.validatorClient.GetProposedValidators(ctx, subnetID)
 			n.setPChainAPICallLatencyMS(time.Since(startPChainAPICall).Milliseconds())
-			return validatorSet, err
+			if err != nil {
+				return snowVdrs.WarpSet{}, err
+			}
+			return validatorSet, nil
 		}
 		validatorSet, err = n.canonicalValidatorSetCache.Get(subnetID, fetchVdrsFunc, skipCache)
 		if err != nil {
