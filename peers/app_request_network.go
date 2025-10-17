@@ -320,7 +320,7 @@ func NewNetwork(
 		networkUpgradeConfig:       upgradeConfig,
 	}
 
-	go arNetwork.startUpdateValidators(ctx)
+	go arNetwork.startUpdateValidatorSets(ctx)
 
 	return arNetwork, nil
 }
@@ -358,11 +358,11 @@ func (n *appRequestNetwork) trackSubnet(subnetID ids.ID) bool {
 func (n *appRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 	// Track the subnet. Update the validator set if we weren't already tracking it.
 	if !n.trackSubnet(subnetID) {
-		n.updateValidatorSet(ctx, subnetID)
+		n.updateTrackedValidatorSet(ctx, subnetID)
 	}
 }
 
-func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
+func (n *appRequestNetwork) startUpdateValidatorSets(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 	ticker := time.NewTicker(ValidatorRefreshPeriod)
 
@@ -370,9 +370,9 @@ func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if n.IsGraniteActivated() {
-				n.updateValidatorSetsPostGranite(ctx)
+				n.updateTrackedValidatorSetsPostGranite(ctx)
 			} else {
-				n.updateValidatorSetsPreGranite(ctx)
+				n.updateTrackedValidatorSetsPreGranite(ctx)
 			}
 		case <-ctx.Done():
 			n.logger.Info("Stopping updating validator process...")
@@ -381,7 +381,7 @@ func (n *appRequestNetwork) startUpdateValidators(ctx context.Context) {
 	}
 }
 
-func (n *appRequestNetwork) updateValidatorSetsPostGranite(ctx context.Context) {
+func (n *appRequestNetwork) updateTrackedValidatorSetsPostGranite(ctx context.Context) {
 	latestPChainHeight, err := n.validatorClient.GetLatestHeight(ctx)
 	if err != nil {
 		// This is not a critical error, just log and return
@@ -398,6 +398,7 @@ func (n *appRequestNetwork) updateValidatorSetsPostGranite(ctx context.Context) 
 	for n.latestPChainHeight < latestPChainHeight {
 		n.latestPChainHeight++
 		allValidators, err := n.getAllValidatorSetsGranite(ctx, n.latestPChainHeight)
+		// If we fail to get the validator sets for this height, log and continue to the next height
 		if err != nil {
 			n.logger.Error("Failed to get canonical validators",
 				zap.Uint64("height", n.latestPChainHeight),
@@ -415,26 +416,39 @@ func (n *appRequestNetwork) updateValidatorSetsPostGranite(ctx context.Context) 
 				)
 				continue
 			}
-			n.updatedTrackedValidators(ctx, subnetID, vdrs)
+			// If we fail to get the validator sets for this subnet, log and continue to the next subnet
+			err := n.updatedTrackedValidators(ctx, subnetID, vdrs)
+			if err != nil {
+				n.logger.Error("Failed to update tracked validators",
+					zap.Stringer("subnetID", subnetID),
+					zap.Error(err),
+				)
+				continue
+			}
 		}
 	}
 }
 
-func (n *appRequestNetwork) updateValidatorSetsPreGranite(ctx context.Context) {
+func (n *appRequestNetwork) updateTrackedValidatorSetsPreGranite(ctx context.Context) {
 	n.trackedSubnetsLock.RLock()
 	subnets := append(n.trackedSubnets.List(), constants.PrimaryNetworkID)
 	n.trackedSubnetsLock.RUnlock()
 
 	for _, subnet := range subnets {
-		err := n.updateValidatorSet(ctx, subnet)
+		err := n.updateTrackedValidatorSet(ctx, subnet)
 		// Log but don't return, so we keep trying to update other subnets
 		if err != nil {
-			n.logger.Error("Failed to update validator set", zap.Stringer("subnetID", subnet), zap.Error(err))
+			n.logger.Error(
+				"Failed to update validator set",
+				zap.Stringer("subnetID", subnet),
+				zap.Error(err),
+			)
+			continue
 		}
 	}
 }
 
-func (n *appRequestNetwork) updateValidatorSet(
+func (n *appRequestNetwork) updateTrackedValidatorSet(
 	ctx context.Context,
 	subnetID ids.ID,
 ) error {
