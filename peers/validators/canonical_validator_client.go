@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
-	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"go.uber.org/zap"
 
 	"github.com/ava-labs/icm-services/config"
@@ -27,8 +26,6 @@ var _ CanonicalValidatorState = &CanonicalValidatorClient{}
 // CanonicalValidatorState is an interface that wraps [avalancheWarp.ValidatorState] and adds additional
 // convenience methods for fetching current and proposed validator sets.
 type CanonicalValidatorState interface {
-	avalancheWarp.ValidatorState
-
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
 	GetLatestHeight(ctx context.Context) (uint64, error)
 	GetAllValidatorSets(ctx context.Context, pchainHeight uint64) (map[ids.ID]validators.WarpSet, error)
@@ -79,26 +76,6 @@ func (v *CanonicalValidatorClient) GetProposedValidators(
 		return validators.WarpSet{}, err
 	}
 	return validators.FlattenValidatorSet(res)
-}
-
-// Gets the validator set of the given subnet at the given P-chain block height.
-// Uses [platform.getValidatorsAt] with supplied height
-func (v *CanonicalValidatorClient) GetValidatorSet(
-	ctx context.Context,
-	height uint64,
-	subnetID ids.ID,
-) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-	res, err := v.client.GetValidatorsAt(ctx, subnetID, pchainapi.Height(height), v.options...)
-	if err != nil {
-		v.logger.Debug(
-			"Error fetching validators at height",
-			zap.String("subnetID", subnetID.String()),
-			zap.Uint64("pChainHeight", height),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-	return res, nil
 }
 
 // Gets the validator set of the given subnet at the given P-chain block height.
