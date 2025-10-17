@@ -28,5 +28,4 @@ classDiagram
     RelayerDatabase : Put()
     AppRequestNetwork : ConnectPeers()
     AppRequestNetwork : ConnectToCanonicalValidators()
-    CanonicalValidatorClient : GetCurrentValidatorSet()
 ```
