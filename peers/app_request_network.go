@@ -71,6 +71,10 @@ type AppRequestNetwork interface {
 		skipCache bool,
 		pchainHeight uint64,
 	) (*CanonicalValidators, error)
+	GetAllValidatorSets(
+		ctx context.Context,
+		pchainHeight uint64,
+	) (map[ids.ID]snowVdrs.WarpSet, error)
 	GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error)
 	RegisterAppRequest(requestID ids.RequestID)
 	RegisterRequestID(
@@ -86,6 +90,7 @@ type AppRequestNetwork interface {
 	Shutdown()
 	TrackSubnet(ctx context.Context, subnetID ids.ID)
 	StartCacheValidatorSets(ctx context.Context)
+	BuildCanonicalValidators(validatorSet snowVdrs.WarpSet) *CanonicalValidators
 	IsGraniteActivated() bool
 }
 
@@ -405,7 +410,7 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 
 	for n.latestSyncedPChainHeight < latestPChainHeight {
 		n.latestSyncedPChainHeight++
-		_, err := n.getAllValidatorSets(ctx, n.latestSyncedPChainHeight)
+		_, err := n.GetAllValidatorSets(ctx, n.latestSyncedPChainHeight)
 		// If we fail to get the validator sets for this height, log and check the next height.
 		if err != nil {
 			n.logger.Error("Failed to get canonical validators",
@@ -420,7 +425,7 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 func (n *appRequestNetwork) updateTrackedValidatorSets(ctx context.Context) {
 	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
-	allValidators, err := n.getAllValidatorSets(cctx, pchainapi.ProposedHeight)
+	allValidators, err := n.GetAllValidatorSets(cctx, pchainapi.ProposedHeight)
 	// If we fail to get the validator sets, log and return
 	if err != nil {
 		n.logger.Error("Failed to get latest validators", zap.Error(err))
@@ -536,7 +541,7 @@ func (n *appRequestNetwork) getValidatorSetGranite(
 	subnetID ids.ID,
 	pchainHeight uint64,
 ) (snowVdrs.WarpSet, error) {
-	allValidators, err := n.getAllValidatorSets(ctx, pchainHeight)
+	allValidators, err := n.GetAllValidatorSets(ctx, pchainHeight)
 	if err != nil {
 		return snowVdrs.WarpSet{}, fmt.Errorf("failed to get all validators at P-Chain height %d: %w", pchainHeight, err)
 	}
@@ -548,7 +553,7 @@ func (n *appRequestNetwork) getValidatorSetGranite(
 	return validatorSet, nil
 }
 
-func (n *appRequestNetwork) getAllValidatorSets(
+func (n *appRequestNetwork) GetAllValidatorSets(
 	ctx context.Context,
 	pchainHeight uint64,
 ) (map[ids.ID]snowVdrs.WarpSet, error) {
@@ -613,11 +618,11 @@ func (n *appRequestNetwork) GetCanonicalValidators(
 		return nil, fmt.Errorf("failed to get validator set at P-Chain height %d: %w", pchainHeight, err)
 	}
 
-	return n.buildCanonicalValidators(validatorSet), nil
+	return n.BuildCanonicalValidators(validatorSet), nil
 }
 
-// buildCanonicalValidators builds the CanonicalValidators struct from a validator set
-func (n *appRequestNetwork) buildCanonicalValidators(
+// BuildCanonicalValidators builds the CanonicalValidators struct from a validator set
+func (n *appRequestNetwork) BuildCanonicalValidators(
 	validatorSet snowVdrs.WarpSet,
 ) *CanonicalValidators {
 	// We make queries to node IDs, not unique validators as represented by a BLS pubkey, so we need this map to track
@@ -691,21 +696,24 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency int64) {
 
 func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
 	return func(ctx context.Context) error {
+		allValidatorSets, err := network.GetAllValidatorSets(
+			ctx,
+			pchainapi.ProposedHeight,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to get all validator sets: %w", err)
+		}
+
 		for _, subnetID := range subnetIDs {
-			// TODO switch this over to check the epoched validators when we start using them
-			vdrs, err := network.GetCanonicalValidators(
-				ctx,
-				subnetID,
-				false,
-				pchainapi.ProposedHeight,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to get connected validators: %s, %w", subnetID, err)
+			vdrs, ok := allValidatorSets[subnetID]
+			if !ok {
+				return fmt.Errorf("no validators for subnet %s", subnetID)
 			}
+			canonicalSet := network.BuildCanonicalValidators(vdrs)
 
 			if !sharedUtils.CheckStakeWeightExceedsThreshold(
-				big.NewInt(0).SetUint64(vdrs.ConnectedWeight),
-				vdrs.ValidatorSet.TotalWeight,
+				big.NewInt(0).SetUint64(canonicalSet.ConnectedWeight),
+				canonicalSet.ValidatorSet.TotalWeight,
 				warp.WarpDefaultQuorumNumerator,
 			) {
 				return ErrNotEnoughConnectedStake
