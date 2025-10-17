@@ -222,13 +222,20 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 		if !ok {
 			continue
 		}
+
+		// If the upgrade is scheduled in the future, skip it. If it activates during the lifetime of the relayer
+		// it will become unhealthy and restart and pick up the new config on next startup.
+		if cfg.Timestamp() != nil && *cfg.Timestamp() > latestBlock.Time() {
+			continue
+		}
+
+		// This is the first non-future config found, so use it for now.
 		if warpConfig == nil {
 			warpConfig = cfg
 			continue
 		}
-		// Grab the latest already activated Warp config, if a new upgrade activates during the lifetime of the relayer
-		// it will become unhealthy and restart and pick up the new config on next startup.
-		if *cfg.Timestamp() > *warpConfig.Timestamp() && *cfg.Timestamp() >= latestBlock.Time() {
+		// Do the nil check to avoid a panic if the initial config has no timestamp.
+		if warpConfig.Timestamp() == nil || *cfg.Timestamp() > *warpConfig.Timestamp() {
 			warpConfig = cfg
 		}
 	}
