@@ -57,7 +57,7 @@ const (
 
 	// The size of the FIFO cache for epoched validator sets
 	// The Cache will store validator sets for the most recent N P-Chain heights.
-	validatorSetCacheSize             = 100
+	validatorSetCacheSize = 100
 )
 
 func main() {
