@@ -141,6 +141,18 @@ func (mr *MockAppRequestNetworkMockRecorder) Shutdown() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockAppRequestNetwork)(nil).Shutdown))
 }
 
+// StartCacheValidatorSets mocks base method.
+func (m *MockAppRequestNetwork) StartCacheValidatorSets(ctx context.Context) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StartCacheValidatorSets", ctx)
+}
+
+// StartCacheValidatorSets indicates an expected call of StartCacheValidatorSets.
+func (mr *MockAppRequestNetworkMockRecorder) StartCacheValidatorSets(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartCacheValidatorSets", reflect.TypeOf((*MockAppRequestNetwork)(nil).StartCacheValidatorSets), ctx)
+}
+
 // TrackSubnet mocks base method.
 func (m *MockAppRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 	m.ctrl.T.Helper()
