@@ -42,26 +42,26 @@ func (m *MockCanonicalValidatorState) EXPECT() *MockCanonicalValidatorStateMockR
 	return m.recorder
 }
 
-// GetCurrentCanonicalValidatorSet mocks base method.
-func (m *MockCanonicalValidatorState) GetCurrentCanonicalValidatorSet(ctx context.Context, subnetID ids.ID, pchainHeight uint64) (validators.WarpSet, error) {
+// GetAllValidatorSets mocks base method.
+func (m *MockCanonicalValidatorState) GetAllValidatorSets(ctx context.Context, pchainHeight uint64) (map[ids.ID]validators.WarpSet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentCanonicalValidatorSet", ctx, subnetID, pchainHeight)
-	ret0, _ := ret[0].(validators.WarpSet)
+	ret := m.ctrl.Call(m, "GetAllValidatorSets", ctx, pchainHeight)
+	ret0, _ := ret[0].(map[ids.ID]validators.WarpSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetCurrentCanonicalValidatorSet indicates an expected call of GetCurrentCanonicalValidatorSet.
-func (mr *MockCanonicalValidatorStateMockRecorder) GetCurrentCanonicalValidatorSet(ctx, subnetID, pchainHeight any) *gomock.Call {
+// GetAllValidatorSets indicates an expected call of GetAllValidatorSets.
+func (mr *MockCanonicalValidatorStateMockRecorder) GetAllValidatorSets(ctx, pchainHeight any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentCanonicalValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetCurrentCanonicalValidatorSet), ctx, subnetID, pchainHeight)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllValidatorSets", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetAllValidatorSets), ctx, pchainHeight)
 }
 
 // GetProposedValidators mocks base method.
-func (m *MockCanonicalValidatorState) GetProposedValidators(ctx context.Context, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+func (m *MockCanonicalValidatorState) GetProposedValidators(ctx context.Context, subnetID ids.ID) (validators.WarpSet, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProposedValidators", ctx, subnetID)
-	ret0, _ := ret[0].(map[ids.NodeID]*validators.GetValidatorOutput)
+	ret0, _ := ret[0].(validators.WarpSet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -21,7 +21,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
-	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/icm-contracts/tests/interfaces"
@@ -271,8 +270,9 @@ func getUnderfundedNodeIndexes(
 	validatorClient := validators.NewCanonicalValidatorClient(logging.NoLog{}, &config.APIConfig{
 		BaseURL: primaryNetworkURI,
 	})
-	canonicalSet, err := validatorClient.GetCurrentCanonicalValidatorSet(ctx, subnetID, pchainapi.ProposedHeight)
+	canonicalSet, err := validatorClient.GetProposedValidators(ctx, subnetID)
 	Expect(err).Should(BeNil(), "Failed to get current canonical validator set")
+
 	for i, validator := range canonicalSet.Validators {
 		for _, nodeID := range validator.NodeIDs {
 			if underfundedNodes.Contains(nodeID) {
