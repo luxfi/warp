@@ -191,6 +191,7 @@ func main() {
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
+		peers.RelayerValidatorSetCacheSize,
 	)
 	if err != nil {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
