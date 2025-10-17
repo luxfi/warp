@@ -397,7 +397,7 @@ func (n *appRequestNetwork) updateValidatorSetsPostGranite(ctx context.Context) 
 
 	for n.latestPChainHeight < latestPChainHeight {
 		n.latestPChainHeight++
-		allValidators, err := n.getAllCanonicalValidatorsGranite(ctx, n.latestPChainHeight)
+		allValidators, err := n.getAllValidatorSetsGranite(ctx, n.latestPChainHeight)
 		if err != nil {
 			n.logger.Error("Failed to get canonical validators",
 				zap.Uint64("height", n.latestPChainHeight),
@@ -432,6 +432,20 @@ func (n *appRequestNetwork) updateValidatorSetsPreGranite(ctx context.Context) {
 			n.logger.Error("Failed to update validator set", zap.Stringer("subnetID", subnet), zap.Error(err))
 		}
 	}
+}
+
+func (n *appRequestNetwork) updateValidatorSet(
+	ctx context.Context,
+	subnetID ids.ID,
+) error {
+	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	defer cancel()
+	validators, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
+	if err != nil {
+		return err
+	}
+
+	return n.updatedTrackedValidators(ctx, subnetID, validators)
 }
 
 func (n *appRequestNetwork) updatedTrackedValidators(
@@ -490,20 +504,6 @@ func (n *appRequestNetwork) updatedTrackedValidators(
 	return nil
 }
 
-func (n *appRequestNetwork) updateValidatorSet(
-	ctx context.Context,
-	subnetID ids.ID,
-) error {
-	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
-	defer cancel()
-	validators, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
-	if err != nil {
-		return err
-	}
-
-	return n.updatedTrackedValidators(ctx, subnetID, validators)
-}
-
 func (n *appRequestNetwork) Shutdown() {
 	n.network.StartClose()
 }
@@ -525,12 +525,12 @@ func (c *CanonicalValidators) GetValidator(nodeID ids.NodeID) (*snowVdrs.Warp, i
 	return c.ValidatorSet.Validators[c.NodeValidatorIndexMap[nodeID]], c.NodeValidatorIndexMap[nodeID]
 }
 
-func (n *appRequestNetwork) getCanonicalValidatorsGranite(
+func (n *appRequestNetwork) getValidatorSetGranite(
 	ctx context.Context,
 	subnetID ids.ID,
 	pchainHeight uint64,
 ) (snowVdrs.WarpSet, error) {
-	allValidators, err := n.getAllCanonicalValidatorsGranite(ctx, pchainHeight)
+	allValidators, err := n.getAllValidatorSetsGranite(ctx, pchainHeight)
 	if err != nil {
 		return snowVdrs.WarpSet{}, fmt.Errorf("failed to get all validators at P-Chain height %d: %w", pchainHeight, err)
 	}
@@ -542,7 +542,7 @@ func (n *appRequestNetwork) getCanonicalValidatorsGranite(
 	return validatorSet, nil
 }
 
-func (n *appRequestNetwork) getAllCanonicalValidatorsGranite(
+func (n *appRequestNetwork) getAllValidatorSetsGranite(
 	ctx context.Context,
 	pchainHeight uint64,
 ) (map[ids.ID]snowVdrs.WarpSet, error) {
@@ -595,7 +595,7 @@ func (n *appRequestNetwork) GetCanonicalValidators(
 		}
 		validatorSet, err = n.canonicalValidatorSetCache.Get(subnetID, fetchVdrsFunc, skipCache)
 	} else {
-		validatorSet, err = n.getCanonicalValidatorsGranite(ctx, subnetID, pchainHeight)
+		validatorSet, err = n.getValidatorSetGranite(ctx, subnetID, pchainHeight)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator set at P-Chain height %d: %w", pchainHeight, err)
