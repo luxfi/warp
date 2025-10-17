@@ -55,11 +55,6 @@ const (
 
 	// The amount of time to cache canonical validator sets
 	canonicalValidatorSetCacheTTL = 2 * time.Second
-
-	// The size of the FIFO cache for epoched validator sets
-	// The Cache will store validator sets for the most recent N P-Chain heights.
-	RelayerValidatorSetCacheSize             = 100
-	SignatureAggregatorValidatorSetCacheSize = 750
 )
 
 var _ AppRequestNetwork = (*appRequestNetwork)(nil)
@@ -90,6 +85,7 @@ type AppRequestNetwork interface {
 	) set.Set[ids.NodeID]
 	Shutdown()
 	TrackSubnet(ctx context.Context, subnetID ids.ID)
+	StartCacheValidatorSets(ctx context.Context)
 	IsGraniteActivated() bool
 }
 
@@ -322,9 +318,6 @@ func NewNetwork(
 	}
 
 	go arNetwork.startUpdateTrackedValidators(ctx)
-	if validatorSetsCacheSize == SignatureAggregatorValidatorSetCacheSize {
-		go arNetwork.startCacheValidatorSets(ctx)
-	}
 
 	return arNetwork, nil
 }
@@ -381,7 +374,7 @@ func (n *appRequestNetwork) startUpdateTrackedValidators(ctx context.Context) {
 	}
 }
 
-func (n *appRequestNetwork) startCacheValidatorSets(ctx context.Context) {
+func (n *appRequestNetwork) StartCacheValidatorSets(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 	ticker := time.NewTicker(ValidatorRefreshPeriod)
 
