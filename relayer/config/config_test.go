@@ -599,6 +599,61 @@ func TestGetWarpConfig(t *testing.T) {
 				RequirePrimaryNetworkSigners: false,
 			},
 		},
+		{
+			name:                "upgrades listed out of order",
+			blockchainID:        blockchainID,
+			subnetID:            subnetID,
+			getChainConfigCalls: 1,
+			chainConfig: params.ChainConfigWithUpgradesJSON{
+				ChainConfig: *params.WithExtra(
+					&params.ChainConfig{},
+					&extras.ChainConfig{
+						GenesisPrecompiles: extras.Precompiles{
+							warpConfigKey: &warp.Config{
+								QuorumNumerator:              0,
+								RequirePrimaryNetworkSigners: false,
+							},
+						},
+					},
+				),
+				UpgradeConfig: extras.UpgradeConfig{
+					PrecompileUpgrades: []extras.PrecompileUpgrade{
+						{
+							Config: &warp.Config{
+								Upgrade: precompileconfig.Upgrade{
+									BlockTimestamp: &afterCurrentBlockTime,
+								},
+								QuorumNumerator:              80,
+								RequirePrimaryNetworkSigners: true,
+							},
+						},
+						{
+							Config: &warp.Config{
+								Upgrade: precompileconfig.Upgrade{
+									BlockTimestamp: &beforeCurrentBlockTime2,
+								},
+								QuorumNumerator:              90,
+								RequirePrimaryNetworkSigners: true,
+							},
+						},
+						{
+							Config: &warp.Config{
+								Upgrade: precompileconfig.Upgrade{
+									BlockTimestamp: &beforeCurrentBlockTime1,
+								},
+								QuorumNumerator:              80,
+								RequirePrimaryNetworkSigners: false,
+							},
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedWarpConfig: WarpConfig{
+				QuorumNumerator:              90,
+				RequirePrimaryNetworkSigners: true,
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
