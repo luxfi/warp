@@ -629,11 +629,11 @@ func (n *appRequestNetwork) BuildCanonicalValidators(
 	// responses from nodes and populate the signatureMap with the corresponding validator signature
 	// This maps node IDs to the index in the canonical validator set
 	nodeValidatorIndexMap := make(map[ids.NodeID]int)
-	nodeIDs := set.NewSet[ids.NodeID](len(nodeValidatorIndexMap))
+	nodeIDs := set.NewSet[ids.NodeID](len(validatorSet.Validators))
 	for i, vdr := range validatorSet.Validators {
-		for _, node := range vdr.NodeIDs {
-			nodeValidatorIndexMap[node] = i
-			nodeIDs.Add(node)
+		for _, nodeID := range vdr.NodeIDs {
+			nodeValidatorIndexMap[nodeID] = i
+			nodeIDs.Add(nodeID)
 		}
 	}
 
