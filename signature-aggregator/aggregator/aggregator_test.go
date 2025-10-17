@@ -105,13 +105,13 @@ func makeConnectedValidators(validatorCount int) (*peers.CanonicalValidators, []
 	utils.Sort(validatorValues)
 
 	// Placeholder for results
-	validatorSet := make([]*warp.Validator, validatorCount)
+	validatorSet := make([]*validators.Warp, validatorCount)
 	validatorSigners := make([]*localsigner.LocalSigner, validatorCount)
 	nodeValidatorIndexMap := make(map[ids.NodeID]int)
 	connectedNodes := set.NewSet[ids.NodeID](validatorCount)
 	for i, validator := range validatorValues {
 		validatorSigners[i] = validator.blsSigner
-		validatorSet[i] = &warp.Validator{
+		validatorSet[i] = &validators.Warp{
 			PublicKey:      validator.blsPublicKey,
 			PublicKeyBytes: validator.blsPublicKeyBytes,
 			Weight:         1,
@@ -179,7 +179,7 @@ func TestCreateSignedMessageFailsWithNoValidators(t *testing.T) {
 		&peers.CanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: validators.WarpSet{
-				Validators:  []*warp.Validator{},
+				Validators:  []*validators.Warp{},
 				TotalWeight: 0,
 			},
 		},
@@ -200,7 +200,7 @@ func TestCreateSignedMessageFailsWithoutSufficientConnectedStake(t *testing.T) {
 		&peers.CanonicalValidators{
 			ConnectedWeight: 0,
 			ValidatorSet: validators.WarpSet{
-				Validators:  []*warp.Validator{},
+				Validators:  []*validators.Warp{},
 				TotalWeight: 1,
 			},
 		},
@@ -526,7 +526,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1}},
 						{NodeIDs: []ids.NodeID{nodeID2}},
 					},
@@ -554,7 +554,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1}},
 						{NodeIDs: []ids.NodeID{nodeID2}},
 					},
@@ -589,7 +589,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1}},
 						{NodeIDs: []ids.NodeID{nodeID2, nodeID3}},
 					},
@@ -616,7 +616,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1}},
 						{NodeIDs: []ids.NodeID{nodeID2}},
 					},
@@ -637,7 +637,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1}},
 					},
 				},
@@ -662,7 +662,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID1, nodeID2}},
 					},
 				},
@@ -674,7 +674,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			l1Validators: []platformvm.ClientPermissionlessValidator{},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{
+					Validators: []*validators.Warp{
 						{NodeIDs: []ids.NodeID{nodeID3}},
 					},
 				},
@@ -686,7 +686,7 @@ func TestGetExcludedValidators(t *testing.T) {
 			l1Validators: []platformvm.ClientPermissionlessValidator{},
 			connected: &peers.CanonicalValidators{
 				ValidatorSet: validators.WarpSet{
-					Validators: []*warp.Validator{},
+					Validators: []*validators.Warp{},
 				},
 			},
 			excludedIdx: []int{},
