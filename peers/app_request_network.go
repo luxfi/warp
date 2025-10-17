@@ -440,12 +440,12 @@ func (n *appRequestNetwork) updateValidatorSet(
 ) error {
 	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
-	validators, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
+	vdrs, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
 	if err != nil {
 		return err
 	}
 
-	return n.updatedTrackedValidators(ctx, subnetID, validators)
+	return n.updatedTrackedValidators(ctx, subnetID, vdrs)
 }
 
 func (n *appRequestNetwork) updatedTrackedValidators(
@@ -455,14 +455,6 @@ func (n *appRequestNetwork) updatedTrackedValidators(
 ) error {
 	n.validatorSetLock.Lock()
 	defer n.validatorSetLock.Unlock()
-
-	// Fetch the subnet validators from the P-Chain
-	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
-	defer cancel()
-	vdrs, err := n.validatorClient.GetProposedValidators(cctx, subnetID)
-	if err != nil {
-		return err
-	}
 
 	nodeIDs := validators.NodeIDs(vdrs)
 
