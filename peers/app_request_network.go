@@ -432,8 +432,12 @@ func (n *appRequestNetwork) updateTrackedValidatorSets(ctx context.Context) {
 		return
 	}
 
+	n.trackedSubnetsLock.RLock()
+	subnets := append(n.trackedSubnets.List(), constants.PrimaryNetworkID)
+	n.trackedSubnetsLock.RUnlock()
+
 	// Update the validators for each tracked subnet for the most recent height
-	for _, subnetID := range append(n.trackedSubnets.List(), constants.PrimaryNetworkID) {
+	for _, subnetID := range subnets {
 		vdrs, ok := allValidators[subnetID]
 		if !ok {
 			n.logger.Warn("No validator set found for tracked subnet",
