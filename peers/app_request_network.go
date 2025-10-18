@@ -182,7 +182,6 @@ func NewNetwork(
 		networkID,
 		manager,
 		trackedSubnets,
-		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -207,15 +206,11 @@ func NewNetwork(
 	nodeID := ids.NodeIDFromCert(parsedCert)
 	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
-	// Set the activation time for the latest network upgrade
-
-	upgradeTime := upgradeConfig.GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		upgradeTime,
 	)
 	if err != nil {
 		logger.Error(
