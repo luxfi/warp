@@ -54,6 +54,10 @@ const (
 	peerNetworkMetricsPrefix    = "peers"
 	msgCreatorMetricsPrefix     = "msgcreator"
 	timeoutManagerMetricsPrefix = "timeoutmanager"
+
+	// The size of the FIFO cache for epoched validator sets
+	// The Cache will store validator sets for the most recent N P-Chain heights.
+	validatorSetCacheSize = 100
 )
 
 func main() {
@@ -191,6 +195,7 @@ func main() {
 		cfg.GetTrackedSubnets(),
 		manuallyTrackedPeers,
 		&cfg,
+		validatorSetCacheSize,
 	)
 	if err != nil {
 		logger.Fatal("Failed to create app request network", zap.Error(err))
