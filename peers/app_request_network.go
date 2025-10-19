@@ -191,6 +191,7 @@ func NewNetwork(
 		return nil, err
 	}
 	testNetworkConfig.AllowPrivateIPs = cfg.GetAllowPrivateIPs()
+	testNetworkConfig.ConnectToAllValidators = true
 	// Set the TLS config if exists and log the NodeID
 	var cert *tls.Certificate
 	if cert = cfg.GetTLSCert(); cert != nil {
@@ -299,6 +300,12 @@ func NewNetwork(
 	vdrsCache := cache.NewTTLCache[ids.ID, snowVdrs.WarpSet](canonicalValidatorSetCacheTTL)
 	epochedVdrsCache := cache.NewFIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet](int(validatorSetsCacheSize))
 
+	localTrackedSubnets := set.NewSet[ids.ID](maxNumSubnets)
+
+	for _, subnetID := range trackedSubnets.List() {
+		localTrackedSubnets.Add(subnetID)
+	}
+
 	arNetwork := &appRequestNetwork{
 		network:                    testNetwork,
 		handler:                    handler,
@@ -307,7 +314,7 @@ func NewNetwork(
 		validatorSetLock:           new(sync.Mutex),
 		validatorClient:            validatorClient,
 		metrics:                    metrics,
-		trackedSubnets:             trackedSubnets,
+		trackedSubnets:             localTrackedSubnets,
 		trackedSubnetsLock:         trackedSubnetsLock,
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
