@@ -25,6 +25,7 @@ Namely:
 - `ManuallyTrackedPeers` []PeerConfig
 - `TLSCertPath` string (optional)
 - `TLSKeyPath` string (optional)
+- `MaxPChainLookback` int (optional)
 
 Sample config that can be used for local testing is `signature-aggregator/sample-signature-aggregator-config.json`
 

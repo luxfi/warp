@@ -15,6 +15,7 @@ import (
 
 	ids "github.com/ava-labs/avalanchego/ids"
 	message "github.com/ava-labs/avalanchego/message"
+	validators "github.com/ava-labs/avalanchego/snow/validators"
 	subnets "github.com/ava-labs/avalanchego/subnets"
 	set "github.com/ava-labs/avalanchego/utils/set"
 	peers "github.com/ava-labs/icm-services/peers"
@@ -43,6 +44,35 @@ func NewMockAppRequestNetwork(ctrl *gomock.Controller) *MockAppRequestNetwork {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockAppRequestNetwork) EXPECT() *MockAppRequestNetworkMockRecorder {
 	return m.recorder
+}
+
+// BuildCanonicalValidators mocks base method.
+func (m *MockAppRequestNetwork) BuildCanonicalValidators(validatorSet validators.WarpSet) *peers.CanonicalValidators {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildCanonicalValidators", validatorSet)
+	ret0, _ := ret[0].(*peers.CanonicalValidators)
+	return ret0
+}
+
+// BuildCanonicalValidators indicates an expected call of BuildCanonicalValidators.
+func (mr *MockAppRequestNetworkMockRecorder) BuildCanonicalValidators(validatorSet any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildCanonicalValidators", reflect.TypeOf((*MockAppRequestNetwork)(nil).BuildCanonicalValidators), validatorSet)
+}
+
+// GetAllValidatorSets mocks base method.
+func (m *MockAppRequestNetwork) GetAllValidatorSets(ctx context.Context, pchainHeight uint64) (map[ids.ID]validators.WarpSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllValidatorSets", ctx, pchainHeight)
+	ret0, _ := ret[0].(map[ids.ID]validators.WarpSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllValidatorSets indicates an expected call of GetAllValidatorSets.
+func (mr *MockAppRequestNetworkMockRecorder) GetAllValidatorSets(ctx, pchainHeight any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllValidatorSets", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetAllValidatorSets), ctx, pchainHeight)
 }
 
 // GetCanonicalValidators mocks base method.
@@ -139,6 +169,18 @@ func (m *MockAppRequestNetwork) Shutdown() {
 func (mr *MockAppRequestNetworkMockRecorder) Shutdown() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockAppRequestNetwork)(nil).Shutdown))
+}
+
+// StartCacheValidatorSets mocks base method.
+func (m *MockAppRequestNetwork) StartCacheValidatorSets(ctx context.Context) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StartCacheValidatorSets", ctx)
+}
+
+// StartCacheValidatorSets indicates an expected call of StartCacheValidatorSets.
+func (mr *MockAppRequestNetworkMockRecorder) StartCacheValidatorSets(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartCacheValidatorSets", reflect.TypeOf((*MockAppRequestNetwork)(nil).StartCacheValidatorSets), ctx)
 }
 
 // TrackSubnet mocks base method.
