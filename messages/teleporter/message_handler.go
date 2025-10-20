@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
@@ -263,6 +264,12 @@ func (m *messageHandler) getShouldSendMessageFromDecider() (bool, error) {
 	return response.ShouldSendMessage, nil
 }
 
+type GraniteNotActivated struct{}
+
+func (g *GraniteNotActivated) IsGraniteActivated() bool {
+	return false
+}
+
 // SendMessage extracts the gasLimit and packs the call data to call the receiveCrossChainMessage
 // method of the Teleporter contract, and dispatches transaction construction and broadcast to the
 // destination client.
@@ -277,10 +284,11 @@ func (m *messageHandler) SendMessage(
 	}
 
 	gasLimit, err := gasUtils.CalculateReceiveMessageGasLimit(
+		&GraniteNotActivated{},
 		numSigners,
 		m.teleporterMessage.RequiredGasLimit,
-		len(signedMessage.Bytes()),
-		len(signedMessage.Payload),
+		len(predicate.New(signedMessage.Bytes())),
+		len(predicate.New(signedMessage.Payload)),
 		len(m.teleporterMessage.Receipts),
 	)
 	if err != nil {
