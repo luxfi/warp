@@ -141,8 +141,7 @@ func TestConnectToCanonicalValidators(t *testing.T) {
 				metrics:                    metrics,
 				logger:                     logging.NoLog{},
 				canonicalValidatorSetCache: vdrsCache,
-				epochedValidatorSetCache:   make(map[ids.ID]*cache.LRUCache[uint64, snowVdrs.WarpSet]),
-				epochedCacheLock:           sync.RWMutex{},
+				epochedValidatorSetCache:   cache.NewFIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet](100),
 			}
 			var totalWeight uint64
 			for _, vdr := range testCase.validators {
@@ -202,6 +201,7 @@ func TestTrackSubnets(t *testing.T) {
 	newSubnetID := ids.GenerateTestID()
 	oldestSubnetID, _, ok := arNetwork.lruSubnets.Oldest()
 	require.True(t, ok)
+
 	arNetwork.TrackSubnet(t.Context(), newSubnetID)
 	require.Equal(t, maxNumSubnets, arNetwork.trackedSubnets.Len())
 	require.Equal(t, maxNumSubnets, arNetwork.lruSubnets.Len())
