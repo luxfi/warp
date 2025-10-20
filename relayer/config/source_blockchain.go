@@ -26,7 +26,7 @@ type SourceBlockchain struct {
 	ProcessHistoricalBlocksFromHeight uint64                           `mapstructure:"process-historical-blocks-from-height" json:"process-historical-blocks-from-height"` //nolint:lll
 	AllowedOriginSenderAddresses      []string                         `mapstructure:"allowed-origin-sender-addresses" json:"allowed-origin-sender-addresses"`             //nolint:lll
 	// DEPRECATED: WarpAPIEndpoint is deprecated. Use request network instead
-	WarpAPIEndpoint                   basecfg.APIConfig                `mapstructure:"warp-api-endpoint" json:"warp-api-endpoint"`                                         //nolint:lll
+	WarpAPIEndpoint basecfg.APIConfig `mapstructure:"warp-api-endpoint" json:"warp-api-endpoint"` //nolint:lll
 
 	// convenience fields to access parsed data after initialization
 	subnetID                     ids.ID
