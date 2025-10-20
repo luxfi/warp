@@ -329,6 +329,10 @@ func (c *Config) LogSafeField() zap.Field {
 	return zap.Any("config", c.sanitizeForLogging())
 }
 
+func (c *Config) GetMaxPChainLookback() int64 {
+	return -1 // No max lookback for relayer
+}
+
 func (c *Config) sanitizeForLogging() map[string]any {
 	return sanitizeValue(reflect.ValueOf(c), reflect.TypeOf(c)).(map[string]any)
 }

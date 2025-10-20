@@ -57,6 +57,21 @@ func (mr *MockCanonicalValidatorStateMockRecorder) GetAllValidatorSets(ctx, pcha
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllValidatorSets", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetAllValidatorSets), ctx, pchainHeight)
 }
 
+// GetLatestHeight mocks base method.
+func (m *MockCanonicalValidatorState) GetLatestHeight(ctx context.Context) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestHeight", ctx)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestHeight indicates an expected call of GetLatestHeight.
+func (mr *MockCanonicalValidatorStateMockRecorder) GetLatestHeight(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestHeight", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetLatestHeight), ctx)
+}
+
 // GetProposedValidators mocks base method.
 func (m *MockCanonicalValidatorState) GetProposedValidators(ctx context.Context, subnetID ids.ID) (validators.WarpSet, error) {
 	m.ctrl.T.Helper()
@@ -85,19 +100,4 @@ func (m *MockCanonicalValidatorState) GetSubnetID(ctx context.Context, blockchai
 func (mr *MockCanonicalValidatorStateMockRecorder) GetSubnetID(ctx, blockchainID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnetID", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetSubnetID), ctx, blockchainID)
-}
-
-// GetValidatorSet mocks base method.
-func (m *MockCanonicalValidatorState) GetValidatorSet(ctx context.Context, height uint64, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetValidatorSet", ctx, height, subnetID)
-	ret0, _ := ret[0].(map[ids.NodeID]*validators.GetValidatorOutput)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetValidatorSet indicates an expected call of GetValidatorSet.
-func (mr *MockCanonicalValidatorStateMockRecorder) GetValidatorSet(ctx, height, subnetID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidatorSet", reflect.TypeOf((*MockCanonicalValidatorState)(nil).GetValidatorSet), ctx, height, subnetID)
 }
