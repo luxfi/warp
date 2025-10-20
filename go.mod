@@ -6,7 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.14.0-fuji-rc.0
-	github.com/ava-labs/icm-contracts v1.0.10-0.20251016202108-cabdb44d0e67
+	github.com/ava-labs/icm-contracts v1.0.10-0.20251020142709-c2a7c85e6b26
 	github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3
 	github.com/ava-labs/subnet-evm v0.8.0-fuji-rc.2
 	github.com/aws/aws-sdk-go-v2 v1.39.3
@@ -390,5 +390,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/ava-labs/icm-contracts => ../icm-contracts
