@@ -804,7 +804,7 @@ func TestPopulateSignatureMapFromCache(t *testing.T) {
 	)
 
 	excluded := set.NewSet[int](0)
-	sigMap, accWeight := aggregator.getCachedSignaturesForMessage(msg, connectedValidators, excluded)
+	sigMap, accWeight := aggregator.getCachedSignaturesForMessage(logging.NoLog{}, msg, connectedValidators, excluded)
 	require.Len(t, sigMap, 1)
 	// The expected weight is the weight of the first validator
 	require.Equal(t, connectedValidators.ValidatorSet.Validators[0].Weight, accWeight.Uint64())
