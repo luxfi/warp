@@ -25,7 +25,8 @@ type SourceBlockchain struct {
 	SupportedDestinations             []*SupportedDestination          `mapstructure:"supported-destinations" json:"supported-destinations"`                               //nolint:lll
 	ProcessHistoricalBlocksFromHeight uint64                           `mapstructure:"process-historical-blocks-from-height" json:"process-historical-blocks-from-height"` //nolint:lll
 	AllowedOriginSenderAddresses      []string                         `mapstructure:"allowed-origin-sender-addresses" json:"allowed-origin-sender-addresses"`             //nolint:lll
-	WarpAPIEndpoint                   basecfg.APIConfig                `mapstructure:"warp-api-endpoint" json:"warp-api-endpoint"`                                         //nolint:lll
+	// DEPRECATED: WarpAPIEndpoint is deprecated. Use request network instead
+	WarpAPIEndpoint basecfg.APIConfig `mapstructure:"warp-api-endpoint" json:"warp-api-endpoint"` //nolint:lll
 
 	// convenience fields to access parsed data after initialization
 	subnetID                     ids.ID
@@ -44,7 +45,7 @@ func (s *SourceBlockchain) Validate(destinationBlockchainIDs *set.Set[string]) e
 	if err := s.WSEndpoint.Validate(); err != nil {
 		return fmt.Errorf("invalid ws-endpoint in source subnet configuration: %w", err)
 	}
-	// The Warp API endpoint is optional. If omitted, signatures are fetched from validators via app request.
+	// DEPRECATED: The Warp API endpoint is optional. If omitted, signatures are fetched from validators via app request.
 	if s.WarpAPIEndpoint.BaseURL != "" {
 		if err := s.WarpAPIEndpoint.Validate(); err != nil {
 			return fmt.Errorf("invalid warp-api-endpoint in source subnet configuration: %w", err)
