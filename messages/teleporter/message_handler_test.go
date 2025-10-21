@@ -342,6 +342,6 @@ func TestSendMessageAlreadyDelivered(t *testing.T) {
 		Times(1)
 
 	// Call the method under test
-	_, err = messageHandler.SendMessage(signedMessage)
+	_, err = messageHandler.SendMessage(signedMessage, false)
 	require.NoError(t, err)
 }
