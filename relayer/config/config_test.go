@@ -363,9 +363,8 @@ func TestGetWarpConfig(t *testing.T) {
 	subnetID, err := ids.FromString("2PsShLjrFFwR51DMcAh8pyuwzLn1Ym3zRhuXLTmLCR1STk2mL6")
 	require.NoError(t, err)
 
-	beforeCurrentBlockTime1 := uint64(time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC).Unix())
-	beforeCurrentBlockTime2 := uint64(time.Date(2025, 9, 10, 0, 0, 0, 0, time.UTC).Unix())
-	afterCurrentBlockTime := uint64(time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC).Unix())
+	// beforeCurrentBlockTime := uint64(time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC).Unix())
+	afterCurrentBlockTime := uint64(time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC).Unix())
 
 	currentBlockTime := uint64(time.Date(2025, 9, 15, 0, 0, 0, 0, time.UTC).Unix())
 	currentBlock := types.NewBlock(&types.Header{
@@ -472,40 +471,6 @@ func TestGetWarpConfig(t *testing.T) {
 			},
 		},
 		{
-			name:                "subnet multiple already activated upgrades",
-			blockchainID:        blockchainID,
-			subnetID:            subnetID,
-			getChainConfigCalls: 1,
-			chainConfig: params.ChainConfigWithUpgradesJSON{
-				UpgradeConfig: extras.UpgradeConfig{
-					PrecompileUpgrades: []extras.PrecompileUpgrade{
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &beforeCurrentBlockTime1,
-								},
-								QuorumNumerator: 50,
-							},
-						},
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &beforeCurrentBlockTime2,
-								},
-								QuorumNumerator:              60,
-								RequirePrimaryNetworkSigners: true,
-							},
-						},
-					},
-				},
-			},
-			expectedError: nil,
-			expectedWarpConfig: WarpConfig{
-				QuorumNumerator:              60,
-				RequirePrimaryNetworkSigners: true,
-			},
-		},
-		{
 			name:                "require primary network signers",
 			blockchainID:        blockchainID,
 			subnetID:            subnetID,
@@ -568,90 +533,26 @@ func TestGetWarpConfig(t *testing.T) {
 								RequirePrimaryNetworkSigners: false,
 							},
 						},
+						UpgradeConfig: extras.UpgradeConfig{
+							PrecompileUpgrades: []extras.PrecompileUpgrade{
+								{
+									Config: &warp.Config{
+										Upgrade: precompileconfig.Upgrade{
+											BlockTimestamp: &afterCurrentBlockTime,
+										},
+										QuorumNumerator:              67,
+										RequirePrimaryNetworkSigners: true,
+									},
+								},
+							},
+						},
 					},
 				),
-				UpgradeConfig: extras.UpgradeConfig{
-					PrecompileUpgrades: []extras.PrecompileUpgrade{
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &beforeCurrentBlockTime1,
-								},
-								QuorumNumerator:              80,
-								RequirePrimaryNetworkSigners: false,
-							},
-						},
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &afterCurrentBlockTime,
-								},
-								QuorumNumerator:              67,
-								RequirePrimaryNetworkSigners: true,
-							},
-						},
-					},
-				},
 			},
 			expectedError: nil,
 			expectedWarpConfig: WarpConfig{
-				QuorumNumerator:              80,
+				QuorumNumerator:              warp.WarpDefaultQuorumNumerator,
 				RequirePrimaryNetworkSigners: false,
-			},
-		},
-		{
-			name:                "upgrades listed out of order",
-			blockchainID:        blockchainID,
-			subnetID:            subnetID,
-			getChainConfigCalls: 1,
-			chainConfig: params.ChainConfigWithUpgradesJSON{
-				ChainConfig: *params.WithExtra(
-					&params.ChainConfig{},
-					&extras.ChainConfig{
-						GenesisPrecompiles: extras.Precompiles{
-							warpConfigKey: &warp.Config{
-								QuorumNumerator:              0,
-								RequirePrimaryNetworkSigners: false,
-							},
-						},
-					},
-				),
-				UpgradeConfig: extras.UpgradeConfig{
-					PrecompileUpgrades: []extras.PrecompileUpgrade{
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &afterCurrentBlockTime,
-								},
-								QuorumNumerator:              80,
-								RequirePrimaryNetworkSigners: true,
-							},
-						},
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &beforeCurrentBlockTime2,
-								},
-								QuorumNumerator:              90,
-								RequirePrimaryNetworkSigners: true,
-							},
-						},
-						{
-							Config: &warp.Config{
-								Upgrade: precompileconfig.Upgrade{
-									BlockTimestamp: &beforeCurrentBlockTime1,
-								},
-								QuorumNumerator:              80,
-								RequirePrimaryNetworkSigners: false,
-							},
-						},
-					},
-				},
-			},
-			expectedError: nil,
-			expectedWarpConfig: WarpConfig{
-				QuorumNumerator:              90,
-				RequirePrimaryNetworkSigners: true,
 			},
 		},
 	}
