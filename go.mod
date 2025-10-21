@@ -6,7 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.14.0-fuji
-	github.com/ava-labs/icm-contracts v1.0.10-0.20251021200039-fde046b52018
+	github.com/ava-labs/icm-contracts v1.0.10-0.20251021211325-3e086333ec6b
 	github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3
 	github.com/ava-labs/subnet-evm v0.8.0-fuji
 	github.com/aws/aws-sdk-go-v2 v1.39.3
