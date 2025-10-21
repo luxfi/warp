@@ -1,14 +1,14 @@
 module github.com/ava-labs/icm-services
 
-go 1.24.8
+go 1.24.9
 
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/alexliesenfeld/health v0.8.1
-	github.com/ava-labs/avalanchego v1.14.0-fuji-rc.0
-	github.com/ava-labs/icm-contracts v1.0.10-0.20251020142709-c2a7c85e6b26
+	github.com/ava-labs/avalanchego v1.14.0-fuji
+	github.com/ava-labs/icm-contracts v1.0.10-0.20251021200039-fde046b52018
 	github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3
-	github.com/ava-labs/subnet-evm v0.8.0-fuji-rc.2
+	github.com/ava-labs/subnet-evm v0.8.0-fuji
 	github.com/aws/aws-sdk-go-v2 v1.39.3
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/service/kms v1.46.0
@@ -77,7 +77,7 @@ require (
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
 	github.com/ava-labs/coreth v0.15.4-rc.4 // indirect
-	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.12 // indirect
+	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.13 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10 // indirect

@@ -12,7 +12,6 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpPayload "github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	teleportermessenger "github.com/ava-labs/icm-contracts/abi-bindings/go/teleporter/TeleporterMessenger"
@@ -290,8 +289,8 @@ func (m *messageHandler) SendMessage(
 		&isGraniteActivated{isGraniteActivated: isGraniteActive},
 		numSigners,
 		m.teleporterMessage.RequiredGasLimit,
-		len(predicate.New(signedMessage.Bytes())),
-		len(predicate.New(signedMessage.Payload)),
+		len(predicate.New(signedMessage.Bytes()),
+		len(signedMessage.Payload),
 		len(m.teleporterMessage.Receipts),
 	)
 	if err != nil {
