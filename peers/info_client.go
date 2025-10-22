@@ -74,5 +74,5 @@ func (i *InfoAPI) Uptime(ctx context.Context) (*info.UptimeResponse, error) {
 }
 
 func (i *InfoAPI) Upgrades(ctx context.Context, options ...rpc.Option) (*upgrade.Config, error) {
-	return i.client.Upgrades(ctx, options...)
+	return i.client.Upgrades(ctx, i.options...)
 }
