@@ -182,7 +182,6 @@ func NewNetwork(
 		networkID,
 		manager,
 		trackedSubnets,
-		trackedSubnetsLock,
 	)
 	if err != nil {
 		logger.Error(
@@ -192,6 +191,7 @@ func NewNetwork(
 		return nil, err
 	}
 	testNetworkConfig.AllowPrivateIPs = cfg.GetAllowPrivateIPs()
+	testNetworkConfig.ConnectToAllValidators = true
 	// Set the TLS config if exists and log the NodeID
 	var cert *tls.Certificate
 	if cert = cfg.GetTLSCert(); cert != nil {
@@ -207,15 +207,11 @@ func NewNetwork(
 	nodeID := ids.NodeIDFromCert(parsedCert)
 	logger.Info("Network starting with NodeID", zap.Stringer("NodeID", nodeID))
 
-	// Set the activation time for the latest network upgrade
-
-	upgradeTime := upgradeConfig.GraniteTime
 	testNetwork, err := network.NewTestNetwork(
 		logger,
 		peerNetworkRegistry,
 		testNetworkConfig,
 		handler,
-		upgradeTime,
 	)
 	if err != nil {
 		logger.Error(
@@ -304,6 +300,12 @@ func NewNetwork(
 	vdrsCache := cache.NewTTLCache[ids.ID, snowVdrs.WarpSet](canonicalValidatorSetCacheTTL)
 	epochedVdrsCache := cache.NewFIFOCache[uint64, map[ids.ID]snowVdrs.WarpSet](int(validatorSetsCacheSize))
 
+	localTrackedSubnets := set.NewSet[ids.ID](maxNumSubnets)
+
+	for _, subnetID := range trackedSubnets.List() {
+		localTrackedSubnets.Add(subnetID)
+	}
+
 	arNetwork := &appRequestNetwork{
 		network:                    testNetwork,
 		handler:                    handler,
@@ -312,7 +314,7 @@ func NewNetwork(
 		validatorSetLock:           new(sync.Mutex),
 		validatorClient:            validatorClient,
 		metrics:                    metrics,
-		trackedSubnets:             trackedSubnets,
+		trackedSubnets:             localTrackedSubnets,
 		trackedSubnetsLock:         trackedSubnetsLock,
 		manager:                    manager,
 		lruSubnets:                 lruSubnets,
