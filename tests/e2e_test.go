@@ -73,6 +73,7 @@ func TestE2E(t *testing.T) {
 var _ = ginkgo.BeforeSuite(func() {
 	var ctx context.Context
 	ctx, cancelFn = context.WithCancel(context.Background())
+	log.SetDefault(log.NewLogger(log.NewTerminalHandler(os.Stdout, false)))
 
 	log.Info("Building all ICM service executables")
 	testUtils.BuildAllExecutables(ctx)

@@ -32,7 +32,6 @@ import (
 	"github.com/ava-labs/icm-services/peers"
 	"github.com/ava-labs/icm-services/signature-aggregator/metrics"
 	"github.com/ava-labs/icm-services/utils"
-	"github.com/ava-labs/libevm/log"
 	"github.com/cenkalti/backoff/v4"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -324,6 +323,7 @@ func (s *SignatureAggregator) selectSigningSubnet(
 // Excludes previously fetched signatures from any validators now inactive.
 // Returns the valid cached signatures to be used, and the total weight of the validators those signatures represent.
 func (s *SignatureAggregator) getCachedSignaturesForMessage(
+	log logging.Logger,
 	unsignedMessage *avalancheWarp.UnsignedMessage,
 	vdrs *peers.CanonicalValidators,
 	excludedValidators set.Set[int],
@@ -630,6 +630,7 @@ func (s *SignatureAggregator) CreateSignedMessage(
 
 	// Populate signature map from cache
 	signatureMap, accumulatedSignatureWeight := s.getCachedSignaturesForMessage(
+		log,
 		unsignedMessage,
 		vdrs,
 		excludedValidators,
