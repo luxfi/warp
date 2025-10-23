@@ -73,6 +73,6 @@ func (i *InfoAPI) Uptime(ctx context.Context) (*info.UptimeResponse, error) {
 	return i.client.Uptime(ctx, i.options...)
 }
 
-func (i *InfoAPI) Upgrades(ctx context.Context, options ...rpc.Option) (*upgrade.Config, error) {
+func (i *InfoAPI) Upgrades(ctx context.Context) (*upgrade.Config, error) {
 	return i.client.Upgrades(ctx, i.options...)
 }
