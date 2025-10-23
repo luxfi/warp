@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.46.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/onsi/ginkgo/v2 v2.26.0
+	github.com/onsi/ginkgo/v2 v2.27.1
 	github.com/onsi/gomega v1.38.2
 	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
