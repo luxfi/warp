@@ -14,9 +14,9 @@ require (
 	github.com/ava-labs/icm-contracts v1.0.10-0.20251021215726-c64f31020739
 	github.com/ava-labs/libevm v1.13.15-0.20251003195629-910e897c54c3
 	github.com/ava-labs/subnet-evm v0.8.0-fuji
-	github.com/aws/aws-sdk-go-v2 v1.39.3
+	github.com/aws/aws-sdk-go-v2 v1.39.4
 	github.com/aws/aws-sdk-go-v2/config v1.31.14
-	github.com/aws/aws-sdk-go-v2/service/kms v1.46.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.46.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/ginkgo/v2 v2.27.1
@@ -85,8 +85,8 @@ require (
 	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.13 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.18 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.10 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.10 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.11 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.11 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.10 // indirect
