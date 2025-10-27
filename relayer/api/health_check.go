@@ -9,6 +9,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 const HealthAPIPath = "/health"
@@ -34,6 +35,7 @@ func healthCheckHandler(
 				var unhealthyRelayers []string
 				for id, health := range relayerHealth {
 					if !health.Load() {
+						logger.Error("Unhealthy relayer", zap.Stringer("relayerID", id))
 						unhealthyRelayers = append(unhealthyRelayers, id.String())
 					}
 				}
