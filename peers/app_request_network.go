@@ -700,7 +700,11 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency int64) {
 
 // Non-receiver util functions
 
-func GetNetworkHealthFunc(logger logging.Logger, network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
+func GetNetworkHealthFunc(
+	logger logging.Logger,
+	network AppRequestNetwork,
+	subnetIDs []ids.ID,
+) func(context.Context) error {
 	return func(ctx context.Context) error {
 		allValidatorSets, err := network.GetAllValidatorSets(
 			ctx,
