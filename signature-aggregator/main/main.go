@@ -177,7 +177,7 @@ func main() {
 
 	healthCheckSubnets := cfg.GetTrackedSubnets().List()
 	healthCheckSubnets = append(healthCheckSubnets, constants.PrimaryNetworkID)
-	networkHealthcheckFunc := peers.GetNetworkHealthFunc(network, healthCheckSubnets)
+	networkHealthcheckFunc := peers.GetNetworkHealthFunc(logger, network, healthCheckSubnets)
 	healthcheck.HandleHealthCheckRequest(networkHealthcheckFunc)
 
 	errGroup.Go(func() error {
