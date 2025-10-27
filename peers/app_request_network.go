@@ -700,19 +700,25 @@ func (n *appRequestNetwork) setPChainAPICallLatencyMS(latency int64) {
 
 // Non-receiver util functions
 
-func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(context.Context) error {
+func GetNetworkHealthFunc(
+	logger logging.Logger,
+	network AppRequestNetwork,
+	subnetIDs []ids.ID,
+) func(context.Context) error {
 	return func(ctx context.Context) error {
 		allValidatorSets, err := network.GetAllValidatorSets(
 			ctx,
 			pchainapi.ProposedHeight,
 		)
 		if err != nil {
+			logger.Error("Failed to get all validator sets", zap.Error(err))
 			return fmt.Errorf("failed to get all validator sets: %w", err)
 		}
 
 		for _, subnetID := range subnetIDs {
 			vdrs, ok := allValidatorSets[subnetID]
 			if !ok {
+				logger.Error("No validators for subnet", zap.Stringer("subnetID", subnetID))
 				return fmt.Errorf("no validators for subnet %s", subnetID)
 			}
 			canonicalSet := network.BuildCanonicalValidators(vdrs)
@@ -722,6 +728,11 @@ func GetNetworkHealthFunc(network AppRequestNetwork, subnetIDs []ids.ID) func(co
 				canonicalSet.ValidatorSet.TotalWeight,
 				warp.WarpDefaultQuorumNumerator,
 			) {
+				logger.Error("Not enough connected stake for subnet",
+					zap.Stringer("subnetID", subnetID),
+					zap.Uint64("connectedWeight", canonicalSet.ConnectedWeight),
+					zap.Uint64("totalWeight", canonicalSet.ValidatorSet.TotalWeight),
+				)
 				return ErrNotEnoughConnectedStake
 			}
 		}
