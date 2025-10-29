@@ -22,11 +22,9 @@ type ProposerVMAPI struct {
 }
 
 func NewProposerVMAPI(uri string, chain string, cfg *config.APIConfig) *ProposerVMAPI {
-	client := proposervm.NewJSONRPCClient(uri, chain)
-	options := utils.InitializeOptions(cfg)
 	return &ProposerVMAPI{
-		client:  client,
-		options: options,
+		client:  proposervm.NewJSONRPCClient(uri, chain),
+		options: utils.InitializeOptions(cfg),
 	}
 }
 
