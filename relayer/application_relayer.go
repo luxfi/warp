@@ -151,7 +151,17 @@ func NewApplicationRelayer(
 		zap.String("destinationBlockchainID", blockchainID),
 	)
 
-	proposerClient := peers.NewProposerVMAPI(baseURL, blockchainID, cfg.GetPChainAPI())
+	destAPIConfig, err := cfg.GetDestinationAPIConfig(blockchainID)
+	if err != nil {
+		logger.Error(
+			"Failed to get destination API config",
+			zap.String("destinationBlockchainID", blockchainID),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	proposerClient := peers.NewProposerVMAPI(baseURL, blockchainID, destAPIConfig)
 
 	ar := ApplicationRelayer{
 		logger:                    logger,
