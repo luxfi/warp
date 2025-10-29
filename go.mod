@@ -8,7 +8,6 @@ tool (
 )
 
 require (
-	connectrpc.com/connect v1.19.1
 	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.14.0-fuji
 	github.com/ava-labs/icm-contracts v1.0.10-0.20251021215726-c64f31020739
@@ -55,6 +54,7 @@ require (
 	buf.build/go/spdx v0.2.0 // indirect
 	buf.build/go/standard v0.1.0 // indirect
 	cel.dev/expr v0.24.0 // indirect
+	connectrpc.com/connect v1.19.1 // indirect
 	connectrpc.com/grpcreflect v1.3.0 // indirect
 	connectrpc.com/otelconnect v0.8.0 // indirect
 	github.com/4meepo/tagalign v1.4.2 // indirect
