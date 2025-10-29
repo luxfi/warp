@@ -6,7 +6,6 @@ package peers
 import (
 	"context"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/rpc"
 	"github.com/ava-labs/avalanchego/vms/proposervm"
 	"github.com/ava-labs/avalanchego/vms/proposervm/block"
@@ -24,9 +23,9 @@ type ProposerVMAPI struct {
 	options []rpc.Option
 }
 
-func NewProposerVMAPI(apiConfig *config.APIConfig, blockchainID ids.ID) *ProposerVMAPI {
-	client := proposervm.NewJSONRPCClient(apiConfig.BaseURL, blockchainID.String())
-	options := utils.InitializeOptions(apiConfig)
+func NewProposerVMAPI(uri string, chain string, cfg *config.APIConfig) *ProposerVMAPI {
+	client := proposervm.NewJSONRPCClient(uri, chain)
+	options := utils.InitializeOptions(cfg)
 	return &ProposerVMAPI{
 		client:  client,
 		options: options,
