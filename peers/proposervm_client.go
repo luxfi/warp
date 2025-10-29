@@ -36,3 +36,7 @@ func NewProposerVMAPI(apiConfig *config.APIConfig, blockchainID ids.ID) *Propose
 func (p *ProposerVMAPI) GetCurrentEpoch(ctx context.Context) (block.Epoch, error) {
 	return p.client.GetCurrentEpoch(ctx, p.options...)
 }
+
+func (p *ProposerVMAPI) GetProposedHeight(ctx context.Context) (uint64, error) {
+	return p.client.GetProposedHeight(ctx, p.options...)
+}
