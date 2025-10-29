@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	pchainapi "github.com/ava-labs/avalanchego/vms/platformvm/api"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	"github.com/ava-labs/avalanchego/vms/proposervm"
 
 	"github.com/ava-labs/icm-services/database"
 	"github.com/ava-labs/icm-services/messages"
@@ -69,7 +68,7 @@ type ApplicationRelayer struct {
 	warpConfig                config.WarpConfig
 	checkpointManager         CheckpointManager
 	sourceWarpSignatureClient *rpc.Client // nil if configured to fetch signatures via AppRequest
-	proposerClient            *proposervm.JSONRPCClient
+	proposerClient            *peers.ProposerVMAPI
 	signatureAggregator       *aggregator.SignatureAggregator
 	processMessageSemaphore   chan struct{}
 }
@@ -152,7 +151,7 @@ func NewApplicationRelayer(
 		zap.String("destinationBlockchainID", blockchainID),
 	)
 
-	proposerClient := proposervm.NewJSONRPCClient(baseURL, blockchainID)
+	proposerClient := peers.NewProposerVMAPI(cfg.GetPChainAPI(), relayerID.DestinationBlockchainID)
 
 	ar := ApplicationRelayer{
 		logger:                    logger,
