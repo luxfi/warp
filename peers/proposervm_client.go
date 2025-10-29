@@ -13,8 +13,6 @@ import (
 	"github.com/ava-labs/icm-services/peers/utils"
 )
 
-//go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -destination=./mocks/mock_p_chain_client.go -package=mocks
-
 // PChainAPI is a wrapper around the info.Client,
 // and provides additional options for the API
 // passed in the config.
