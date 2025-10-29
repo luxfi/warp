@@ -252,6 +252,15 @@ func getWarpConfig(client ethclient.Client) (*warp.Config, error) {
 	return warpConfig, nil
 }
 
+func (c *Config) GetDestinationAPIConfig(blockchainID string) (*basecfg.APIConfig, error) {
+	for _, dest := range c.DestinationBlockchains {
+		if blockchainID == dest.BlockchainID {
+			return &dest.RPCEndpoint, nil
+		}
+	}
+	return nil, fmt.Errorf("blockchain %s not configured as a destination", blockchainID)
+}
+
 // Initializes Warp configurations (quorum and self-signing settings) for each destination subnet
 func (c *Config) initializeWarpConfigs(ctx context.Context) error {
 	// Fetch the Warp config values for each destination subnet.
