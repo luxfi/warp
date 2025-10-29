@@ -13,9 +13,8 @@ import (
 	"github.com/ava-labs/icm-services/peers/utils"
 )
 
-// PChainAPI is a wrapper around the info.Client,
-// and provides additional options for the API
-// passed in the config.
+// ProposerVMAPI is a wrapper around a [proposervm.JSONRPCClient],
+// and provides additional options for the API passed in the config.
 type ProposerVMAPI struct {
 	client  *proposervm.JSONRPCClient
 	options []rpc.Option
