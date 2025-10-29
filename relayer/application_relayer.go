@@ -151,7 +151,7 @@ func NewApplicationRelayer(
 		zap.String("destinationBlockchainID", blockchainID),
 	)
 
-	proposerClient := peers.NewProposerVMAPI(cfg.GetPChainAPI(), relayerID.DestinationBlockchainID)
+	proposerClient := peers.NewProposerVMAPI(baseURL, blockchainID, cfg.GetPChainAPI())
 
 	ar := ApplicationRelayer{
 		logger:                    logger,
