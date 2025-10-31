@@ -15,7 +15,7 @@ require (
 	github.com/ava-labs/subnet-evm v0.8.0-fuji
 	github.com/aws/aws-sdk-go-v2 v1.39.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.16
-	github.com/aws/aws-sdk-go-v2/service/kms v1.46.2
+	github.com/aws/aws-sdk-go-v2/service/kms v1.47.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/ginkgo/v2 v2.27.2
