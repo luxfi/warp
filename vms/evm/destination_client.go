@@ -339,7 +339,7 @@ func (c *destinationClient) SendTx(
 
 	if result.err != nil {
 		c.logger.Error(
-			"Transaction failed to be included or confirmed",
+			"Transaction failed to be issued or confirmed",
 			zap.Error(result.err),
 		)
 		return nil, result.err
@@ -370,6 +370,8 @@ func (s *concurrentSigner) processIncomingTransactions() {
 				zap.Error(err),
 			)
 			// If issueTransaction fails, we have not passed the resultChan to waitForReceipt
+			// so we need to release the semaphore slot here and send the error result
+			<-s.queuedTxSemaphore
 			messageData.resultChan <- txResult{
 				receipt: nil,
 				err:     err,
