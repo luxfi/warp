@@ -200,10 +200,11 @@ func (r *ApplicationRelayer) ProcessHeight(
 	)
 	var eg errgroup.Group
 	for _, handler := range handlers {
-		// Acquire the semaphore to limit the number of messages being processed concurrently globally.
-		r.processMessageSemaphore <- struct{}{}
-
+		handler := handler // capture the handler to ensure goroutines use the correct value
 		eg.Go(func() error {
+			// Acquire the semaphore to limit the number of messages being processed concurrently globally.
+			// This needs to be done in the same goroutine as the message processing to avoid deadlocks.
+			r.processMessageSemaphore <- struct{}{}
 			defer func() {
 				<-r.processMessageSemaphore
 			}()
