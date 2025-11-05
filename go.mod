@@ -10,9 +10,9 @@ tool (
 require (
 	github.com/alexliesenfeld/health v0.8.1
 	github.com/ava-labs/avalanchego v1.14.0
-	github.com/ava-labs/icm-contracts v1.0.10-0.20251021215726-c64f31020739
+	github.com/ava-labs/icm-contracts v1.0.10-0.20251105224503-7d4784cff747
 	github.com/ava-labs/libevm v1.13.15-0.20251016142715-1bccf4f2ddb2
-	github.com/ava-labs/subnet-evm v0.8.0-rc.0
+	github.com/ava-labs/subnet-evm v0.8.0
 	github.com/aws/aws-sdk-go-v2 v1.39.6
 	github.com/aws/aws-sdk-go-v2/config v1.31.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.47.1
