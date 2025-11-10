@@ -32,9 +32,9 @@ func NewRedisDatabase(logger logging.Logger, redisURL string, relayerIDs []Relay
 		return nil, err
 	}
 
-    // Disable maintenance notifications to avoid errors in establishing connections
-    // to servers that do not support them.
-    // See https://github.com/redis/go-redis/issues/3536
+	// Disable maintenance notifications to avoid errors in establishing connections
+	// to servers that do not support them.
+	// See https://github.com/redis/go-redis/issues/3536
 	opts.MaintNotificationsConfig = &maintnotifications.Config{
 		Mode: maintnotifications.ModeDisabled,
 	}
