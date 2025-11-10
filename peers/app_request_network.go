@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/avalanchego/api/info"
@@ -113,8 +114,7 @@ type appRequestNetwork struct {
 	lruSubnets         *linked.Hashmap[ids.ID, interface{}]
 	trackedSubnetsLock *sync.RWMutex
 
-	latestSyncedPChainHeight     uint64
-	latestSyncedPChainHeightLock *sync.RWMutex
+	latestSyncedPChainHeight atomic.Uint64
 	// Used by the signature aggregator to limit how far back in P-Chain history it will look
 	maxPChainLookback int64
 
@@ -310,22 +310,22 @@ func NewNetwork(
 	}
 
 	arNetwork := &appRequestNetwork{
-		network:                      testNetwork,
-		handler:                      handler,
-		infoAPI:                      infoAPI,
-		logger:                       logger,
-		validatorSetLock:             new(sync.Mutex),
-		validatorClient:              validatorClient,
-		metrics:                      metrics,
-		trackedSubnets:               localTrackedSubnets,
-		trackedSubnetsLock:           trackedSubnetsLock,
-		manager:                      manager,
-		lruSubnets:                   lruSubnets,
-		canonicalValidatorSetCache:   vdrsCache,
-		epochedValidatorSetCache:     epochedVdrsCache,
-		latestSyncedPChainHeightLock: new(sync.RWMutex),
-		maxPChainLookback:            cfg.GetMaxPChainLookback(),
-		networkUpgradeConfig:         upgradeConfig,
+		network:                    testNetwork,
+		handler:                    handler,
+		infoAPI:                    infoAPI,
+		logger:                     logger,
+		validatorSetLock:           new(sync.Mutex),
+		validatorClient:            validatorClient,
+		metrics:                    metrics,
+		trackedSubnets:             localTrackedSubnets,
+		trackedSubnetsLock:         trackedSubnetsLock,
+		manager:                    manager,
+		lruSubnets:                 lruSubnets,
+		canonicalValidatorSetCache: vdrsCache,
+		epochedValidatorSetCache:   epochedVdrsCache,
+		maxPChainLookback:          cfg.GetMaxPChainLookback(),
+		networkUpgradeConfig:       upgradeConfig,
+		// latestSyncedPChainHeight is initialized to 0 by default (atomic.Uint64 zero value)
 	}
 
 	go arNetwork.startUpdateTrackedValidators(ctx)
@@ -339,9 +339,7 @@ func (n *appRequestNetwork) IsGraniteActivated() bool {
 
 // GetLatestSyncedPChainHeight returns the highest P-Chain height that has been successfully cached.
 func (n *appRequestNetwork) GetLatestSyncedPChainHeight() uint64 {
-	n.latestSyncedPChainHeightLock.RLock()
-	defer n.latestSyncedPChainHeightLock.RUnlock()
-	return n.latestSyncedPChainHeight
+	return n.latestSyncedPChainHeight.Load()
 }
 
 // trackSubnet adds the subnetID to the set of tracked subnets. Returns true iff the subnet was already being tracked.
@@ -417,15 +415,13 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 		return
 	}
 
-	n.latestSyncedPChainHeightLock.Lock()
-	currentSyncedHeight := n.latestSyncedPChainHeight
+	currentSyncedHeight := n.latestSyncedPChainHeight.Load()
 	if currentSyncedHeight == 0 {
 		// Setting the current synced height to be one less than the latest P-Chain upon initialization makes it such that we only fetch the validator sets at the latest P-Chain height to start.
 		currentSyncedHeight = latestPChainHeight - 1
-		n.latestSyncedPChainHeight = currentSyncedHeight
+		n.latestSyncedPChainHeight.Store(currentSyncedHeight)
 		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", currentSyncedHeight))
 	}
-	n.latestSyncedPChainHeightLock.Unlock()
 
 	for currentSyncedHeight < latestPChainHeight {
 		currentSyncedHeight++
@@ -462,7 +458,7 @@ func (n *appRequestNetwork) updateTrackedValidatorSets(ctx context.Context) {
 		if !ok {
 			n.logger.Warn("No validator set found for tracked subnet",
 				zap.Stringer("subnetID", subnetID),
-				zap.Uint64("pchainHeight", n.latestSyncedPChainHeight),
+				zap.Uint64("pchainHeight", n.latestSyncedPChainHeight.Load()),
 			)
 			continue
 		}
@@ -590,9 +586,7 @@ func (n *appRequestNetwork) GetAllValidatorSets(
 	// Use FIFO cache for epoched validators (specific heights) - immutable historical data
 	// FIFO cache key is pchainHeight, fetch function uses the passed height
 	fetchVdrsFunc := func(height uint64) (map[ids.ID]snowVdrs.WarpSet, error) {
-		n.latestSyncedPChainHeightLock.RLock()
-		latestSyncedHeight := n.latestSyncedPChainHeight
-		n.latestSyncedPChainHeightLock.RUnlock()
+		latestSyncedHeight := n.latestSyncedPChainHeight.Load()
 		if n.maxPChainLookback >= 0 && int64(height) < int64(latestSyncedHeight)-n.maxPChainLookback {
 			return nil, fmt.Errorf("requested P-Chain height %d is beyond the max lookback of %d from latest height %d",
 				height, n.maxPChainLookback, latestSyncedHeight,
@@ -611,13 +605,18 @@ func (n *appRequestNetwork) GetAllValidatorSets(
 		return nil, err
 	}
 
-	// If the fetch succeeded, the set is in the cache now so increment the latest synched height if greater
-	// than the current latest synched height
-	n.latestSyncedPChainHeightLock.Lock()
-	if pchainHeight > n.latestSyncedPChainHeight {
-		n.latestSyncedPChainHeight = pchainHeight
+	// If the fetch succeeded, the set is in the cache now so update the latest synced height if greater
+	// than the current latest synced height using atomic compare-and-swap
+	for {
+		current := n.latestSyncedPChainHeight.Load()
+		if pchainHeight <= current {
+			break
+		}
+		if n.latestSyncedPChainHeight.CompareAndSwap(current, pchainHeight) {
+			break
+		}
+		// CAS failed, another goroutine updated it, retry
 	}
-	n.latestSyncedPChainHeightLock.Unlock()
 
 	return validatorSets, nil
 }
