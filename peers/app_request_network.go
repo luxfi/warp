@@ -92,6 +92,7 @@ type AppRequestNetwork interface {
 	StartCacheValidatorSets(ctx context.Context)
 	BuildCanonicalValidators(validatorSet snowVdrs.WarpSet) *CanonicalValidators
 	IsGraniteActivated() bool
+	GetLatestSyncedPChainHeight() uint64
 }
 
 type appRequestNetwork struct {
@@ -111,7 +112,8 @@ type appRequestNetwork struct {
 	lruSubnets         *linked.Hashmap[ids.ID, interface{}]
 	trackedSubnetsLock *sync.RWMutex
 
-	latestSyncedPChainHeight uint64
+	latestSyncedPChainHeight     uint64
+	latestSyncedPChainHeightLock *sync.RWMutex
 	// Used by the signature aggregator to limit how far back in P-Chain history it will look
 	maxPChainLookback int64
 
@@ -307,21 +309,22 @@ func NewNetwork(
 	}
 
 	arNetwork := &appRequestNetwork{
-		network:                    testNetwork,
-		handler:                    handler,
-		infoAPI:                    infoAPI,
-		logger:                     logger,
-		validatorSetLock:           new(sync.Mutex),
-		validatorClient:            validatorClient,
-		metrics:                    metrics,
-		trackedSubnets:             localTrackedSubnets,
-		trackedSubnetsLock:         trackedSubnetsLock,
-		manager:                    manager,
-		lruSubnets:                 lruSubnets,
-		canonicalValidatorSetCache: vdrsCache,
-		epochedValidatorSetCache:   epochedVdrsCache,
-		maxPChainLookback:          cfg.GetMaxPChainLookback(),
-		networkUpgradeConfig:       upgradeConfig,
+		network:                      testNetwork,
+		handler:                      handler,
+		infoAPI:                      infoAPI,
+		logger:                       logger,
+		validatorSetLock:             new(sync.Mutex),
+		validatorClient:              validatorClient,
+		metrics:                      metrics,
+		trackedSubnets:               localTrackedSubnets,
+		trackedSubnetsLock:           trackedSubnetsLock,
+		manager:                      manager,
+		lruSubnets:                   lruSubnets,
+		canonicalValidatorSetCache:   vdrsCache,
+		epochedValidatorSetCache:     epochedVdrsCache,
+		latestSyncedPChainHeightLock: new(sync.RWMutex),
+		maxPChainLookback:            cfg.GetMaxPChainLookback(),
+		networkUpgradeConfig:         upgradeConfig,
 	}
 
 	go arNetwork.startUpdateTrackedValidators(ctx)
@@ -331,6 +334,13 @@ func NewNetwork(
 
 func (n *appRequestNetwork) IsGraniteActivated() bool {
 	return n.networkUpgradeConfig.IsGraniteActivated(time.Now())
+}
+
+// GetLatestSyncedPChainHeight returns the highest P-Chain height that has been successfully cached.
+func (n *appRequestNetwork) GetLatestSyncedPChainHeight() uint64 {
+	n.latestSyncedPChainHeightLock.RLock()
+	defer n.latestSyncedPChainHeightLock.RUnlock()
+	return n.latestSyncedPChainHeight
 }
 
 // trackSubnet adds the subnetID to the set of tracked subnets. Returns true iff the subnet was already being tracked.
@@ -404,15 +414,20 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 		return
 	}
 
-	if n.latestSyncedPChainHeight == 0 {
+	n.latestSyncedPChainHeightLock.Lock()
+	currentSyncedHeight := n.latestSyncedPChainHeight
+	if currentSyncedHeight == 0 {
 		// First time initialization
-		n.latestSyncedPChainHeight = latestPChainHeight - 1
-		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", n.latestSyncedPChainHeight))
+		currentSyncedHeight = latestPChainHeight - 1
+		n.latestSyncedPChainHeight = currentSyncedHeight
+		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", currentSyncedHeight))
 	}
+	n.latestSyncedPChainHeightLock.Unlock()
 
-	for n.latestSyncedPChainHeight < latestPChainHeight {
-		n.latestSyncedPChainHeight++
-		_, err := n.GetAllValidatorSets(ctx, n.latestSyncedPChainHeight)
+	for currentSyncedHeight < latestPChainHeight {
+		currentSyncedHeight++
+		// GetAllValidatorSets will update latestSyncedPChainHeight after successful cache
+		_, err := n.GetAllValidatorSets(ctx, currentSyncedHeight)
 		// If we fail to get the validator sets for this height, log and check the next height.
 		if err != nil {
 			n.logger.Error("Failed to get canonical validators",
@@ -421,6 +436,10 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 			)
 			continue
 		}
+		// Update currentSyncedHeight to match what GetAllValidatorSets updated
+		n.latestSyncedPChainHeightLock.RLock()
+		currentSyncedHeight = n.latestSyncedPChainHeight
+		n.latestSyncedPChainHeightLock.RUnlock()
 	}
 }
 
@@ -572,9 +591,12 @@ func (n *appRequestNetwork) GetAllValidatorSets(
 	// Use FIFO cache for epoched validators (specific heights) - immutable historical data
 	// FIFO cache key is pchainHeight, fetch function uses the passed height
 	fetchVdrsFunc := func(height uint64) (map[ids.ID]snowVdrs.WarpSet, error) {
-		if n.maxPChainLookback >= 0 && int64(height) < int64(n.latestSyncedPChainHeight)-n.maxPChainLookback {
+		n.latestSyncedPChainHeightLock.RLock()
+		latestSyncedHeight := n.latestSyncedPChainHeight
+		n.latestSyncedPChainHeightLock.RUnlock()
+		if n.maxPChainLookback >= 0 && int64(height) < int64(latestSyncedHeight)-n.maxPChainLookback {
 			return nil, fmt.Errorf("requested P-Chain height %d is beyond the max lookback of %d from latest height %d",
-				height, n.maxPChainLookback, n.latestSyncedPChainHeight,
+				height, n.maxPChainLookback, latestSyncedHeight,
 			)
 		}
 
@@ -584,7 +606,21 @@ func (n *appRequestNetwork) GetAllValidatorSets(
 		n.setPChainAPICallLatencyMS(time.Since(startPChainAPICall).Milliseconds())
 		return validatorSet, err
 	}
-	return n.epochedValidatorSetCache.Get(pchainHeight, fetchVdrsFunc)
+
+	validatorSets, err := n.epochedValidatorSetCache.Get(pchainHeight, fetchVdrsFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the fetch succeded, the set is in the cache now so increment the latest synched height if greater
+	// than the current latest synched height
+	n.latestSyncedPChainHeightLock.Lock()
+	if pchainHeight > n.latestSyncedPChainHeight {
+		n.latestSyncedPChainHeight = pchainHeight
+	}
+	n.latestSyncedPChainHeightLock.Unlock()
+
+	return validatorSets, nil
 }
 
 // GetCanonicalValidators returns the validator information in canonical ordering for the given subnet
@@ -706,9 +742,19 @@ func GetNetworkHealthFunc(
 	subnetIDs []ids.ID,
 ) func(context.Context) error {
 	return func(ctx context.Context) error {
+		cachedHeight := network.GetLatestSyncedPChainHeight()
+		var pchainHeight uint64
+		if cachedHeight > 0 {
+			pchainHeight = cachedHeight
+			logger.Debug("Using cached P-Chain height for health check", zap.Uint64("height", pchainHeight))
+		} else {
+			pchainHeight = pchainapi.ProposedHeight
+			logger.Debug("Cache not initialized, using ProposedHeight for health check")
+		}
+
 		allValidatorSets, err := network.GetAllValidatorSets(
 			ctx,
-			pchainapi.ProposedHeight,
+			pchainHeight,
 		)
 		if err != nil {
 			logger.Error("Failed to get all validator sets", zap.Error(err))
