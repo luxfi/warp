@@ -439,10 +439,6 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 			)
 			continue
 		}
-		// Update currentSyncedHeight to match what GetAllValidatorSets updated
-		n.latestSyncedPChainHeightLock.RLock()
-		currentSyncedHeight = n.latestSyncedPChainHeight
-		n.latestSyncedPChainHeightLock.RUnlock()
 	}
 }
 
