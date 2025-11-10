@@ -417,7 +417,8 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 
 	currentSyncedHeight := n.latestSyncedPChainHeight.Load()
 	if currentSyncedHeight == 0 {
-		// Setting the current synced height to be one less than the latest P-Chain upon initialization makes it such that we only fetch the validator sets at the latest P-Chain height to start.
+		// Setting the current synced height to be one less than the latest P-Chain upon initialization makes it
+		// such that we only fetch the validator sets at the latest P-Chain height to start.
 		currentSyncedHeight = latestPChainHeight - 1
 		n.latestSyncedPChainHeight.Store(currentSyncedHeight)
 		n.logger.Info("Initializing P-Chain height", zap.Uint64("height", currentSyncedHeight))
