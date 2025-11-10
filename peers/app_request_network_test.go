@@ -236,21 +236,21 @@ func TestGetLatestSyncedPChainHeight(t *testing.T) {
 
 	testCases := []struct {
 		name                   string
-		heightToCache          uint64
+		fetchedHeight          uint64
 		expectedSyncedHeight   uint64
 		shouldCallValidatorAPI bool
 		setupMock              func()
 	}{
 		{
 			name:                   "initially returns zero",
-			heightToCache:          0,
+			fetchedHeight:          0,
 			expectedSyncedHeight:   0,
 			shouldCallValidatorAPI: false,
 			setupMock:              func() {},
 		},
 		{
 			name:                   "updates after caching first height",
-			heightToCache:          100,
+			fetchedHeight:          100,
 			expectedSyncedHeight:   100,
 			shouldCallValidatorAPI: true,
 			setupMock: func() {
@@ -261,7 +261,7 @@ func TestGetLatestSyncedPChainHeight(t *testing.T) {
 		},
 		{
 			name:                   "does not update when caching lower height",
-			heightToCache:          50,
+			fetchedHeight:          50,
 			expectedSyncedHeight:   100,
 			shouldCallValidatorAPI: true,
 			setupMock: func() {
@@ -272,12 +272,23 @@ func TestGetLatestSyncedPChainHeight(t *testing.T) {
 		},
 		{
 			name:                   "updates when caching higher height",
-			heightToCache:          200,
+			fetchedHeight:          200,
 			expectedSyncedHeight:   200,
 			shouldCallValidatorAPI: true,
 			setupMock: func() {
 				mockValidatorClient.EXPECT().GetAllValidatorSets(
 					gomock.Any(), uint64(200),
+				).Return(validatorSet, nil).Times(1)
+			},
+		},
+		{
+			name:                   "does not cache when fetching proposed height",
+			fetchedHeight:          pchainapi.ProposedHeight,
+			expectedSyncedHeight:   200,
+			shouldCallValidatorAPI: true,
+			setupMock: func() {
+				mockValidatorClient.EXPECT().GetAllValidatorSets(
+					gomock.Any(), gomock.Any(),
 				).Return(validatorSet, nil).Times(1)
 			},
 		},
@@ -297,7 +308,7 @@ func TestGetLatestSyncedPChainHeight(t *testing.T) {
 			testCase.setupMock()
 
 			if testCase.shouldCallValidatorAPI {
-				_, err := arNetwork.GetAllValidatorSets(context.Background(), testCase.heightToCache)
+				_, err := arNetwork.GetAllValidatorSets(context.Background(), testCase.fetchedHeight)
 				require.NoError(t, err)
 			}
 
