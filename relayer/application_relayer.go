@@ -371,7 +371,16 @@ func (r *ApplicationRelayer) RelayerID() database.RelayerID {
 func (r *ApplicationRelayer) getPChainHeightForDestination(ctx context.Context) (uint64, error) {
 	if !r.network.IsGraniteActivated() {
 		r.logger.Debug("Granite is not activated, using ProposedHeight")
-		return pchainapi.ProposedHeight, nil
+		// Get the proposed height from the ProposerVM API to be able to cache the validator sets for this height
+		height, err := r.proposerClient.GetProposedHeight(ctx)
+		if err != nil {
+			r.logger.Warn("Failed to get proposed height using ProposerVM API, using ProposedHeight constant",
+				zap.Stringer("destinationBlockchainID", r.relayerID.DestinationBlockchainID),
+				zap.Error(err),
+			)
+			return pchainapi.ProposedHeight, nil
+		}
+		return height, nil
 	}
 	epoch, err := r.proposerClient.GetCurrentEpoch(ctx)
 	if err != nil {
