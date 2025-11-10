@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/libevm/common"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +30,10 @@ func NewRedisDatabase(logger logging.Logger, redisURL string, relayerIDs []Relay
 			zap.Error(err),
 		)
 		return nil, err
+	}
+
+	opts.MaintNotificationsConfig = &maintnotifications.Config{
+		Mode: maintnotifications.ModeDisabled,
 	}
 
 	// Create a new Redis client.
