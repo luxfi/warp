@@ -379,6 +379,7 @@ func (n *appRequestNetwork) TrackSubnet(ctx context.Context, subnetID ids.ID) {
 func (n *appRequestNetwork) startUpdateTrackedValidators(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 	ticker := time.NewTicker(ValidatorRefreshPeriod)
+	n.updateTrackedValidatorSets(ctx)
 
 	for {
 		select {
@@ -394,6 +395,7 @@ func (n *appRequestNetwork) startUpdateTrackedValidators(ctx context.Context) {
 func (n *appRequestNetwork) StartCacheValidatorSets(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
 	ticker := time.NewTicker(ValidatorRefreshPeriod)
+	n.cacheMostRecentValidatorSets(ctx)
 
 	for {
 		select {
