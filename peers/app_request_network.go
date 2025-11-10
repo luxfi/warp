@@ -47,6 +47,7 @@ import (
 const (
 	InboundMessageChannelSize = 1000
 	ValidatorRefreshPeriod    = time.Minute * 1
+	ValidatorPreFetchPeriod   = time.Second * 5
 	NumBootstrapNodes         = 5
 	// Maximum number of subnets that can be tracked by the app request network
 	// This value is defined in avalanchego peers package
@@ -394,7 +395,7 @@ func (n *appRequestNetwork) startUpdateTrackedValidators(ctx context.Context) {
 
 func (n *appRequestNetwork) StartCacheValidatorSets(ctx context.Context) {
 	// Fetch validators immediately when called, and refresh every ValidatorRefreshPeriod
-	ticker := time.NewTicker(ValidatorRefreshPeriod)
+	ticker := time.NewTicker(ValidatorPreFetchPeriod)
 	n.cacheMostRecentValidatorSets(ctx)
 
 	for {
@@ -433,7 +434,7 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 		// If we fail to get the validator sets for this height, log and check the next height.
 		if err != nil {
 			n.logger.Error("Failed to get canonical validators",
-				zap.Uint64("height", latestPChainHeight),
+				zap.Uint64("height", currentSyncedHeight),
 				zap.Error(err),
 			)
 			continue
