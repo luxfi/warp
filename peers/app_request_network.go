@@ -612,7 +612,7 @@ func (n *appRequestNetwork) GetAllValidatorSets(
 		return nil, err
 	}
 
-	// If the fetch succeded, the set is in the cache now so increment the latest synched height if greater
+	// If the fetch succeeded, the set is in the cache now so increment the latest synched height if greater
 	// than the current latest synched height
 	n.latestSyncedPChainHeightLock.Lock()
 	if pchainHeight > n.latestSyncedPChainHeight {
