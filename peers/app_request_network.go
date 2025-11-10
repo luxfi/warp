@@ -46,7 +46,7 @@ import (
 
 const (
 	InboundMessageChannelSize = 1000
-	ValidatorRefreshPeriod    = time.Second * 5
+	ValidatorRefreshPeriod    = time.Minute * 1
 	NumBootstrapNodes         = 5
 	// Maximum number of subnets that can be tracked by the app request network
 	// This value is defined in avalanchego peers package
