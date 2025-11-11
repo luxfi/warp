@@ -440,11 +440,12 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 }
 
 func (n *appRequestNetwork) updateTrackedValidatorSets(ctx context.Context) {
-	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	cctx, cancel := context.WithTimeout(ctx, 2*sharedUtils.DefaultRPCTimeout)
 	defer cancel()
 	latestPChainHeight, err := n.validatorClient.GetLatestHeight(ctx)
 	if err != nil {
 		n.logger.Warn("Failed to get latest P-Chain height", zap.Error(err))
+		return
 	}
 	allValidators, err := n.GetAllValidatorSets(cctx, latestPChainHeight)
 	// If we fail to get the validator sets, log and return
