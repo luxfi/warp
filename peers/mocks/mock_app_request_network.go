@@ -90,6 +90,20 @@ func (mr *MockAppRequestNetworkMockRecorder) GetCanonicalValidators(ctx, subnetI
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCanonicalValidators", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetCanonicalValidators), ctx, subnetID, skipCache, pchainHeight)
 }
 
+// GetLatestSyncedPChainHeight mocks base method.
+func (m *MockAppRequestNetwork) GetLatestSyncedPChainHeight() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestSyncedPChainHeight")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// GetLatestSyncedPChainHeight indicates an expected call of GetLatestSyncedPChainHeight.
+func (mr *MockAppRequestNetworkMockRecorder) GetLatestSyncedPChainHeight() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestSyncedPChainHeight", reflect.TypeOf((*MockAppRequestNetwork)(nil).GetLatestSyncedPChainHeight))
+}
+
 // GetSubnetID mocks base method.
 func (m *MockAppRequestNetwork) GetSubnetID(ctx context.Context, blockchainID ids.ID) (ids.ID, error) {
 	m.ctrl.T.Helper()
