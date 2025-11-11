@@ -440,13 +440,15 @@ func (n *appRequestNetwork) cacheMostRecentValidatorSets(ctx context.Context) {
 }
 
 func (n *appRequestNetwork) updateTrackedValidatorSets(ctx context.Context) {
-	cctx, cancel := context.WithTimeout(ctx, 2*sharedUtils.DefaultRPCTimeout)
+	cctx, cancel := context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
 	defer cancel()
-	latestPChainHeight, err := n.validatorClient.GetLatestHeight(ctx)
+	latestPChainHeight, err := n.validatorClient.GetLatestHeight(cctx)
 	if err != nil {
 		n.logger.Warn("Failed to get latest P-Chain height", zap.Error(err))
 		return
 	}
+	cctx, cancel = context.WithTimeout(ctx, sharedUtils.DefaultRPCTimeout)
+	defer cancel()
 	allValidators, err := n.GetAllValidatorSets(cctx, latestPChainHeight)
 	// If we fail to get the validator sets, log and return
 	if err != nil {
@@ -747,11 +749,7 @@ func GetNetworkHealthFunc(
 ) func(context.Context) error {
 	return func(ctx context.Context) error {
 		cachedHeight := network.GetLatestSyncedPChainHeight()
-		var pchainHeight uint64
-		if cachedHeight > 0 {
-			pchainHeight = cachedHeight
-			logger.Debug("Using cached P-Chain height for health check", zap.Uint64("height", pchainHeight))
-		} else {
+		if cachedHeight == 0 {
 			// This should only happen at startup when the cache is not yet initialized.
 			logger.Info("No cached P-Chain height, skipping network health check")
 			return nil
@@ -759,7 +757,7 @@ func GetNetworkHealthFunc(
 
 		allValidatorSets, err := network.GetAllValidatorSets(
 			ctx,
-			pchainHeight,
+			cachedHeight,
 		)
 		if err != nil {
 			logger.Error("Failed to get all validator sets", zap.Error(err))
