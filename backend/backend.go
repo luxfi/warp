@@ -4,10 +4,12 @@
 package backend
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/luxfi/crypto/bls"
 	"github.com/luxfi/geth/common"
 	"github.com/luxfi/warp"
 	"github.com/luxfi/warp/signer"
@@ -70,15 +72,16 @@ func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error {
 	// For simplicity, we'll create a single-signer BitSetSignature
 	// In production, this would aggregate signatures from multiple validators
 	bitSet := warp.NewBitSet()
+	signerPKBytes := bls.PublicKeyToCompressedBytes(b.signer.GetPublicKey())
 	for i, v := range validators {
-		if v.PublicKey.Equal(b.signer.GetPublicKey()) {
+		if bytes.Equal(bls.PublicKeyToCompressedBytes(v.PublicKey), signerPKBytes) {
 			bitSet.Add(i)
 			break
 		}
 	}
 
 	sigBytes := [warp.SignatureLen]byte{}
-	copy(sigBytes[:], sig.Bytes())
+	copy(sigBytes[:], bls.SignatureToBytes(sig))
 
 	bitSetSig := &warp.BitSetSignature{
 		Signers:   bitSet,

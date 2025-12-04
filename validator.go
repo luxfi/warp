@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/luxfi/crypto/bls"
 	"github.com/luxfi/geth/common"
-	"github.com/luxfi/warp/bls"
 )
 
 // Validator represents a validator in the network
@@ -171,12 +171,12 @@ func ValidatorSetToMap(validators []*Validator) map[string]*Validator {
 
 // ParsePublicKey parses a BLS public key from bytes
 func ParsePublicKey(publicKeyBytes []byte) (*bls.PublicKey, error) {
-	return bls.PublicKeyFromBytes(publicKeyBytes)
+	return bls.PublicKeyFromCompressedBytes(publicKeyBytes)
 }
 
 // SerializePublicKey serializes a BLS public key to bytes
 func SerializePublicKey(publicKey *bls.PublicKey) []byte {
-	return bls.PublicKeyToBytes(publicKey)
+	return bls.PublicKeyToCompressedBytes(publicKey)
 }
 
 // ValidateValidatorSet performs validation on a validator set
