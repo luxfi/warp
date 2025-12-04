@@ -18,25 +18,31 @@ func NewBitSet() Bits {
 
 // Add adds an index to the bit set
 func (b *Bits) Add(i int) {
+	if i < 0 {
+		return
+	}
 	byteIndex := i / 8
-	bitIndex := uint(i % 8)
+	bitIndex := i % 8
 
 	// Grow slice if needed
 	for len(*b) <= byteIndex {
 		*b = append(*b, 0)
 	}
 
-	(*b)[byteIndex] |= 1 << bitIndex
+	(*b)[byteIndex] |= 1 << uint(bitIndex) //nolint:gosec // bitIndex is always 0-7
 }
 
 // Contains returns true if the bit set contains the index
 func (b Bits) Contains(i int) bool {
+	if i < 0 {
+		return false
+	}
 	byteIndex := i / 8
 	if byteIndex >= len(b) {
 		return false
 	}
-	bitIndex := uint(i % 8)
-	return (b[byteIndex] & (1 << bitIndex)) != 0
+	bitIndex := i % 8
+	return (b[byteIndex] & (1 << uint(bitIndex))) != 0 //nolint:gosec // bitIndex is always 0-7
 }
 
 // BitLen returns the number of bits that can be represented (capacity)
@@ -123,9 +129,7 @@ func (b Bits) Union(other Bits) Bits {
 	}
 
 	result := make(Bits, maxLen)
-	for i := 0; i < len(b); i++ {
-		result[i] = b[i]
-	}
+	copy(result, b)
 	for i := 0; i < len(other); i++ {
 		result[i] |= other[i]
 	}
