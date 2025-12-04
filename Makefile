@@ -15,7 +15,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
 # Build flags
 GO_BUILD_FLAGS := -v
-GO_TEST_FLAGS := -v -race -coverprofile=coverage.txt -covermode=atomic
+GO_TEST_FLAGS := -v -race -coverprofile=coverage.txt
 
 # Installation paths
 INSTALL_PREFIX ?= /usr/local
