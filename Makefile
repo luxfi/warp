@@ -106,8 +106,8 @@ fmt:
 lint:
 	@echo "$(GREEN)Linting code...$(NC)"
 	@if ! which golangci-lint > /dev/null; then \
-		echo "$(YELLOW)Installing golangci-lint...$(NC)"; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+		echo "$(YELLOW)Installing golangci-lint v2...$(NC)"; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6; \
 	fi
 	@golangci-lint run --timeout=5m
 	@echo "$(GREEN)Linting complete!$(NC)"
