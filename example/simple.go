@@ -5,21 +5,22 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/luxfi/warp/types"
 )
 
 // SimpleMessage implements the types.Message interface
 type SimpleMessage struct {
-	id        types.ID
-	sourceID  types.ID
-	destID    types.ID
-	payload   []byte
+	id       types.ID
+	sourceID types.ID
+	destID   types.ID
+	payload  []byte
 }
 
-func (m *SimpleMessage) ID() types.ID                { return m.id }
-func (m *SimpleMessage) SourceChainID() types.ID     { return m.sourceID }
+func (m *SimpleMessage) ID() types.ID                 { return m.id }
+func (m *SimpleMessage) SourceChainID() types.ID      { return m.sourceID }
 func (m *SimpleMessage) DestinationChainID() types.ID { return m.destID }
-func (m *SimpleMessage) Payload() []byte             { return m.payload }
+func (m *SimpleMessage) Payload() []byte              { return m.payload }
 func (m *SimpleMessage) Serialize() ([]byte, error) {
 	// Simple concatenation for example
 	result := make([]byte, 0, 32*3+len(m.payload))
@@ -37,7 +38,7 @@ func main() {
 		destID:   types.ID{0xBB},
 		payload:  []byte("Hello from chain A to chain B!"),
 	}
-	
+
 	fmt.Printf("Message ID: %x\n", msg.ID())
 	fmt.Printf("Source Chain: %x\n", msg.SourceChainID())
 	fmt.Printf("Destination Chain: %x\n", msg.DestinationChainID())

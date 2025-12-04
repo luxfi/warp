@@ -50,7 +50,7 @@ func ParsePayload(bytes []byte) (Payload, error) {
 	// Try to decode as each payload type
 	// This is a simplified approach - in production you'd use a type registry
 	var err error
-	
+
 	// Try AddressedCall
 	ac := &AddressedCall{}
 	if err = rlp.DecodeBytes(bytes, ac); err == nil {
@@ -58,7 +58,7 @@ func ParsePayload(bytes []byte) (Payload, error) {
 			return ac, nil
 		}
 	}
-	
+
 	// Try Hash
 	h := &Hash{}
 	if err = rlp.DecodeBytes(bytes, h); err == nil {
@@ -66,7 +66,7 @@ func ParsePayload(bytes []byte) (Payload, error) {
 			return h, nil
 		}
 	}
-	
+
 	// Try L1ValidatorRegistration
 	lvr := &L1ValidatorRegistration{}
 	if err = rlp.DecodeBytes(bytes, lvr); err == nil {
@@ -74,7 +74,7 @@ func ParsePayload(bytes []byte) (Payload, error) {
 			return lvr, nil
 		}
 	}
-	
+
 	// Try RegisterL1Validator
 	rlv := &RegisterL1Validator{}
 	if err = rlp.DecodeBytes(bytes, rlv); err == nil {
@@ -82,7 +82,7 @@ func ParsePayload(bytes []byte) (Payload, error) {
 			return rlv, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("%w: unable to decode payload", ErrInvalidPayload)
 }
 
@@ -207,10 +207,10 @@ func (r *L1ValidatorRegistration) Bytes() []byte {
 
 // RegisterL1Validator adds a validator to a subnet
 type RegisterL1Validator struct {
-	SubnetID        []byte `serialize:"true"`
-	NodeID          []byte `serialize:"true"`
-	Weight          uint64 `serialize:"true"`
-	BLSPublicKey    []byte `serialize:"true"`
+	SubnetID         []byte `serialize:"true"`
+	NodeID           []byte `serialize:"true"`
+	Weight           uint64 `serialize:"true"`
+	BLSPublicKey     []byte `serialize:"true"`
 	RegistrationTime uint64 `serialize:"true"`
 }
 
@@ -223,10 +223,10 @@ func NewRegisterL1Validator(
 	registrationTime uint64,
 ) (*RegisterL1Validator, error) {
 	r := &RegisterL1Validator{
-		SubnetID:        subnetID,
-		NodeID:          nodeID,
-		Weight:          weight,
-		BLSPublicKey:    blsPublicKey,
+		SubnetID:         subnetID,
+		NodeID:           nodeID,
+		Weight:           weight,
+		BLSPublicKey:     blsPublicKey,
 		RegistrationTime: registrationTime,
 	}
 	if err := r.Verify(); err != nil {
@@ -260,9 +260,9 @@ func (r *RegisterL1Validator) Bytes() []byte {
 
 // SubnetToL1Conversion represents a subnet conversion message
 type SubnetToL1Conversion struct {
-	SubnetID []byte `serialize:"true"`
-	ChainID  []byte `serialize:"true"`
-	Address  []byte `serialize:"true"`
+	SubnetID []byte   `serialize:"true"`
+	ChainID  []byte   `serialize:"true"`
+	Address  []byte   `serialize:"true"`
 	Managers [][]byte `serialize:"true"`
 }
 

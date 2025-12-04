@@ -85,7 +85,9 @@ func (b *SignerBackend) AddSigner(index int, signer Signer) error {
 }
 
 // Sign signs a message with multiple signers
-func (b *SignerBackend) Sign(ctx context.Context, msg *warp.UnsignedMessage, signerIndices []int) (*warp.Message, error) {
+func (b *SignerBackend) Sign(
+	ctx context.Context, msg *warp.UnsignedMessage, signerIndices []int,
+) (*warp.Message, error) {
 	if len(signerIndices) == 0 {
 		return nil, errors.New("no signers specified")
 	}
