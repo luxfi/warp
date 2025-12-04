@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/luxfi/crypto/bls"
 	"github.com/luxfi/warp"
-	"github.com/luxfi/warp/bls"
 )
 
 // Signer is an interface for signing warp messages
@@ -21,17 +21,17 @@ type Signer interface {
 	GetPublicKey() *bls.PublicKey
 }
 
-// LocalSigner signs messages with a local private key
+// LocalSigner signs messages with a local secret key
 type LocalSigner struct {
-	sk *bls.PrivateKey
+	sk *bls.SecretKey
 	pk *bls.PublicKey
 }
 
 // NewLocalSigner creates a new local signer
-func NewLocalSigner(sk *bls.PrivateKey) *LocalSigner {
+func NewLocalSigner(sk *bls.SecretKey) *LocalSigner {
 	return &LocalSigner{
 		sk: sk,
-		pk: bls.PublicFromPrivateKey(sk),
+		pk: sk.PublicKey(),
 	}
 }
 
@@ -76,7 +76,7 @@ func (b *SignerBackend) AddSigner(index int, signer Signer) error {
 
 	// Verify public key matches
 	expectedPK := b.validators[index].PublicKey
-	if !expectedPK.Equal(signer.GetPublicKey()) {
+	if expectedPK != signer.GetPublicKey() {
 		return errors.New("signer public key does not match validator")
 	}
 
@@ -91,14 +91,14 @@ func (b *SignerBackend) Sign(ctx context.Context, msg *warp.UnsignedMessage, sig
 	}
 
 	// Get signers
-	signers := make([]*bls.PrivateKey, 0, len(signerIndices))
+	signers := make([]*bls.SecretKey, 0, len(signerIndices))
 	for _, idx := range signerIndices {
 		signer, ok := b.signers[idx]
 		if !ok {
 			return nil, fmt.Errorf("no signer for validator %d", idx)
 		}
 
-		// For local signers, we need the private key
+		// For local signers, we need the secret key
 		localSigner, ok := signer.(*LocalSigner)
 		if !ok {
 			return nil, fmt.Errorf("signer %d is not a local signer", idx)
@@ -139,7 +139,7 @@ func NewRemoteSigner(client SignerClient) (*RemoteSigner, error) {
 		return nil, fmt.Errorf("failed to get public key: %w", err)
 	}
 
-	pk, err := bls.PublicKeyFromBytes(pkBytes)
+	pk, err := bls.PublicKeyFromCompressedBytes(pkBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse public key: %w", err)
 	}

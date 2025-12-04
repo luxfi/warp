@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/luxfi/warp/bls"
+	"github.com/luxfi/crypto/bls"
 )
 
 // Signature is an interface for warp message signatures
@@ -146,15 +146,15 @@ func AggregateSignatures(signatures []*bls.Signature) (*bls.Signature, error) {
 	return bls.AggregateSignatures(signatures)
 }
 
-// Sign creates a signature for a message using a private key
-func Sign(msg []byte, sk *bls.PrivateKey) (*bls.Signature, error) {
-	return bls.Sign(sk, msg)
+// Sign creates a signature for a message using a secret key
+func Sign(msg []byte, sk *bls.SecretKey) (*bls.Signature, error) {
+	return sk.Sign(msg)
 }
 
 // SignMessage signs a warp message with a set of signers
 func SignMessage(
 	msg *UnsignedMessage,
-	signers []*bls.PrivateKey,
+	signers []*bls.SecretKey,
 	validators []*Validator,
 ) (*Message, error) {
 	if len(signers) == 0 {
@@ -170,10 +170,10 @@ func SignMessage(
 	// Sign with each signer
 	for _, sk := range signers {
 		// Find validator index for this signer
-		pk := bls.PublicFromPrivateKey(sk)
+		pk := sk.PublicKey()
 		index := -1
 		for i, v := range validators {
-			if v.PublicKey.Equal(pk) {
+			if v.PublicKey == pk {
 				index = i
 				break
 			}
@@ -201,7 +201,7 @@ func SignMessage(
 
 	// Create bit set signature
 	aggSigBytes := [bls.SignatureLen]byte{}
-	copy(aggSigBytes[:], aggSig.Bytes())
+	copy(aggSigBytes[:], bls.SignatureToBytes(aggSig))
 
 	signature := &BitSetSignature{
 		Signers:   signerBits,
