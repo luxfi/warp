@@ -1,6 +1,38 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/luxfi/warp
+
+linters:
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+
 linters-settings:
   govet:
-    check-shadowing: true
+    enable:
+      - shadow
   gocyclo:
     min-complexity: 15
   goconst:
@@ -10,8 +42,6 @@ linters-settings:
     locale: US
   lll:
     line-length: 140
-  goimports:
-    local-prefixes: github.com/luxfi/warp
   gocritic:
     enabled-tags:
       - diagnostic
@@ -29,35 +59,6 @@ linters-settings:
     lines: 100
     statements: 50
 
-linters:
-  disable-all: true
-  enable:
-    - bodyclose
-    - depguard
-    - dogsled
-    - dupl
-    - errcheck
-    - funlen
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    - lll
-    - misspell
-    - nakedret
-    - staticcheck
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - whitespace
-
 issues:
   exclude-rules:
     - path: _test\.go
@@ -66,15 +67,12 @@ issues:
         - errcheck
         - dupl
         - gosec
-    - path: cmd/
-      linters:
-        - gochecknoinits
     - linters:
         - lll
       source: "^//go:generate "
+    - linters:
+        - unparam
+      text: "is always nil"
 
 run:
-  skip-dirs:
-    - build
-    - vendor
-  deadline: 5m
+  timeout: 5m

@@ -16,10 +16,10 @@ type Scheme string
 const (
 	// SchemeBLS uses BLS signatures (Warp V1 compatible)
 	SchemeBLS Scheme = "bls"
-	
+
 	// SchemeRingtail uses post-quantum ring signatures
 	SchemeRingtail Scheme = "ringtail"
-	
+
 	// SchemeHybrid uses both BLS and Ringtail for migration period
 	SchemeHybrid Scheme = "hybrid"
 )
@@ -28,10 +28,10 @@ const (
 type Verifier interface {
 	// Scheme returns the signature scheme this verifier uses
 	Scheme() Scheme
-	
+
 	// Verify checks if a signature is valid for the given message
 	Verify(ctx context.Context, message []byte, signature Signature, signers SignerSet) error
-	
+
 	// VerifyAggregate verifies an aggregated signature from multiple signers
 	VerifyAggregate(ctx context.Context, message []byte, signature Signature, signers SignerSet) error
 }
@@ -40,10 +40,10 @@ type Verifier interface {
 type Signer interface {
 	// Scheme returns the signature scheme this signer uses
 	Scheme() Scheme
-	
+
 	// Sign creates a signature for the message
 	Sign(ctx context.Context, message []byte, key PrivateKey) (Signature, error)
-	
+
 	// AggregateSign creates an aggregated signature with other signers
 	AggregateSign(ctx context.Context, message []byte, keys []PrivateKey) (Signature, error)
 }
@@ -52,10 +52,10 @@ type Signer interface {
 type Signature interface {
 	// Scheme returns which signature scheme created this signature
 	Scheme() Scheme
-	
+
 	// Bytes returns the serialized signature
 	Bytes() []byte
-	
+
 	// Verify checks if this signature is valid (self-contained verification)
 	Verify(message []byte, publicKey PublicKey) error
 }
@@ -64,13 +64,13 @@ type Signature interface {
 type SignerSet interface {
 	// GetSigner returns a signer by index
 	GetSigner(index int) (PublicKey, uint64, error)
-	
+
 	// TotalWeight returns the total weight of all signers
 	TotalWeight() uint64
-	
+
 	// Threshold returns the minimum weight needed for validity
 	Threshold() uint64
-	
+
 	// Contains checks if a public key is in the set
 	Contains(key PublicKey) (index int, weight uint64, exists bool)
 }
@@ -79,10 +79,10 @@ type SignerSet interface {
 type PublicKey interface {
 	// Scheme returns which signature scheme this key is for
 	Scheme() Scheme
-	
+
 	// Bytes returns the serialized public key
 	Bytes() []byte
-	
+
 	// Equal checks if two public keys are the same
 	Equal(other PublicKey) bool
 }
@@ -91,7 +91,7 @@ type PublicKey interface {
 type PrivateKey interface {
 	// PublicKey returns the corresponding public key
 	PublicKey() PublicKey
-	
+
 	// Bytes returns the serialized private key (handle with care!)
 	Bytes() []byte
 }

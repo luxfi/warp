@@ -7,7 +7,7 @@ package warp
 import (
 	"encoding/hex"
 	"fmt"
-	
+
 	"github.com/luxfi/warp/types"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +30,7 @@ between Lux networks and other blockchains.`,
 	cmd.AddCommand(newSignCmd())
 	cmd.AddCommand(newVerifyCmd())
 	cmd.AddCommand(newRelayCmd())
-	
+
 	return cmd
 }
 
@@ -40,7 +40,7 @@ func newCreateCmd() *cobra.Command {
 		destChain   string
 		payload     string
 	)
-	
+
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new cross-chain message",
@@ -54,23 +54,23 @@ Example:
 			if err != nil {
 				return fmt.Errorf("invalid source chain ID: %w", err)
 			}
-			
+
 			destID, err := hexToID(destChain)
 			if err != nil {
 				return fmt.Errorf("invalid destination chain ID: %w", err)
 			}
-			
+
 			// Create message
 			msg := &SimpleMessage{
 				sourceID: sourceID,
 				destID:   destID,
 				payload:  []byte(payload),
 			}
-			
+
 			// Generate message ID
 			serialized, _ := msg.Serialize()
 			msg.id = types.ID(hashBytes(serialized))
-			
+
 			// Output message
 			fmt.Printf("Warp message created:\n")
 			fmt.Printf("  ID: %x\n", msg.ID())
@@ -78,18 +78,18 @@ Example:
 			fmt.Printf("  Destination: %x\n", msg.DestinationChainID())
 			fmt.Printf("  Payload: %s\n", msg.Payload())
 			fmt.Printf("  Serialized: %x\n", serialized)
-			
+
 			return nil
 		},
 	}
-	
+
 	cmd.Flags().StringVarP(&sourceChain, "source", "s", "", "Source chain ID (hex)")
 	cmd.Flags().StringVarP(&destChain, "dest", "d", "", "Destination chain ID (hex)")
 	cmd.Flags().StringVarP(&payload, "payload", "p", "", "Message payload")
-	cmd.MarkFlagRequired("source")
-	cmd.MarkFlagRequired("dest")
-	cmd.MarkFlagRequired("payload")
-	
+	_ = cmd.MarkFlagRequired("source")
+	_ = cmd.MarkFlagRequired("dest")
+	_ = cmd.MarkFlagRequired("payload")
+
 	return cmd
 }
 
@@ -98,7 +98,7 @@ func newSignCmd() *cobra.Command {
 		messageHex string
 		keyFile    string
 	)
-	
+
 	cmd := &cobra.Command{
 		Use:   "sign",
 		Short: "Sign a Warp message",
@@ -112,21 +112,21 @@ Example:
 			if err != nil {
 				return fmt.Errorf("invalid message hex: %w", err)
 			}
-			
+
 			// TODO: Implement BLS signing
 			fmt.Printf("Message to sign: %x\n", messageBytes)
 			fmt.Printf("Key file: %s\n", keyFile)
 			fmt.Println("Note: BLS signing will be implemented with validator integration")
-			
+
 			return nil
 		},
 	}
-	
+
 	cmd.Flags().StringVarP(&messageHex, "message", "m", "", "Message to sign (hex)")
 	cmd.Flags().StringVarP(&keyFile, "key", "k", "", "Path to signing key")
-	cmd.MarkFlagRequired("message")
-	cmd.MarkFlagRequired("key")
-	
+	_ = cmd.MarkFlagRequired("message")
+	_ = cmd.MarkFlagRequired("key")
+
 	return cmd
 }
 
@@ -135,7 +135,7 @@ func newVerifyCmd() *cobra.Command {
 		messageHex   string
 		signatureHex string
 	)
-	
+
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Verify a signed message",
@@ -149,26 +149,26 @@ Example:
 			if err != nil {
 				return fmt.Errorf("invalid message hex: %w", err)
 			}
-			
+
 			signatureBytes, err := hex.DecodeString(signatureHex)
 			if err != nil {
 				return fmt.Errorf("invalid signature hex: %w", err)
 			}
-			
+
 			// TODO: Implement verification
 			fmt.Printf("Message: %x\n", messageBytes)
 			fmt.Printf("Signature: %x\n", signatureBytes)
 			fmt.Println("Note: Verification will be implemented with validator set integration")
-			
+
 			return nil
 		},
 	}
-	
+
 	cmd.Flags().StringVarP(&messageHex, "message", "m", "", "Message to verify (hex)")
 	cmd.Flags().StringVarP(&signatureHex, "signature", "s", "", "Signature to verify (hex)")
-	cmd.MarkFlagRequired("message")
-	cmd.MarkFlagRequired("signature")
-	
+	_ = cmd.MarkFlagRequired("message")
+	_ = cmd.MarkFlagRequired("signature")
+
 	return cmd
 }
 
@@ -186,7 +186,7 @@ to destination chains after signature verification.`,
 			return nil
 		},
 	}
-	
+
 	return cmd
 }
 
@@ -198,10 +198,10 @@ type SimpleMessage struct {
 	payload  []byte
 }
 
-func (m *SimpleMessage) ID() types.ID                  { return m.id }
-func (m *SimpleMessage) SourceChainID() types.ID       { return m.sourceID }
+func (m *SimpleMessage) ID() types.ID                 { return m.id }
+func (m *SimpleMessage) SourceChainID() types.ID      { return m.sourceID }
 func (m *SimpleMessage) DestinationChainID() types.ID { return m.destID }
-func (m *SimpleMessage) Payload() []byte               { return m.payload }
+func (m *SimpleMessage) Payload() []byte              { return m.payload }
 func (m *SimpleMessage) Serialize() ([]byte, error) {
 	result := make([]byte, 0, 32*2+len(m.payload))
 	result = append(result, m.sourceID[:]...)
@@ -215,17 +215,17 @@ func hexToID(hexStr string) (types.ID, error) {
 	if len(hexStr) == 0 {
 		return types.ID{}, fmt.Errorf("empty chain ID")
 	}
-	
+
 	// Handle "0x" prefix
 	if len(hexStr) >= 2 && hexStr[0:2] == "0x" {
 		hexStr = hexStr[2:]
 	}
-	
+
 	bytes, err := hex.DecodeString(hexStr)
 	if err != nil {
 		return types.ID{}, err
 	}
-	
+
 	// Pad or truncate to 32 bytes
 	var id types.ID
 	copy(id[:], bytes)

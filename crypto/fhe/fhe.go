@@ -11,13 +11,13 @@ import (
 type Scheme interface {
 	// Encrypt encrypts a plaintext message
 	Encrypt(plaintext []byte, publicKey PublicKey) (Ciphertext, error)
-	
+
 	// Decrypt decrypts a ciphertext
 	Decrypt(ciphertext Ciphertext, privateKey PrivateKey) ([]byte, error)
-	
+
 	// Evaluate performs homomorphic evaluation on encrypted data
 	Evaluate(op Operation, ciphertexts ...Ciphertext) (Ciphertext, error)
-	
+
 	// GenerateKeys generates a new public/private key pair
 	GenerateKeys() (PublicKey, PrivateKey, error)
 }
@@ -26,10 +26,10 @@ type Scheme interface {
 type Ciphertext interface {
 	// Bytes returns the serialized ciphertext
 	Bytes() []byte
-	
+
 	// Add performs homomorphic addition with another ciphertext
 	Add(other Ciphertext) (Ciphertext, error)
-	
+
 	// Multiply performs homomorphic multiplication with another ciphertext
 	Multiply(other Ciphertext) (Ciphertext, error)
 }
@@ -57,13 +57,13 @@ const (
 type PrivateMessage struct {
 	// Encrypted source chain ID
 	SourceChain Ciphertext
-	
-	// Encrypted destination chain ID  
+
+	// Encrypted destination chain ID
 	DestChain Ciphertext
-	
+
 	// Encrypted payload
 	Payload Ciphertext
-	
+
 	// Public metadata (for routing)
 	Metadata []byte
 }

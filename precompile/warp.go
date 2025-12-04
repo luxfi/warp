@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/holiman/uint256"
 	"github.com/luxfi/geth/common"
 	"github.com/luxfi/geth/core/vm"
 	"github.com/luxfi/warp"
-	"github.com/holiman/uint256"
 )
 
 // WarpPrecompile is the interface for the warp precompile contract
@@ -44,9 +44,9 @@ type WarpPrecompile interface {
 
 // WarpConfig is the configuration for the warp precompile
 type WarpConfig struct {
-	NetworkID      uint32
-	SourceChainID  []byte
-	BlockchainID   []byte
+	NetworkID         uint32
+	SourceChainID     []byte
+	BlockchainID      []byte
 	QuorumNumerator   uint64
 	QuorumDenominator uint64
 }
