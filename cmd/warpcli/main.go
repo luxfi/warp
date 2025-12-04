@@ -51,31 +51,31 @@ var createCmd = &cobra.Command{
 		sourceChain, _ := cmd.Flags().GetString("source")
 		destChain, _ := cmd.Flags().GetString("dest")
 		payload, _ := cmd.Flags().GetString("payload")
-		
+
 		// Convert chain IDs from hex strings
 		sourceID, err := hexToID(sourceChain)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid source chain ID: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		destID, err := hexToID(destChain)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid destination chain ID: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// Create message
 		msg := &SimpleMessage{
 			sourceID: sourceID,
 			destID:   destID,
 			payload:  []byte(payload),
 		}
-		
+
 		// Generate message ID
 		serialized, _ := msg.Serialize()
 		msg.id = types.ID(hashBytes(serialized))
-		
+
 		// Output message details
 		fmt.Printf("Message created:\n")
 		fmt.Printf("  ID: %x\n", msg.ID())
@@ -93,14 +93,14 @@ var signCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		messageHex, _ := cmd.Flags().GetString("message")
 		keyFile, _ := cmd.Flags().GetString("key")
-		
+
 		// Decode message
 		messageBytes, err := hex.DecodeString(messageHex)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid message hex: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// TODO: Load private key from file and sign
 		fmt.Printf("Message to sign: %x\n", messageBytes)
 		fmt.Printf("Key file: %s\n", keyFile)
@@ -115,20 +115,20 @@ var verifyCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		messageHex, _ := cmd.Flags().GetString("message")
 		signatureHex, _ := cmd.Flags().GetString("signature")
-		
+
 		// Decode inputs
 		messageBytes, err := hex.DecodeString(messageHex)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid message hex: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		signatureBytes, err := hex.DecodeString(signatureHex)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid signature hex: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// TODO: Implement verification with validator set
 		fmt.Printf("Message: %x\n", messageBytes)
 		fmt.Printf("Signature: %x\n", signatureBytes)
@@ -143,7 +143,7 @@ var encodeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		data, _ := cmd.Flags().GetString("data")
 		format, _ := cmd.Flags().GetString("format")
-		
+
 		switch format {
 		case "hex":
 			fmt.Printf("%x\n", []byte(data))
@@ -162,13 +162,13 @@ var decodeCmd = &cobra.Command{
 	Long:  `Decode hex-encoded Warp message data.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataHex, _ := cmd.Flags().GetString("data")
-		
+
 		data, err := hex.DecodeString(dataHex)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid hex data: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		// Try to parse as a message
 		if len(data) >= 96 { // Minimum message size (3 * 32 bytes)
 			fmt.Println("Decoded as potential message:")
@@ -188,12 +188,12 @@ var serveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		port, _ := cmd.Flags().GetInt("port")
 		dev, _ := cmd.Flags().GetBool("dev")
-		
+
 		fmt.Printf("Starting Warp relay server on port %d\n", port)
 		if dev {
 			fmt.Println("Running in development mode")
 		}
-		
+
 		// TODO: Implement server functionality
 		fmt.Println("Server functionality will be implemented with network integration")
 	},
@@ -204,31 +204,31 @@ func init() {
 	createCmd.Flags().StringP("source", "s", "", "Source chain ID (hex)")
 	createCmd.Flags().StringP("dest", "d", "", "Destination chain ID (hex)")
 	createCmd.Flags().StringP("payload", "p", "", "Message payload")
-	createCmd.MarkFlagRequired("source")
-	createCmd.MarkFlagRequired("dest")
-	createCmd.MarkFlagRequired("payload")
-	
+	_ = createCmd.MarkFlagRequired("source")
+	_ = createCmd.MarkFlagRequired("dest")
+	_ = createCmd.MarkFlagRequired("payload")
+
 	// Sign command flags
 	signCmd.Flags().StringP("message", "m", "", "Serialized message (hex)")
 	signCmd.Flags().StringP("key", "k", "", "Private key file")
-	signCmd.MarkFlagRequired("message")
-	signCmd.MarkFlagRequired("key")
-	
+	_ = signCmd.MarkFlagRequired("message")
+	_ = signCmd.MarkFlagRequired("key")
+
 	// Verify command flags
 	verifyCmd.Flags().StringP("message", "m", "", "Serialized message (hex)")
 	verifyCmd.Flags().StringP("signature", "s", "", "Signature (hex)")
-	verifyCmd.MarkFlagRequired("message")
-	verifyCmd.MarkFlagRequired("signature")
-	
+	_ = verifyCmd.MarkFlagRequired("message")
+	_ = verifyCmd.MarkFlagRequired("signature")
+
 	// Encode command flags
 	encodeCmd.Flags().StringP("data", "d", "", "Data to encode")
 	encodeCmd.Flags().StringP("format", "f", "hex", "Output format (hex, base64)")
-	encodeCmd.MarkFlagRequired("data")
-	
+	_ = encodeCmd.MarkFlagRequired("data")
+
 	// Decode command flags
 	decodeCmd.Flags().StringP("data", "d", "", "Hex data to decode")
-	decodeCmd.MarkFlagRequired("data")
-	
+	_ = decodeCmd.MarkFlagRequired("data")
+
 	// Serve command flags
 	serveCmd.Flags().IntP("port", "p", 9650, "Server port")
 	serveCmd.Flags().Bool("dev", false, "Run in development mode")
@@ -242,10 +242,10 @@ type SimpleMessage struct {
 	payload  []byte
 }
 
-func (m *SimpleMessage) ID() types.ID                  { return m.id }
-func (m *SimpleMessage) SourceChainID() types.ID       { return m.sourceID }
+func (m *SimpleMessage) ID() types.ID                 { return m.id }
+func (m *SimpleMessage) SourceChainID() types.ID      { return m.sourceID }
 func (m *SimpleMessage) DestinationChainID() types.ID { return m.destID }
-func (m *SimpleMessage) Payload() []byte               { return m.payload }
+func (m *SimpleMessage) Payload() []byte              { return m.payload }
 func (m *SimpleMessage) Serialize() ([]byte, error) {
 	result := make([]byte, 0, 32*2+len(m.payload))
 	result = append(result, m.sourceID[:]...)
@@ -259,17 +259,17 @@ func hexToID(hexStr string) (types.ID, error) {
 	if len(hexStr) == 0 {
 		return types.ID{}, fmt.Errorf("empty chain ID")
 	}
-	
+
 	// Handle "0x" prefix
 	if len(hexStr) >= 2 && hexStr[0:2] == "0x" {
 		hexStr = hexStr[2:]
 	}
-	
+
 	bytes, err := hex.DecodeString(hexStr)
 	if err != nil {
 		return types.ID{}, err
 	}
-	
+
 	// Pad or truncate to 32 bytes
 	var id types.ID
 	copy(id[:], bytes)
