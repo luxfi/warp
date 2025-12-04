@@ -59,15 +59,7 @@ jobs:
             ${{ runner.os }}-go-
       
       - name: Run tests
-        run: make test-coverage
-      
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.txt
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+        run: go test -v -race ./...
 
   build:
     name: Build
