@@ -7,8 +7,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/luxfi/geth/common"
+	"github.com/luxfi/geth/rlp"
 )
 
 const (
@@ -266,4 +268,58 @@ func (m *Message) Equal(other *Message) bool {
 	}
 
 	return m.Signature.Equal(other.Signature)
+}
+
+// EncodeRLP implements rlp.Encoder for Message
+func (m *Message) EncodeRLP(w io.Writer) error {
+	// Encode as a list of: UnsignedMessage, SignatureType, SignatureData
+	sigType := uint8(0) // BitSetSignature type
+	var sigData interface{}
+
+	if bitSetSig, ok := m.Signature.(*BitSetSignature); ok {
+		sigData = bitSetSig
+	} else {
+		return errors.New("unknown signature type")
+	}
+
+	return rlp.Encode(w, []interface{}{
+		m.UnsignedMessage,
+		sigType,
+		sigData,
+	})
+}
+
+// DecodeRLP implements rlp.Decoder for Message
+func (m *Message) DecodeRLP(s *rlp.Stream) error {
+	// Decode the outer list
+	_, err := s.List()
+	if err != nil {
+		return err
+	}
+
+	// Decode UnsignedMessage
+	m.UnsignedMessage = &UnsignedMessage{}
+	if err := s.Decode(m.UnsignedMessage); err != nil {
+		return fmt.Errorf("failed to decode unsigned message: %w", err)
+	}
+
+	// Decode signature type
+	var sigType uint8
+	if err := s.Decode(&sigType); err != nil {
+		return fmt.Errorf("failed to decode signature type: %w", err)
+	}
+
+	// Decode signature based on type
+	switch sigType {
+	case 0: // BitSetSignature
+		bitSetSig := &BitSetSignature{}
+		if err := s.Decode(bitSetSig); err != nil {
+			return fmt.Errorf("failed to decode bit set signature: %w", err)
+		}
+		m.Signature = bitSetSig
+	default:
+		return fmt.Errorf("unknown signature type: %d", sigType)
+	}
+
+	return s.ListEnd()
 }
