@@ -51,8 +51,8 @@ func (s *BitSetSignature) Verify(msg []byte, validators []*Validator) error {
 		return errors.New("no signers")
 	}
 
-	if s.Signers.BitLen() > len(validators) {
-		return fmt.Errorf("bit set length %d exceeds validator count %d", s.Signers.BitLen(), len(validators))
+	if s.Signers.HighestSetBit() > len(validators) {
+		return fmt.Errorf("signer index %d exceeds validator count %d", s.Signers.HighestSetBit()-1, len(validators))
 	}
 
 	// Aggregate public keys of signers
@@ -99,8 +99,8 @@ func (s *BitSetSignature) Verify(msg []byte, validators []*Validator) error {
 
 // GetSignedWeight returns the total weight of validators that signed
 func (s *BitSetSignature) GetSignedWeight(validators []*Validator) (uint64, error) {
-	if s.Signers.BitLen() > len(validators) {
-		return 0, fmt.Errorf("bit set length %d exceeds validator count %d", s.Signers.BitLen(), len(validators))
+	if s.Signers.HighestSetBit() > len(validators) {
+		return 0, fmt.Errorf("signer index %d exceeds validator count %d", s.Signers.HighestSetBit()-1, len(validators))
 	}
 
 	var weight uint64
