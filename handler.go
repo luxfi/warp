@@ -20,4 +20,17 @@ type Handler interface {
 	Gossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
 	// RequestFailed is called when a request fails
 	RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *Error) error
+
+	// AppRequest handles an application-level request
+	AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, request []byte) error
+	// AppResponse handles an application-level response
+	AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error
+	// AppGossip handles application-level gossip
+	AppGossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
+	// AppRequestFailed is called when an app request fails
+	AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, appErr *Error) error
 }
+
+// AppHandler handles application-level messages between nodes.
+// This is an alias for Handler for clarity.
+type AppHandler = Handler
