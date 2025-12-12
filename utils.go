@@ -45,3 +45,8 @@ func ComputeHash256(data []byte) []byte {
 	hash := sha256.Sum256(data)
 	return hash[:]
 }
+
+// ComputeHash256Array computes SHA256 hash and returns as fixed-size array
+func ComputeHash256Array(data []byte) [32]byte {
+	return sha256.Sum256(data)
+}

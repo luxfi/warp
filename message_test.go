@@ -6,13 +6,13 @@ package warp
 import (
 	"testing"
 
+	"github.com/luxfi/ids"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUnsignedMessage(t *testing.T) {
 	networkID := uint32(1)
-	sourceChainID := make([]byte, 32)
-	sourceChainID[31] = 1
+	sourceChainID := ids.ID{31: 1}
 	payload := []byte("test payload")
 
 	// Create unsigned message
@@ -31,7 +31,7 @@ func TestUnsignedMessage(t *testing.T) {
 
 	// Test ID
 	id := msg.ID()
-	require.Len(t, id, 32)
+	require.NotEqual(t, ids.Empty, id)
 
 	// Test parsing
 	parsed, err := ParseUnsignedMessage(bytes)
@@ -39,21 +39,6 @@ func TestUnsignedMessage(t *testing.T) {
 	require.Equal(t, msg.NetworkID, parsed.NetworkID)
 	require.Equal(t, msg.SourceChainID, parsed.SourceChainID)
 	require.Equal(t, msg.Payload, parsed.Payload)
-}
-
-func TestInvalidUnsignedMessage(t *testing.T) {
-	networkID := uint32(1)
-	payload := []byte("test payload")
-
-	// Invalid source chain ID (not 32 bytes)
-	_, err := NewUnsignedMessage(networkID, []byte("short"), payload)
-	require.Error(t, err)
-
-	// Valid message
-	sourceChainID := make([]byte, 32)
-	msg, err := NewUnsignedMessage(networkID, sourceChainID, payload)
-	require.NoError(t, err)
-	require.NotNil(t, msg)
 }
 
 func TestVerifyWeight(t *testing.T) {

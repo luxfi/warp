@@ -11,6 +11,7 @@ import (
 
 	"github.com/luxfi/crypto/bls"
 	"github.com/luxfi/geth/common"
+	"github.com/luxfi/ids"
 )
 
 // Validator represents a validator in the network
@@ -18,7 +19,7 @@ type Validator struct {
 	PublicKey      *bls.PublicKey
 	PublicKeyBytes []byte
 	Weight         uint64
-	NodeID         []byte
+	NodeID         ids.NodeID
 }
 
 // NewValidator creates a new validator
@@ -26,7 +27,7 @@ func NewValidator(
 	publicKey *bls.PublicKey,
 	publicKeyBytes []byte,
 	weight uint64,
-	nodeID []byte,
+	nodeID ids.NodeID,
 ) *Validator {
 	return &Validator{
 		PublicKey:      publicKey,
@@ -120,7 +121,7 @@ func (c *CanonicalValidatorSet) Len() int {
 // ValidatorState is an interface for retrieving validator sets
 type ValidatorState interface {
 	// GetValidatorSet returns the validator set for a given chain ID at a given height
-	GetValidatorSet(chainID []byte, height uint64) (map[string]*Validator, error)
+	GetValidatorSet(chainID ids.ID, height uint64) (map[ids.NodeID]*Validator, error)
 
 	// GetCurrentHeight returns the current height
 	GetCurrentHeight() (uint64, error)
@@ -129,7 +130,7 @@ type ValidatorState interface {
 // GetCanonicalValidatorSet retrieves and canonicalizes the validator set
 func GetCanonicalValidatorSet(
 	validatorState ValidatorState,
-	chainID []byte,
+	chainID ids.ID,
 ) ([]*Validator, uint64, error) {
 	height, err := validatorState.GetCurrentHeight()
 	if err != nil {
@@ -161,10 +162,10 @@ func GetCanonicalValidatorSet(
 }
 
 // ValidatorSetToMap converts a validator slice to a map keyed by node ID
-func ValidatorSetToMap(validators []*Validator) map[string]*Validator {
-	vMap := make(map[string]*Validator, len(validators))
+func ValidatorSetToMap(validators []*Validator) map[ids.NodeID]*Validator {
+	vMap := make(map[ids.NodeID]*Validator, len(validators))
 	for _, v := range validators {
-		vMap[string(v.NodeID)] = v
+		vMap[v.NodeID] = v
 	}
 	return vMap
 }
@@ -211,6 +212,6 @@ func ValidateValidatorSet(validators []*Validator) error {
 }
 
 // ChainIDToHash converts a chain ID to a common.Hash
-func ChainIDToHash(chainID []byte) common.Hash {
-	return common.BytesToHash(chainID)
+func ChainIDToHash(chainID ids.ID) common.Hash {
+	return common.BytesToHash(chainID[:])
 }
