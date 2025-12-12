@@ -10,49 +10,28 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/luxfi/geth/common"
 	"github.com/luxfi/geth/core/vm"
+	"github.com/luxfi/ids"
 	"github.com/luxfi/warp"
 )
 
 // WarpPrecompile is the interface for the warp precompile contract
 type WarpPrecompile interface {
-	// GetVerifiedWarpMessage retrieves a verified warp message
-	GetVerifiedWarpMessage(
-		index uint32,
-		evm *vm.EVM,
-		caller common.Address,
-		value *uint256.Int,
-		readOnly bool,
-	) ([]byte, error)
-
-	// SendWarpMessage sends a warp message
-	SendWarpMessage(
-		payload []byte,
-		evm *vm.EVM,
-		caller common.Address,
-		value *uint256.Int,
-		readOnly bool,
-	) ([]byte, error)
-
-	// GetBlockchainID retrieves the blockchain ID
-	GetBlockchainID(
-		evm *vm.EVM,
-		caller common.Address,
-		value *uint256.Int,
-		readOnly bool,
-	) ([]byte, error)
+	GetVerifiedWarpMessage(index uint32, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
+	SendWarpMessage(payload []byte, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
+	GetBlockchainID(evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
 }
 
 // WarpConfig is the configuration for the warp precompile
 type WarpConfig struct {
 	NetworkID         uint32
-	SourceChainID     []byte
-	BlockchainID      []byte
+	SourceChainID     ids.ID
+	BlockchainID      ids.ID
 	QuorumNumerator   uint64
 	QuorumDenominator uint64
 }
 
 // DefaultWarpConfig returns the default warp configuration
-func DefaultWarpConfig(networkID uint32, chainID []byte) *WarpConfig {
+func DefaultWarpConfig(networkID uint32, chainID ids.ID) *WarpConfig {
 	return &WarpConfig{
 		NetworkID:         networkID,
 		SourceChainID:     chainID,
@@ -64,13 +43,8 @@ func DefaultWarpConfig(networkID uint32, chainID []byte) *WarpConfig {
 
 // WarpBackend is the backend interface for warp operations
 type WarpBackend interface {
-	// GetMessage returns a verified warp message by index
 	GetMessage(index uint32) (*warp.Message, error)
-
-	// AddMessage adds a new warp message to be sent
 	AddMessage(unsignedMessage *warp.UnsignedMessage) error
-
-	// GetValidatorState returns the validator state
 	GetValidatorState() warp.ValidatorState
 }
 
@@ -96,13 +70,11 @@ func (w *WarpModule) GetVerifiedWarpMessage(
 	value *uint256.Int,
 	readOnly bool,
 ) ([]byte, error) {
-	// Get message from backend
 	msg, err := w.backend.GetMessage(index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
 
-	// Verify message
 	err = warp.VerifyMessage(
 		msg,
 		w.config.NetworkID,
@@ -114,7 +86,6 @@ func (w *WarpModule) GetVerifiedWarpMessage(
 		return nil, fmt.Errorf("failed to verify message: %w", err)
 	}
 
-	// Return message bytes
 	return msg.Bytes(), nil
 }
 
@@ -130,23 +101,17 @@ func (w *WarpModule) SendWarpMessage(
 		return nil, errors.New("cannot send warp message in read-only mode")
 	}
 
-	// Create unsigned message
-	unsignedMsg, err := warp.NewUnsignedMessage(
-		w.config.NetworkID,
-		w.config.SourceChainID,
-		payload,
-	)
+	unsignedMsg, err := warp.NewUnsignedMessage(w.config.NetworkID, w.config.SourceChainID, payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create unsigned message: %w", err)
 	}
 
-	// Add message to backend
 	if err := w.backend.AddMessage(unsignedMsg); err != nil {
 		return nil, fmt.Errorf("failed to add message: %w", err)
 	}
 
-	// Return message ID
-	return unsignedMsg.ID(), nil
+	msgID := unsignedMsg.ID()
+	return msgID[:], nil
 }
 
 // GetBlockchainID retrieves the blockchain ID
@@ -156,7 +121,7 @@ func (w *WarpModule) GetBlockchainID(
 	value *uint256.Int,
 	readOnly bool,
 ) ([]byte, error) {
-	return w.config.BlockchainID, nil
+	return w.config.BlockchainID[:], nil
 }
 
 // Gas costs for warp operations
@@ -172,99 +137,42 @@ var WarpPrecompileContract = common.HexToAddress("0x0200000000000000000000000000
 // WarpABI is the ABI for the warp precompile
 const WarpABI = `[
 	{
-		"inputs": [
-			{
-				"internalType": "uint32",
-				"name": "index",
-				"type": "uint32"
-			}
-		],
+		"inputs": [{"internalType": "uint32", "name": "index", "type": "uint32"}],
 		"name": "getVerifiedWarpMessage",
 		"outputs": [
 			{
 				"components": [
-					{
-						"internalType": "bytes32",
-						"name": "sourceChainID",
-						"type": "bytes32"
-					},
-					{
-						"internalType": "address",
-						"name": "originSenderAddress",
-						"type": "address"
-					},
-					{
-						"internalType": "bytes",
-						"name": "payload",
-						"type": "bytes"
-					}
+					{"internalType": "bytes32", "name": "sourceChainID", "type": "bytes32"},
+					{"internalType": "address", "name": "originSenderAddress", "type": "address"},
+					{"internalType": "bytes", "name": "payload", "type": "bytes"}
 				],
-				"internalType": "struct WarpMessage",
-				"name": "message",
-				"type": "tuple"
+				"internalType": "struct WarpMessage", "name": "message", "type": "tuple"
 			},
-			{
-				"internalType": "bool",
-				"name": "valid",
-				"type": "bool"
-			}
+			{"internalType": "bool", "name": "valid", "type": "bool"}
 		],
 		"stateMutability": "view",
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "bytes",
-				"name": "payload",
-				"type": "bytes"
-			}
-		],
+		"inputs": [{"internalType": "bytes", "name": "payload", "type": "bytes"}],
 		"name": "sendWarpMessage",
-		"outputs": [
-			{
-				"internalType": "bytes32",
-				"name": "messageID",
-				"type": "bytes32"
-			}
-		],
+		"outputs": [{"internalType": "bytes32", "name": "messageID", "type": "bytes32"}],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
 		"inputs": [],
 		"name": "getBlockchainID",
-		"outputs": [
-			{
-				"internalType": "bytes32",
-				"name": "blockchainID",
-				"type": "bytes32"
-			}
-		],
+		"outputs": [{"internalType": "bytes32", "name": "blockchainID", "type": "bytes32"}],
 		"stateMutability": "view",
 		"type": "function"
 	},
 	{
 		"anonymous": false,
 		"inputs": [
-			{
-				"indexed": true,
-				"internalType": "address",
-				"name": "sender",
-				"type": "address"
-			},
-			{
-				"indexed": true,
-				"internalType": "bytes32",
-				"name": "messageID",
-				"type": "bytes32"
-			},
-			{
-				"indexed": false,
-				"internalType": "bytes",
-				"name": "message",
-				"type": "bytes"
-			}
+			{"indexed": true, "internalType": "address", "name": "sender", "type": "address"},
+			{"indexed": true, "internalType": "bytes32", "name": "messageID", "type": "bytes32"},
+			{"indexed": false, "internalType": "bytes", "name": "message", "type": "bytes"}
 		],
 		"name": "SendWarpMessage",
 		"type": "event"
