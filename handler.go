@@ -12,14 +12,12 @@ import (
 
 // Handler handles warp messages
 type Handler interface {
-	Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) error
+	// Request handles an incoming request and returns a response or error
+	Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) ([]byte, *Error)
+	// Response handles an incoming response to a previous request
 	Response(ctx context.Context, nodeID ids.NodeID, requestID uint32, msg []byte) error
+	// Gossip handles an incoming gossip message
 	Gossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
+	// RequestFailed is called when a request fails
 	RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *Error) error
-
-	// App* methods are aliases for backward compatibility
-	AppRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) error
-	AppResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, msg []byte) error
-	AppGossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
-	AppRequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *Error) error
 }
