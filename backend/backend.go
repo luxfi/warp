@@ -11,6 +11,7 @@ import (
 
 	"github.com/luxfi/crypto/bls"
 	"github.com/luxfi/geth/common"
+	"github.com/luxfi/ids"
 	"github.com/luxfi/warp"
 	"github.com/luxfi/warp/signer"
 )
@@ -116,15 +117,15 @@ func (b *MemoryBackend) GetValidatorState() warp.ValidatorState {
 
 // MockValidatorState is a mock implementation of ValidatorState
 type MockValidatorState struct {
-	validators map[string]*warp.Validator
+	validators map[ids.NodeID]*warp.Validator
 	height     uint64
 }
 
 // NewMockValidatorState creates a new mock validator state
 func NewMockValidatorState(validators []*warp.Validator, height uint64) *MockValidatorState {
-	vMap := make(map[string]*warp.Validator)
+	vMap := make(map[ids.NodeID]*warp.Validator)
 	for _, v := range validators {
-		vMap[string(v.NodeID)] = v
+		vMap[v.NodeID] = v
 	}
 	return &MockValidatorState{
 		validators: vMap,
@@ -133,7 +134,7 @@ func NewMockValidatorState(validators []*warp.Validator, height uint64) *MockVal
 }
 
 // GetValidatorSet returns the validator set for a given chain ID at a given height
-func (m *MockValidatorState) GetValidatorSet(chainID []byte, height uint64) (map[string]*warp.Validator, error) {
+func (m *MockValidatorState) GetValidatorSet(chainID ids.ID, height uint64) (map[ids.NodeID]*warp.Validator, error) {
 	return m.validators, nil
 }
 
