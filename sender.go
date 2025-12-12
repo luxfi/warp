@@ -18,11 +18,11 @@ type SendConfig struct {
 	Peers         int
 }
 
-// Sender sends warp messages between nodes.
+// Sender sends messages between nodes.
 // This is the primary interface for cross-node communication used by VMs.
 type Sender interface {
-	SendWarpRequest(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, requestBytes []byte) error
-	SendWarpResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error
-	SendWarpError(ctx context.Context, nodeID ids.NodeID, requestID uint32, errorCode int32, errorMessage string) error
-	SendWarpGossip(ctx context.Context, config SendConfig, gossipBytes []byte) error
+	SendRequest(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, request []byte) error
+	SendResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error
+	SendError(ctx context.Context, nodeID ids.NodeID, requestID uint32, errorCode int32, errorMessage string) error
+	SendGossip(ctx context.Context, config SendConfig, msg []byte) error
 }
