@@ -28,20 +28,3 @@ func (FakeSender) SendError(context.Context, ids.NodeID, uint32, int32, string) 
 func (FakeSender) SendGossip(context.Context, SendConfig, []byte) error {
 	return nil
 }
-
-// Backward compatibility methods
-func (FakeSender) SendAppRequest(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
-	return nil
-}
-
-func (FakeSender) SendAppResponse(context.Context, ids.NodeID, uint32, []byte) error {
-	return nil
-}
-
-func (FakeSender) SendAppError(context.Context, ids.NodeID, uint32, int32, string) error {
-	return nil
-}
-
-func (FakeSender) SendAppGossip(context.Context, set.Set[ids.NodeID], []byte) error {
-	return nil
-}
