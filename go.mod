@@ -4,8 +4,10 @@ go 1.25.5
 
 require (
 	github.com/holiman/uint256 v1.3.2
-	github.com/luxfi/crypto v1.17.7
+	github.com/luxfi/crypto v1.17.18
 	github.com/luxfi/geth v1.16.39
+	github.com/luxfi/ids v1.1.2
+	github.com/luxfi/math v0.1.4
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
 )
@@ -15,7 +17,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/bits-and-blooms/bitset v1.24.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cloudflare/circl v1.6.2-0.20251027185721-da1faa40b98c // indirect
+	github.com/cloudflare/circl v1.6.2-0.20251204010831-23491bd573cf // indirect
 	github.com/consensys/gnark-crypto v0.19.2 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.4.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
@@ -30,10 +32,10 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
+	github.com/gorilla/rpc v1.2.1 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/luxfi/ids v1.1.2 // indirect
 	github.com/luxfi/mock v0.1.0 // indirect
 	github.com/luxfi/node v1.20.3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
@@ -55,8 +57,10 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
+	gonum.org/v1/gonum v0.16.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
