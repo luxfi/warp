@@ -13,6 +13,9 @@ import (
 // FakeSender is a test implementation of Sender that does nothing.
 type FakeSender struct{}
 
+// Interface compliance check
+var _ Sender = FakeSender{}
+
 func (FakeSender) SendRequest(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 	return nil
 }
