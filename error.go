@@ -3,15 +3,15 @@
 
 package warp
 
-import "fmt"
+import "github.com/luxfi/p2p"
 
-// Error represents a warp error
-type Error struct {
-	Code    int32
-	Message string
-}
+// Error is an alias for p2p.Error for backward compatibility
+type Error = p2p.Error
 
-// Error implements the error interface
-func (e *Error) Error() string {
-	return fmt.Sprintf("warp error %d: %s", e.Code, e.Message)
-}
+// Standard errors re-exported from p2p
+var (
+	ErrUnexpected          = p2p.ErrUnexpected
+	ErrUnregisteredHandler = p2p.ErrUnregisteredHandler
+	ErrNotValidator        = p2p.ErrNotValidator
+	ErrThrottled           = p2p.ErrThrottled
+)

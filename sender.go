@@ -3,26 +3,10 @@
 
 package warp
 
-import (
-	"context"
+import "github.com/luxfi/p2p"
 
-	"github.com/luxfi/ids"
-	"github.com/luxfi/math/set"
-)
+// SendConfig is an alias for p2p.SendConfig for backward compatibility
+type SendConfig = p2p.SendConfig
 
-// SendConfig configures message sending.
-type SendConfig struct {
-	NodeIDs       set.Set[ids.NodeID]
-	Validators    int
-	NonValidators int
-	Peers         int
-}
-
-// Sender sends messages between nodes.
-// This is the primary interface for cross-node communication used by VMs.
-type Sender interface {
-	SendRequest(ctx context.Context, nodeIDs set.Set[ids.NodeID], requestID uint32, request []byte) error
-	SendResponse(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error
-	SendError(ctx context.Context, nodeID ids.NodeID, requestID uint32, errorCode int32, errorMessage string) error
-	SendGossip(ctx context.Context, config SendConfig, msg []byte) error
-}
+// Sender is an alias for p2p.Sender for backward compatibility
+type Sender = p2p.Sender
