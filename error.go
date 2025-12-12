@@ -15,3 +15,6 @@ type Error struct {
 func (e *Error) Error() string {
 	return fmt.Sprintf("warp error %d: %s", e.Code, e.Message)
 }
+
+// AppError is an alias for Error, used by VMs for application-level errors.
+type AppError = Error
