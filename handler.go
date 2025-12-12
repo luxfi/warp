@@ -8,17 +8,19 @@ import (
 	"time"
 
 	"github.com/luxfi/ids"
+	"github.com/luxfi/p2p"
 )
 
 // Handler handles messages between nodes.
 // This is the primary interface for receiving cross-node messages used by VMs.
+// For simple request/response handlers, use p2p.Handler directly.
 type Handler interface {
 	// Request handles an incoming request and returns a response or error
-	Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) ([]byte, *Error)
+	Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) ([]byte, *p2p.Error)
 	// Response handles an incoming response to a previous request
 	Response(ctx context.Context, nodeID ids.NodeID, requestID uint32, msg []byte) error
 	// Gossip handles an incoming gossip message
 	Gossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
 	// RequestFailed is called when a request fails
-	RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *Error) error
+	RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *p2p.Error) error
 }
