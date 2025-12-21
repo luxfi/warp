@@ -16,9 +16,15 @@ import (
 
 // WarpPrecompile is the interface for the warp precompile contract
 type WarpPrecompile interface {
-	GetVerifiedWarpMessage(index uint32, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
-	SendWarpMessage(payload []byte, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
-	GetBlockchainID(evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool) ([]byte, error)
+	GetVerifiedWarpMessage(
+		index uint32, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool,
+	) ([]byte, error)
+	SendWarpMessage(
+		payload []byte, evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool,
+	) ([]byte, error)
+	GetBlockchainID(
+		evm *vm.EVM, caller common.Address, value *uint256.Int, readOnly bool,
+	) ([]byte, error)
 }
 
 // WarpConfig is the configuration for the warp precompile
