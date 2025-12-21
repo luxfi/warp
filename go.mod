@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/holiman/uint256 v1.3.2
-	github.com/luxfi/crypto v1.17.23
+	github.com/luxfi/crypto v1.17.25
 	github.com/luxfi/geth v1.16.53
 	github.com/luxfi/ids v1.2.4
 	github.com/luxfi/math v1.0.2
@@ -37,6 +37,7 @@ require (
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/luxfi/cache v1.0.0 // indirect
 	github.com/luxfi/consensus v1.22.26 // indirect
 	github.com/luxfi/log v1.1.26 // indirect
 	github.com/luxfi/metric v1.4.8 // indirect
