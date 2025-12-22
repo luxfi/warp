@@ -22,8 +22,8 @@ type Signer interface {
 	Sign(msg *UnsignedMessage) ([]byte, error)
 }
 
-// NewSigner creates a new warp message signer
-func NewSigner(sk *bls.SecretKey, networkID uint32, chainID ids.ID) Signer {
+// NewSigner creates a new warp message signer using a bls.Signer interface
+func NewSigner(sk bls.Signer, networkID uint32, chainID ids.ID) Signer {
 	return &signer{
 		sk:        sk,
 		networkID: networkID,
@@ -32,7 +32,7 @@ func NewSigner(sk *bls.SecretKey, networkID uint32, chainID ids.ID) Signer {
 }
 
 type signer struct {
-	sk        *bls.SecretKey
+	sk        bls.Signer
 	networkID uint32
 	chainID   ids.ID
 }
