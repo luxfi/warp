@@ -247,7 +247,6 @@ jobs:
   docs:
     name: Build & Deploy Docs
     runs-on: ubuntu-latest
-    needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
