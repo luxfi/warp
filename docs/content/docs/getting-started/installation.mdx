@@ -1,0 +1,76 @@
+---
+title: Installation
+description: Install and configure Lux Warp for your project
+---
+
+# Installation
+
+## Requirements
+
+- Go 1.25.5 or later
+- A Lux Network node (for production use)
+
+## Install via Go
+
+```bash
+go get github.com/luxfi/warp@v1.18.0
+```
+
+## Dependencies
+
+Warp depends on the following Lux packages:
+
+```go
+require (
+    github.com/luxfi/crypto v1.17.25  // BLS cryptography
+    github.com/luxfi/geth v1.16.53    // EVM types
+    github.com/luxfi/ids v1.2.4       // ID types
+    github.com/luxfi/p2p v1.4.6       // P2P networking
+)
+```
+
+## Import the Package
+
+```go
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/payload"
+    "github.com/luxfi/warp/backend"
+    "github.com/luxfi/warp/signer"
+)
+```
+
+## Verify Installation
+
+Create a simple test to verify the installation:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/luxfi/warp"
+    "github.com/luxfi/ids"
+)
+
+func main() {
+    // Create a test message
+    msg, err := warp.NewUnsignedMessage(
+        1,                    // Network ID
+        ids.GenerateTestID(), // Source chain ID
+        []byte("test"),       // Payload
+    )
+    if err != nil {
+        panic(err)
+    }
+    
+    fmt.Printf("Message ID: %s\n", msg.ID())
+    fmt.Printf("Codec version: %d\n", warp.CodecVersion)
+    fmt.Printf("Max message size: %d bytes\n", warp.MaxMessageSize)
+}
+```
+
+## Next Steps
+
+- [Quick Start Guide](/docs/getting-started/quick-start) - Build your first cross-chain message
+- [Core Concepts](/docs/concepts/messages) - Understand the message format

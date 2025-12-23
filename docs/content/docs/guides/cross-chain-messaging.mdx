@@ -1,0 +1,218 @@
+---
+title: Cross-Chain Messaging Guide
+description: Step-by-step guide to implementing cross-chain messaging with Warp
+---
+
+# Cross-Chain Messaging Guide
+
+This guide walks through implementing cross-chain messaging between two Lux Network chains.
+
+## Overview
+
+Cross-chain messaging with Warp involves:
+1. **Sending Chain**: Creates and broadcasts an unsigned message
+2. **Validators**: Sign the message
+3. **Receiving Chain**: Verifies and processes the signed message
+
+## Architecture
+
+```
+┌─────────────┐    ┌────────────┐    ┌─────────────┐
+│   Chain A   │    │ Validators │    │   Chain B   │
+│   (Source)  │───▶│  (Signers) │───▶│   (Dest)    │
+└─────────────┘    └────────────┘    └─────────────┘
+      │                  │                  │
+      ▼                  ▼                  ▼
+  Create Msg         Sign Msg         Verify Msg
+```
+
+## Step 1: Create the Message on Source Chain
+
+```go
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/payload"
+    "github.com/luxfi/ids"
+)
+
+// Define your cross-chain call
+sourceAddr := []byte{0x01, 0x02, 0x03}  // Your contract
+callData := abi.EncodeMethodCall("transfer", recipient, amount)
+
+// Create payload
+p, err := payload.NewAddressedCall(sourceAddr, callData)
+if err != nil {
+    return err
+}
+
+// Create unsigned message
+unsigned, err := warp.NewUnsignedMessage(
+    networkID,        // e.g., 1 for mainnet
+    sourceChainID,    // Your chain's ID
+    p.Bytes(),        // Serialized payload
+)
+if err != nil {
+    return err
+}
+
+// Submit to backend for signing
+err = backend.AddMessage(unsigned)
+```
+
+## Step 2: Collect Signatures
+
+Validators sign the message using the signature aggregator:
+
+```go
+import (
+    "context"
+    "github.com/luxfi/warp/signer"
+)
+
+// Set up signer backend with validators you control
+signerBackend := signer.NewSignerBackend(validators)
+signerBackend.AddSigner(myValidatorIndex, localSigner)
+
+// Sign the message
+signed, err := signerBackend.Sign(ctx, unsigned, []int{myValidatorIndex})
+```
+
+For distributed signing, use the signature aggregator:
+
+```go
+import "github.com/luxfi/warp/signature-aggregator/api"
+
+// Request signatures from other validators
+response, err := aggregator.GetSignature(ctx, &api.GetSignatureRequest{
+    Message:       unsigned.Bytes(),
+    QuorumPercent: 67,
+})
+```
+
+## Step 3: Verify on Destination Chain
+
+```go
+import (
+    "github.com/luxfi/warp"
+)
+
+// Parse the incoming message
+msg, err := warp.ParseMessage(incomingBytes)
+if err != nil {
+    return fmt.Errorf("invalid message: %w", err)
+}
+
+// Verify the message
+err = warp.VerifyMessage(
+    msg,
+    networkID,
+    validatorState,
+    67,   // 67% quorum
+    100,
+)
+if err != nil {
+    return fmt.Errorf("verification failed: %w", err)
+}
+
+// Extract and process the payload
+p, err := payload.ParseAddressedCall(msg.UnsignedMessage.Payload)
+if err != nil {
+    return fmt.Errorf("invalid payload: %w", err)
+}
+
+// Execute the cross-chain call
+processCall(p.SourceAddress, p.Payload)
+```
+
+## Complete Example: Token Bridge
+
+Here's a complete token bridge example:
+
+### Source Chain Contract (Solidity)
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@luxfi/warp/contracts/IWarpMessenger.sol";
+
+contract TokenBridge {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    
+    event TokensSent(bytes32 destinationChain, address recipient, uint256 amount);
+    
+    function sendTokens(
+        bytes32 destinationChain,
+        address recipient,
+        uint256 amount
+    ) external payable {
+        require(msg.value == amount, "Must send exact amount");
+        
+        // Encode the transfer data
+        bytes memory payload = abi.encode(recipient, amount);
+        
+        // Send via warp
+        bytes32 messageID = warp.sendWarpMessage(payload);
+        
+        emit TokensSent(destinationChain, recipient, amount);
+    }
+}
+```
+
+### Destination Chain Contract (Solidity)
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@luxfi/warp/contracts/IWarpMessenger.sol";
+
+contract TokenReceiver {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    bytes32 public sourceChain;
+    address public sourceBridge;
+    
+    event TokensReceived(address recipient, uint256 amount);
+    
+    function receiveTokens(uint32 messageIndex, address relayer) external {
+        // Get and verify the warp message
+        (WarpMessage memory message, bool valid) = warp.getVerifiedWarpMessage(messageIndex);
+        require(valid, "Invalid warp message");
+        require(message.sourceChainID == sourceChain, "Wrong source chain");
+        
+        // Decode the payload
+        (address sourceAddr, bytes memory payload) = abi.decode(
+            message.payload,
+            (address, bytes)
+        );
+        require(sourceAddr == sourceBridge, "Wrong source contract");
+        
+        // Decode transfer data
+        (address recipient, uint256 amount) = abi.decode(payload, (address, uint256));
+        
+        // Execute transfer
+        payable(recipient).transfer(amount);
+        
+        emit TokensReceived(recipient, amount);
+    }
+}
+```
+
+## Error Handling
+
+Common errors and solutions:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `ErrInvalidSignature` | Signature verification failed | Check signer keys match validators |
+| `ErrInsufficientWeight` | Not enough signers | Collect more signatures |
+| `ErrInvalidMessage` | Malformed message | Validate message format |
+| `ErrUnknownValidator` | Signer not in validator set | Use correct validator set |
+
+## Security Considerations
+
+1. **Verify source chain** - Always check `SourceChainID` matches expected chain
+2. **Verify source address** - Validate the sending contract
+3. **Use sufficient quorum** - 67% provides BFT security
+4. **Handle failures** - Implement retry logic for transient errors
+5. **Rate limiting** - Prevent spam on the receiving chain

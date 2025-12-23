@@ -1,0 +1,27 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "---Getting Started---",
+    "getting-started/installation",
+    "getting-started/quick-start",
+    "---Core Concepts---",
+    "concepts/messages",
+    "concepts/signatures",
+    "concepts/validators",
+    "concepts/payloads",
+    "---API Reference---",
+    "api/message",
+    "api/signature",
+    "api/validator",
+    "api/payload",
+    "api/backend",
+    "api/signer",
+    "api/handler",
+    "api/verifier",
+    "---Guides---",
+    "guides/cross-chain-messaging",
+    "guides/validator-integration",
+    "guides/precompile-integration"
+  ]
+}

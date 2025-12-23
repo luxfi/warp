@@ -1,0 +1,244 @@
+---
+title: Payload API
+description: API reference for message payload types
+---
+
+# Payload API
+
+Package: `github.com/luxfi/warp/payload`
+
+## Payload Interface
+
+```go
+type Payload interface {
+    Bytes() []byte   // Returns serialized payload
+    Verify() error   // Validates the payload
+}
+```
+
+## Payload Type IDs
+
+```go
+const (
+    AddressedCallID           uint32 = 0
+    HashID                    uint32 = 1
+    L1ValidatorRegistrationID uint32 = 2
+    RegisterL1ValidatorID     uint32 = 3
+    SubnetToL1ConversionID    uint32 = 4
+    L1ValidatorWeightID       uint32 = 5
+)
+```
+
+## Error Variables
+
+```go
+var ErrInvalidPayload = errors.New("invalid payload")
+```
+
+---
+
+## AddressedCall
+
+Cross-VM contract call payload.
+
+```go
+type AddressedCall struct {
+    SourceAddress []byte `serialize:"true"`
+    Payload       []byte `serialize:"true"`
+}
+```
+
+### NewAddressedCall
+
+```go
+func NewAddressedCall(sourceAddress []byte, payload []byte) (*AddressedCall, error)
+```
+
+**Validation:**
+- `sourceAddress` must not be empty
+
+### ParseAddressedCall
+
+```go
+func ParseAddressedCall(bytes []byte) (*AddressedCall, error)
+```
+
+---
+
+## Hash
+
+Simple 32-byte hash payload.
+
+```go
+type Hash struct {
+    Hash []byte `serialize:"true"`
+}
+```
+
+### NewHash
+
+```go
+func NewHash(hash []byte) (*Hash, error)
+```
+
+**Validation:**
+- `hash` must be exactly 32 bytes
+
+### ParseHash
+
+```go
+func ParseHash(bytes []byte) (*Hash, error)
+```
+
+---
+
+## L1ValidatorRegistration
+
+Validator registration status.
+
+```go
+type L1ValidatorRegistration struct {
+    Valid      bool   `serialize:"true"`
+    Validation []byte `serialize:"true"`
+}
+```
+
+### NewL1ValidatorRegistration
+
+```go
+func NewL1ValidatorRegistration(valid bool, validation []byte) (*L1ValidatorRegistration, error)
+```
+
+### ParseL1ValidatorRegistration
+
+```go
+func ParseL1ValidatorRegistration(bytes []byte) (*L1ValidatorRegistration, error)
+```
+
+---
+
+## RegisterL1Validator
+
+Add a validator to a subnet.
+
+```go
+type RegisterL1Validator struct {
+    SubnetID         []byte `serialize:"true"`
+    NodeID           []byte `serialize:"true"`
+    Weight           uint64 `serialize:"true"`
+    BLSPublicKey     []byte `serialize:"true"`
+    RegistrationTime uint64 `serialize:"true"`
+}
+```
+
+### NewRegisterL1Validator
+
+```go
+func NewRegisterL1Validator(
+    subnetID []byte,
+    nodeID []byte,
+    weight uint64,
+    blsPublicKey []byte,
+    registrationTime uint64,
+) (*RegisterL1Validator, error)
+```
+
+**Validation:**
+- `subnetID` must be 32 bytes
+- `nodeID` must not be empty
+- `weight` must be non-zero
+- `blsPublicKey` must not be empty
+
+### ParseRegisterL1Validator
+
+```go
+func ParseRegisterL1Validator(bytes []byte) (*RegisterL1Validator, error)
+```
+
+---
+
+## SubnetToL1Conversion
+
+Subnet conversion message.
+
+```go
+type SubnetToL1Conversion struct {
+    SubnetID []byte   `serialize:"true"`
+    ChainID  []byte   `serialize:"true"`
+    Address  []byte   `serialize:"true"`
+    Managers [][]byte `serialize:"true"`
+}
+```
+
+### NewSubnetToL1Conversion
+
+```go
+func NewSubnetToL1Conversion(
+    subnetID []byte,
+    chainID []byte,
+    address []byte,
+    managers [][]byte,
+) (*SubnetToL1Conversion, error)
+```
+
+**Validation:**
+- `subnetID` must be 32 bytes
+- `chainID` must be 32 bytes
+
+---
+
+## L1ValidatorWeight
+
+Validator weight update.
+
+```go
+type L1ValidatorWeight struct {
+    ValidationID []byte `serialize:"true"`
+    Nonce        uint64 `serialize:"true"`
+    Weight       uint64 `serialize:"true"`
+}
+```
+
+### NewL1ValidatorWeight
+
+```go
+func NewL1ValidatorWeight(
+    validationID []byte,
+    nonce uint64,
+    weight uint64,
+) (*L1ValidatorWeight, error)
+```
+
+**Validation:**
+- `validationID` must be 32 bytes
+
+---
+
+## Generic Parsing
+
+### ParsePayload
+
+```go
+func ParsePayload(bytes []byte) (Payload, error)
+```
+
+Attempts to parse bytes as any known payload type.
+
+**Example:**
+```go
+p, err := payload.ParsePayload(data)
+if err != nil {
+    return err
+}
+
+switch v := p.(type) {
+case *payload.AddressedCall:
+    handleAddressedCall(v)
+case *payload.Hash:
+    handleHash(v)
+case *payload.RegisterL1Validator:
+    handleRegistration(v)
+default:
+    return errors.New("unknown payload type")
+}
+```

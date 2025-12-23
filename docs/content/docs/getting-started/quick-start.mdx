@@ -1,0 +1,129 @@
+---
+title: Quick Start
+description: Build your first cross-chain message with Lux Warp
+---
+
+# Quick Start
+
+This guide walks you through creating, signing, and verifying a cross-chain message.
+
+## Create an Unsigned Message
+
+```go
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/ids"
+)
+
+// Define message parameters
+networkID := uint32(1)  // Mainnet
+sourceChainID := ids.FromStringOrPanic("2q9e4r6Mu3U68nU1fYjgbR6JvwrRx36CohpAX5UQxse55x1Q5")
+payload := []byte("Hello from Chain A!")
+
+// Create the unsigned message
+unsigned, err := warp.NewUnsignedMessage(networkID, sourceChainID, payload)
+if err != nil {
+    panic(err)
+}
+
+fmt.Printf("Message ID: %s\n", unsigned.ID())
+```
+
+## Sign the Message
+
+To sign a message, you need BLS keys for the validators:
+
+```go
+import (
+    "github.com/luxfi/crypto/bls"
+    "github.com/luxfi/warp"
+)
+
+// Generate test keys (in production, use secure key management)
+sk1, _ := bls.NewSecretKey()
+sk2, _ := bls.NewSecretKey()
+
+// Create validators
+validators := []*warp.Validator{
+    warp.NewValidator(sk1.PublicKey(), bls.PublicKeyToCompressedBytes(sk1.PublicKey()), 100, nodeID1),
+    warp.NewValidator(sk2.PublicKey(), bls.PublicKeyToCompressedBytes(sk2.PublicKey()), 100, nodeID2),
+}
+
+// Sign with both validators
+signers := []*bls.SecretKey{sk1, sk2}
+signed, err := warp.SignMessage(unsigned, signers, validators)
+if err != nil {
+    panic(err)
+}
+```
+
+## Verify the Message
+
+```go
+// Set up validator state (in production, this comes from the blockchain)
+validatorState := backend.NewMockValidatorState(validators, 1000)
+
+// Verify with 67% quorum requirement
+quorumNum := uint64(67)
+quorumDen := uint64(100)
+
+err = warp.VerifyMessage(signed, networkID, validatorState, quorumNum, quorumDen)
+if err != nil {
+    fmt.Printf("Verification failed: %v\n", err)
+} else {
+    fmt.Println("Message verified successfully!")
+}
+```
+
+## Serialize and Parse
+
+```go
+// Serialize the message
+bytes := signed.Bytes()
+fmt.Printf("Serialized message: %d bytes\n", len(bytes))
+
+// Parse it back
+parsed, err := warp.ParseMessage(bytes)
+if err != nil {
+    panic(err)
+}
+
+// Verify equality
+if signed.Equal(parsed) {
+    fmt.Println("Round-trip successful!")
+}
+```
+
+## Using Payloads
+
+For structured cross-chain calls, use the payload types:
+
+```go
+import "github.com/luxfi/warp/payload"
+
+// Create an addressed call payload
+sourceAddr := []byte{0x01, 0x02, 0x03} // Source contract address
+callData := []byte{0xde, 0xad, 0xbe, 0xef}
+
+addressedCall, err := payload.NewAddressedCall(sourceAddr, callData)
+if err != nil {
+    panic(err)
+}
+
+// Use the payload in a message
+unsigned, err := warp.NewUnsignedMessage(
+    networkID,
+    sourceChainID,
+    addressedCall.Bytes(),
+)
+```
+
+## Complete Example
+
+See the [example/simple.go](https://github.com/luxfi/warp/blob/main/example/simple.go) file for a complete working example.
+
+## Next Steps
+
+- [Messages](/docs/concepts/messages) - Understand the message format in detail
+- [Signatures](/docs/concepts/signatures) - Learn about BLS signature aggregation
+- [Validators](/docs/concepts/validators) - Understand validator set management

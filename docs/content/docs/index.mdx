@@ -1,0 +1,100 @@
+---
+title: Lux Warp v1.18.0
+description: Cross-chain messaging protocol for Lux Network with post-quantum safety
+---
+
+# Lux Warp
+
+**Version 1.18.0** - Cross-chain messaging protocol with BLS signature aggregation
+
+Warp is Lux Network's native cross-chain messaging (XCM) protocol, enabling secure and efficient communication between blockchains. It uses BLS signatures for efficient multi-signature aggregation and supports both EVM and non-EVM chains.
+
+## Key Features
+
+- **BLS Signature Aggregation**: Efficient multi-signature aggregation reduces on-chain verification costs
+- **Post-Quantum Ready**: Designed with future post-quantum cryptography in mind
+- **Chain-Agnostic**: Works with EVM chains, non-EVM chains, and custom VMs
+- **Modular Design**: Components can be used independently
+- **Protocol-First**: Clean separation between protocol definitions and implementations
+
+## Architecture Overview
+
+```
+github.com/luxfi/warp
+├── message.go         # Core message types (UnsignedMessage, Message)
+├── signature.go       # BLS signature handling (BitSetSignature)
+├── validator.go       # Validator set management
+├── verifier.go        # Message verification interface
+├── payload/           # Payload types (AddressedCall, Hash, etc.)
+├── backend/           # Backend implementations
+├── signer/            # Signing infrastructure
+└── handler.go         # P2P message handling
+```
+
+## Quick Example
+
+```go
+import "github.com/luxfi/warp"
+
+// Create an unsigned message
+unsigned, err := warp.NewUnsignedMessage(
+    networkID,
+    sourceChainID,
+    payload,
+)
+
+// Sign with validators
+signed, err := warp.SignMessage(unsigned, signers, validators)
+
+// Verify the message
+err = warp.VerifyMessage(signed, networkID, validatorState, quorumNum, quorumDen)
+```
+
+## Installation
+
+```bash
+go get github.com/luxfi/warp@v1.18.0
+```
+
+## Documentation Sections
+
+<Cards>
+  <Card title="Getting Started" href="/docs/getting-started/installation">
+    Install and configure Warp for your project
+  </Card>
+  <Card title="Core Concepts" href="/docs/concepts/messages">
+    Understand messages, signatures, and validators
+  </Card>
+  <Card title="API Reference" href="/docs/api/message">
+    Complete API documentation
+  </Card>
+  <Card title="Guides" href="/docs/guides/cross-chain-messaging">
+    Step-by-step implementation guides
+  </Card>
+</Cards>
+
+## Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| v1.18.0 | 2024 | **LP-118 merged** - Verifier, SignatureHandler, SignatureAggregator moved from `github.com/luxfi/p2p/lp118` to warp package |
+| v1.17.0 | 2024 | L1 validator registration payloads |
+| v1.16.0 | 2024 | Enhanced signature aggregation |
+
+## LP-118 Migration (v1.18.0)
+
+As of v1.18.0, all functionality from `github.com/luxfi/p2p/lp118` has been consolidated into the warp package:
+
+```go
+// Old imports (deprecated)
+import "github.com/luxfi/p2p/lp118"
+
+// New imports
+import "github.com/luxfi/warp"
+```
+
+See the [Signature Request API](/docs/api/signature-request) for complete migration guide.
+
+## License
+
+Lux Warp is licensed under the [LICENSE](https://github.com/luxfi/warp/blob/main/LICENSE).

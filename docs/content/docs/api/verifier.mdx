@@ -1,0 +1,184 @@
+---
+title: Verifier API
+description: API reference for message verification
+---
+
+# Verifier API
+
+Package: `github.com/luxfi/warp`
+
+## Verifier Interface
+
+The `Verifier` interface allows custom verification logic before signing warp messages.
+
+```go
+type Verifier interface {
+    // Verify verifies an unsigned warp message with justification.
+    // Returns nil on success, or an error if verification fails.
+    Verify(ctx context.Context, unsignedMessage *UnsignedMessage, justification []byte) error
+}
+```
+
+---
+
+## Method
+
+### Verify
+
+```go
+Verify(ctx context.Context, unsignedMessage *UnsignedMessage, justification []byte) error
+```
+
+Verifies that a message should be signed.
+
+**Parameters:**
+- `ctx` - Context for cancellation and timeouts
+- `unsignedMessage` - The message to verify
+- `justification` - Additional proof/data to support the message
+
+**Returns:**
+- `nil` - If verification succeeds
+- `error` - If verification fails
+
+---
+
+## Use Cases
+
+### Payload Verification
+
+Verify the message payload is valid:
+
+```go
+type PayloadVerifier struct {
+    allowedChains map[ids.ID]bool
+}
+
+func (v *PayloadVerifier) Verify(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) error {
+    // Check source chain is allowed
+    if !v.allowedChains[msg.SourceChainID] {
+        return errors.New("source chain not allowed")
+    }
+
+    // Parse and validate payload
+    payload, err := payload.ParsePayload(msg.Payload)
+    if err != nil {
+        return fmt.Errorf("invalid payload: %w", err)
+    }
+
+    return payload.Verify()
+}
+```
+
+### Proof Verification
+
+Verify justification proofs:
+
+```go
+type ProofVerifier struct {
+    stateProvider StateProvider
+}
+
+func (v *ProofVerifier) Verify(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) error {
+    // Parse proof from justification
+    proof, err := ParseProof(justification)
+    if err != nil {
+        return fmt.Errorf("invalid proof: %w", err)
+    }
+
+    // Verify proof against state
+    return v.stateProvider.VerifyProof(ctx, msg, proof)
+}
+```
+
+### Rate Limiting
+
+Prevent spam by rate limiting:
+
+```go
+type RateLimitVerifier struct {
+    limiter *rate.Limiter
+}
+
+func (v *RateLimitVerifier) Verify(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) error {
+    if !v.limiter.Allow() {
+        return errors.New("rate limit exceeded")
+    }
+    return nil
+}
+```
+
+### Composite Verification
+
+Chain multiple verifiers:
+
+```go
+type CompositeVerifier struct {
+    verifiers []warp.Verifier
+}
+
+func (v *CompositeVerifier) Verify(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) error {
+    for _, verifier := range v.verifiers {
+        if err := verifier.Verify(ctx, msg, justification); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+```
+
+---
+
+## Integration Example
+
+```go
+import (
+    "context"
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/signer"
+)
+
+type VerifiedSigner struct {
+    verifier warp.Verifier
+    signer   signer.Signer
+}
+
+func (s *VerifiedSigner) SignWithVerification(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) (*bls.Signature, error) {
+    // First verify the message
+    if err := s.verifier.Verify(ctx, msg, justification); err != nil {
+        return nil, fmt.Errorf("verification failed: %w", err)
+    }
+
+    // Then sign it
+    return s.signer.Sign(msg)
+}
+```
+
+---
+
+## Best Practices
+
+1. **Always verify before signing** - Never sign messages without verification
+2. **Use justification** - Provide proof data for complex verifications
+3. **Implement timeouts** - Use context deadlines to prevent hanging
+4. **Log failures** - Record verification failures for debugging
+5. **Be conservative** - When in doubt, reject the message
