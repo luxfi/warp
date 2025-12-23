@@ -1,0 +1,157 @@
+---
+title: Signature Aggregator API
+description: BLS signature aggregation for warp messages
+---
+
+# Signature Aggregator API
+
+The `SignatureAggregator` collects BLS signatures from validators and aggregates them into a single warp message signature.
+
+## SignatureAggregator
+
+```go
+type SignatureAggregator struct {
+    log    log.Logger
+    client *p2p.Client
+}
+
+func NewSignatureAggregator(log log.Logger, client *p2p.Client) *SignatureAggregator
+```
+
+### Constructor
+
+```go
+import (
+    "github.com/luxfi/log"
+    "github.com/luxfi/p2p"
+    "github.com/luxfi/warp"
+)
+
+aggregator := warp.NewSignatureAggregator(logger, p2pClient)
+```
+
+## AggregateSignatures
+
+Collects signatures from validators until a quorum is reached.
+
+```go
+func (s *SignatureAggregator) AggregateSignatures(
+    ctx context.Context,
+    message *Message,
+    justification []byte,
+    validators []*Validator,
+    quorumNum uint64,
+    quorumDen uint64,
+) (
+    signedMessage *Message,
+    aggregatedStake *big.Int,
+    totalStake *big.Int,
+    err error,
+)
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ctx` | `context.Context` | Context for cancellation |
+| `message` | `*Message` | The warp message to sign |
+| `justification` | `[]byte` | Optional justification bytes |
+| `validators` | `[]*Validator` | Canonical validator set |
+| `quorumNum` | `uint64` | Quorum numerator (e.g., 67) |
+| `quorumDen` | `uint64` | Quorum denominator (e.g., 100) |
+
+### Returns
+
+| Return | Type | Description |
+|--------|------|-------------|
+| `signedMessage` | `*Message` | Message with aggregated signature |
+| `aggregatedStake` | `*big.Int` | Total stake weight of signers |
+| `totalStake` | `*big.Int` | Total stake weight of all validators |
+| `err` | `error` | Error if aggregation failed |
+
+### Behavior
+
+1. **Request Distribution**: Sends signature requests to all validators not already in the signer bit set
+2. **Response Collection**: Collects responses asynchronously via channels
+3. **Signature Verification**: Verifies each BLS signature against the validator's public key
+4. **Aggregation**: Combines valid signatures using BLS aggregation
+5. **Quorum Check**: Returns early when quorum threshold is met
+6. **Graceful Cancellation**: Returns partial results if context is cancelled
+
+## Usage Example
+
+```go
+import (
+    "context"
+    "math/big"
+
+    "github.com/luxfi/warp"
+)
+
+// Create aggregator
+aggregator := warp.NewSignatureAggregator(logger, p2pClient)
+
+// Aggregate signatures with 67% quorum
+signedMsg, aggregatedStake, totalStake, err := aggregator.AggregateSignatures(
+    ctx,
+    unsignedMessage,
+    nil,              // no justification
+    validators,
+    67,               // quorum numerator
+    100,              // quorum denominator
+)
+if err != nil {
+    return err
+}
+
+// Check if quorum was reached
+threshold := new(big.Int).Mul(totalStake, big.NewInt(67))
+threshold.Div(threshold, big.NewInt(100))
+
+if aggregatedStake.Cmp(threshold) >= 0 {
+    fmt.Println("Quorum reached!")
+}
+```
+
+## Internal Types
+
+### indexedValidator
+
+Internal type tracking validator with its index in the canonical set.
+
+```go
+type indexedValidator struct {
+    *Validator
+    Index int
+}
+```
+
+### aggregatorResult
+
+Internal result type for async signature collection.
+
+```go
+type aggregatorResult struct {
+    NodeID    ids.NodeID
+    Validator indexedValidator
+    Signature *bls.Signature
+    Err       error
+}
+```
+
+## Error Handling
+
+The aggregator handles various error conditions:
+
+- **Failed verification**: Signatures that don't verify are logged and dropped
+- **Duplicate signatures**: Validators sharing public keys are deduplicated
+- **Network errors**: Request failures are logged but don't stop aggregation
+- **Context cancellation**: Returns partial results when cancelled
+
+## Performance Considerations
+
+- Requests are sent in parallel to all non-signing validators
+- Early return when quorum is reached avoids waiting for slow validators
+- Bit set operations efficiently track which validators have signed
+- BLS aggregation combines multiple signatures into a single compact signature

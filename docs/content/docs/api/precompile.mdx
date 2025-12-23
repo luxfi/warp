@@ -1,0 +1,238 @@
+---
+title: Precompile API
+description: EVM precompile interface for warp messaging
+---
+
+# Precompile API
+
+The warp precompile provides native EVM integration for cross-chain messaging at address `0x0200000000000000000000000000000000000005`.
+
+## Contract Address
+
+```go
+var WarpPrecompileContract = common.HexToAddress("0x0200000000000000000000000000000000000005")
+```
+
+## WarpPrecompile Interface
+
+```go
+type WarpPrecompile interface {
+    GetVerifiedWarpMessage(
+        index uint32,
+        evm *vm.EVM,
+        caller common.Address,
+        value *uint256.Int,
+        readOnly bool,
+    ) ([]byte, error)
+
+    SendWarpMessage(
+        payload []byte,
+        evm *vm.EVM,
+        caller common.Address,
+        value *uint256.Int,
+        readOnly bool,
+    ) ([]byte, error)
+
+    GetBlockchainID(
+        evm *vm.EVM,
+        caller common.Address,
+        value *uint256.Int,
+        readOnly bool,
+    ) ([]byte, error)
+}
+```
+
+## Configuration
+
+### WarpConfig
+
+```go
+type WarpConfig struct {
+    NetworkID         uint32   // Lux network ID
+    SourceChainID     ids.ID   // Source blockchain ID
+    BlockchainID      ids.ID   // This blockchain's ID
+    QuorumNumerator   uint64   // Signature quorum numerator
+    QuorumDenominator uint64   // Signature quorum denominator
+}
+```
+
+### DefaultWarpConfig
+
+Returns default configuration with 67% quorum.
+
+```go
+func DefaultWarpConfig(networkID uint32, chainID ids.ID) *WarpConfig {
+    return &WarpConfig{
+        NetworkID:         networkID,
+        SourceChainID:     chainID,
+        BlockchainID:      chainID,
+        QuorumNumerator:   67,
+        QuorumDenominator: 100,
+    }
+}
+```
+
+## WarpBackend Interface
+
+Backend interface required by the precompile.
+
+```go
+type WarpBackend interface {
+    GetMessage(index uint32) (*warp.Message, error)
+    AddMessage(unsignedMessage *warp.UnsignedMessage) error
+    GetValidatorState() warp.ValidatorState
+}
+```
+
+## WarpModule
+
+Implementation of the warp precompile functionality.
+
+```go
+type WarpModule struct {
+    config  *WarpConfig
+    backend WarpBackend
+}
+
+func NewWarpModule(config *WarpConfig, backend WarpBackend) *WarpModule
+```
+
+### GetVerifiedWarpMessage
+
+Retrieves and verifies a warp message by index.
+
+```go
+func (w *WarpModule) GetVerifiedWarpMessage(
+    index uint32,
+    evm *vm.EVM,
+    caller common.Address,
+    value *uint256.Int,
+    readOnly bool,
+) ([]byte, error)
+```
+
+**Process:**
+1. Retrieves message from backend
+2. Verifies signatures against validator state
+3. Checks quorum threshold
+4. Returns verified message bytes
+
+### SendWarpMessage
+
+Sends a new warp message from the EVM.
+
+```go
+func (w *WarpModule) SendWarpMessage(
+    payload []byte,
+    evm *vm.EVM,
+    caller common.Address,
+    value *uint256.Int,
+    readOnly bool,
+) ([]byte, error)
+```
+
+**Process:**
+1. Validates not in read-only mode
+2. Creates unsigned message with payload
+3. Adds message to backend
+4. Returns message ID
+
+### GetBlockchainID
+
+Returns the blockchain ID.
+
+```go
+func (w *WarpModule) GetBlockchainID(
+    evm *vm.EVM,
+    caller common.Address,
+    value *uint256.Int,
+    readOnly bool,
+) ([]byte, error)
+```
+
+## Gas Costs
+
+```go
+const (
+    GetVerifiedWarpMessageGas = 200_000
+    SendWarpMessageGas        = 100_000
+    GetBlockchainIDGas        = 10_000
+)
+```
+
+## Solidity Interface
+
+```solidity
+interface IWarp {
+    struct WarpMessage {
+        bytes32 sourceChainID;
+        address originSenderAddress;
+        bytes payload;
+    }
+
+    function getVerifiedWarpMessage(uint32 index)
+        external view
+        returns (WarpMessage memory message, bool valid);
+
+    function sendWarpMessage(bytes calldata payload)
+        external
+        returns (bytes32 messageID);
+
+    function getBlockchainID()
+        external view
+        returns (bytes32 blockchainID);
+
+    event SendWarpMessage(
+        address indexed sender,
+        bytes32 indexed messageID,
+        bytes message
+    );
+}
+```
+
+## Usage in Solidity
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IWarp {
+    function sendWarpMessage(bytes calldata payload) external returns (bytes32);
+    function getBlockchainID() external view returns (bytes32);
+}
+
+contract CrossChainSender {
+    IWarp constant WARP = IWarp(0x0200000000000000000000000000000000000005);
+
+    function sendMessage(bytes calldata data) external returns (bytes32) {
+        return WARP.sendWarpMessage(data);
+    }
+
+    function getChainID() external view returns (bytes32) {
+        return WARP.getBlockchainID();
+    }
+}
+```
+
+## Usage in Go
+
+```go
+import (
+    "github.com/luxfi/warp/precompile"
+)
+
+// Create configuration
+config := precompile.DefaultWarpConfig(networkID, chainID)
+
+// Create warp module
+module := precompile.NewWarpModule(config, backend)
+
+// Send a message
+messageID, err := module.SendWarpMessage(
+    payload,
+    evm,
+    caller,
+    value,
+    false, // not read-only
+)
+```
