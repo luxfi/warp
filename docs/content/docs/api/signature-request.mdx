@@ -1,0 +1,169 @@
+---
+title: Signature Request API
+description: P2P signature request and response handling for warp messages
+---
+
+# Signature Request API
+
+The signature request API provides P2P protocol handlers for requesting and responding to warp signature requests between validators.
+
+## Types
+
+### SignatureRequest
+
+Represents a request for a warp signature from a validator.
+
+```go
+type SignatureRequest struct {
+    Message       []byte  // The unsigned warp message bytes
+    Justification []byte  // Optional justification for the signature
+}
+```
+
+### SignatureResponse
+
+Represents a validator's signature response.
+
+```go
+type SignatureResponse struct {
+    Signature []byte  // The BLS signature bytes
+}
+```
+
+## Marshaling Functions
+
+### MarshalSignatureRequest
+
+Marshals a signature request to bytes for P2P transmission.
+
+```go
+func MarshalSignatureRequest(req *SignatureRequest) ([]byte, error)
+```
+
+**Wire Format:**
+```
+msgLen(4 bytes) + message + justLen(4 bytes) + justification
+```
+
+### UnmarshalSignatureRequest
+
+Unmarshals bytes to a signature request.
+
+```go
+func UnmarshalSignatureRequest(data []byte) (*SignatureRequest, error)
+```
+
+### MarshalSignatureResponse
+
+Marshals a signature response to bytes.
+
+```go
+func MarshalSignatureResponse(signature []byte) ([]byte, error)
+```
+
+### UnmarshalSignatureResponse
+
+Unmarshals bytes to a signature response.
+
+```go
+func UnmarshalSignatureResponse(data []byte) (*SignatureResponse, error)
+```
+
+## Handlers
+
+### SignatureHandler Interface
+
+The interface for handling signature requests.
+
+```go
+type SignatureHandler interface {
+    Request(ctx context.Context, nodeID ids.NodeID, deadline time.Time, request []byte) ([]byte, error)
+}
+```
+
+### NoOpSignatureHandler
+
+A no-op implementation that returns empty responses.
+
+```go
+type NoOpSignatureHandler struct{}
+
+func (NoOpSignatureHandler) Request(context.Context, ids.NodeID, time.Time, []byte) ([]byte, error) {
+    return nil, nil
+}
+```
+
+### CachedSignatureHandler
+
+A handler that caches signature responses for efficiency.
+
+```go
+type CachedSignatureHandler struct {
+    cache   SignatureCacher[ids.ID, []byte]
+    backend interface{}
+    signer  Signer
+}
+
+func NewCachedSignatureHandler(
+    cache SignatureCacher[ids.ID, []byte],
+    backend interface{},
+    signer Signer,
+) SignatureHandler
+```
+
+The cached handler:
+1. Parses the incoming request
+2. Checks the cache for an existing signature
+3. If not cached, verifies the message (if backend is a Verifier)
+4. Signs the message
+5. Caches and returns the signature
+
+### SignatureHandlerAdapter
+
+Adapts a `SignatureHandler` to the `p2p.Handler` interface for use with the P2P router.
+
+```go
+type SignatureHandlerAdapter struct {
+    handler SignatureHandler
+}
+
+func NewSignatureHandlerAdapter(handler SignatureHandler) *SignatureHandlerAdapter
+```
+
+## Cache Interface
+
+### SignatureCacher
+
+Generic cache interface for signature responses.
+
+```go
+type SignatureCacher[K comparable, V any] interface {
+    Get(key K) (V, bool)
+    Put(key K, value V)
+}
+```
+
+## Constants
+
+```go
+const SignatureHandlerID = 0x12345678  // Protocol ID for warp signature handling
+```
+
+## Usage Example
+
+```go
+import "github.com/luxfi/warp"
+
+// Create a cached signature handler
+handler := warp.NewCachedSignatureHandler(
+    myCache,
+    myBackend,
+    mySigner,
+)
+
+// Adapt for P2P router
+adapter := warp.NewSignatureHandlerAdapter(handler)
+
+// Register with P2P router
+router.RegisterHandler(warp.SignatureHandlerID, adapter)
+```
