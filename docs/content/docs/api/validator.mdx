@@ -1,0 +1,237 @@
+---
+title: Validator API
+description: API reference for validator set management
+---
+
+# Validator API
+
+Package: `github.com/luxfi/warp`
+
+## Validator
+
+### Type Definition
+
+```go
+type Validator struct {
+    PublicKey      *bls.PublicKey
+    PublicKeyBytes []byte
+    Weight         uint64
+    NodeID         ids.NodeID
+}
+```
+
+### NewValidator
+
+```go
+func NewValidator(
+    publicKey *bls.PublicKey,
+    publicKeyBytes []byte,
+    weight uint64,
+    nodeID ids.NodeID,
+) *Validator
+```
+
+Creates a new validator.
+
+**Parameters:**
+- `publicKey` - Parsed BLS public key
+- `publicKeyBytes` - Compressed public key bytes (for canonical ordering)
+- `weight` - Stake weight (voting power)
+- `nodeID` - Node identifier
+
+### Methods
+
+#### Less
+
+```go
+func (v *Validator) Less(other *Validator) bool
+```
+
+Compares validators by public key bytes for sorting.
+
+---
+
+## CanonicalValidatorSet
+
+### Type Definition
+
+```go
+type CanonicalValidatorSet struct {
+    validators  []*Validator
+    totalWeight uint64
+}
+```
+
+### NewCanonicalValidatorSet
+
+```go
+func NewCanonicalValidatorSet(validators []*Validator) (*CanonicalValidatorSet, error)
+```
+
+Creates a canonical (sorted) validator set.
+
+**Validation:**
+- No nil validators
+- No zero weights
+- No empty public keys
+- No duplicate public keys
+- Total weight doesn't overflow
+
+**Sorting:**
+Validators are sorted by public key bytes (lexicographic).
+
+### Methods
+
+#### Validators
+
+```go
+func (c *CanonicalValidatorSet) Validators() []*Validator
+```
+
+Returns validators in canonical order.
+
+#### TotalWeight
+
+```go
+func (c *CanonicalValidatorSet) TotalWeight() uint64
+```
+
+Returns the sum of all validator weights.
+
+#### GetValidator
+
+```go
+func (c *CanonicalValidatorSet) GetValidator(index int) (*Validator, error)
+```
+
+Returns the validator at the given index.
+
+#### Len
+
+```go
+func (c *CanonicalValidatorSet) Len() int
+```
+
+Returns the number of validators.
+
+---
+
+## ValidatorState Interface
+
+```go
+type ValidatorState interface {
+    // GetValidatorSet returns the validator set for a chain at a height
+    GetValidatorSet(chainID ids.ID, height uint64) (map[ids.NodeID]*Validator, error)
+
+    // GetCurrentHeight returns the current height
+    GetCurrentHeight() (uint64, error)
+}
+```
+
+This interface is implemented by blockchain clients to provide validator sets.
+
+---
+
+## Helper Functions
+
+### GetCanonicalValidatorSet
+
+```go
+func GetCanonicalValidatorSet(
+    validatorState ValidatorState,
+    chainID ids.ID,
+) ([]*Validator, uint64, error)
+```
+
+Retrieves and canonicalizes the validator set.
+
+**Returns:**
+- Validators in canonical order
+- Total weight
+- Error if failed
+
+**Example:**
+```go
+validators, totalWeight, err := warp.GetCanonicalValidatorSet(state, chainID)
+```
+
+### ValidatorSetToMap
+
+```go
+func ValidatorSetToMap(validators []*Validator) map[ids.NodeID]*Validator
+```
+
+Converts a validator slice to a map keyed by node ID.
+
+### ParsePublicKey
+
+```go
+func ParsePublicKey(publicKeyBytes []byte) (*bls.PublicKey, error)
+```
+
+Parses a BLS public key from compressed bytes.
+
+### SerializePublicKey
+
+```go
+func SerializePublicKey(publicKey *bls.PublicKey) []byte
+```
+
+Serializes a BLS public key to compressed bytes.
+
+### ValidateValidatorSet
+
+```go
+func ValidateValidatorSet(validators []*Validator) error
+```
+
+Validates a validator set.
+
+**Checks:**
+- No nil validators
+- No zero weights
+- No empty public key bytes
+- No nil public key objects
+- No duplicate public keys
+
+### ChainIDToHash
+
+```go
+func ChainIDToHash(chainID ids.ID) common.Hash
+```
+
+Converts a chain ID to an EVM-compatible hash.
+
+---
+
+## Backend Package
+
+Package: `github.com/luxfi/warp/backend`
+
+### MockValidatorState
+
+For testing purposes:
+
+```go
+type MockValidatorState struct {
+    validators map[ids.NodeID]*warp.Validator
+    height     uint64
+}
+```
+
+#### NewMockValidatorState
+
+```go
+func NewMockValidatorState(validators []*warp.Validator, height uint64) *MockValidatorState
+```
+
+Creates a mock validator state for testing.
+
+**Example:**
+```go
+validators := []*warp.Validator{v1, v2, v3}
+mockState := backend.NewMockValidatorState(validators, 1000)
+
+// Use in verification
+err := warp.VerifyMessage(msg, networkID, mockState, 67, 100)
+```

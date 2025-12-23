@@ -1,0 +1,168 @@
+---
+title: Validators
+description: Validator set management and canonical ordering
+---
+
+# Validators
+
+Validators are responsible for signing Warp messages. The validator set must be ordered canonically for consistent signature verification across all nodes.
+
+## Validator Structure
+
+```go
+type Validator struct {
+    PublicKey      *bls.PublicKey  // BLS public key
+    PublicKeyBytes []byte          // Compressed public key bytes
+    Weight         uint64          // Stake weight
+    NodeID         ids.NodeID      // Node identifier
+}
+```
+
+### Creating a Validator
+
+```go
+v := warp.NewValidator(
+    publicKey,      // *bls.PublicKey
+    publicKeyBytes, // []byte
+    weight,         // uint64
+    nodeID,         // ids.NodeID
+)
+```
+
+## Canonical Validator Set
+
+Validators must be sorted deterministically for consistent verification:
+
+```go
+type CanonicalValidatorSet struct {
+    validators  []*Validator
+    totalWeight uint64
+}
+```
+
+### Creating a Canonical Set
+
+```go
+validators := []*Validator{v1, v2, v3}
+
+canonicalSet, err := warp.NewCanonicalValidatorSet(validators)
+```
+
+The constructor:
+1. Validates all validators (non-nil, non-zero weight, valid public key)
+2. Checks for duplicate public keys
+3. Calculates total weight
+4. Sorts validators by public key bytes
+
+### Accessing Validators
+
+```go
+// Get all validators in order
+validators := canonicalSet.Validators()
+
+// Get total weight
+totalWeight := canonicalSet.TotalWeight()
+
+// Get validator by index
+v, err := canonicalSet.GetValidator(0)
+
+// Get count
+count := canonicalSet.Len()
+```
+
+## ValidatorState Interface
+
+For integration with blockchain state:
+
+```go
+type ValidatorState interface {
+    // GetValidatorSet returns validators for a chain at a height
+    GetValidatorSet(chainID ids.ID, height uint64) (map[ids.NodeID]*Validator, error)
+
+    // GetCurrentHeight returns the current block height
+    GetCurrentHeight() (uint64, error)
+}
+```
+
+### Fetching Canonical Set
+
+```go
+validators, totalWeight, err := warp.GetCanonicalValidatorSet(
+    validatorState,
+    chainID,
+)
+```
+
+## Utility Functions
+
+### Convert to Map
+
+```go
+validatorMap := warp.ValidatorSetToMap(validators)
+// Returns map[ids.NodeID]*Validator
+```
+
+### Parse Public Key
+
+```go
+pk, err := warp.ParsePublicKey(publicKeyBytes)
+```
+
+### Serialize Public Key
+
+```go
+bytes := warp.SerializePublicKey(publicKey)
+```
+
+### Validate Set
+
+```go
+err := warp.ValidateValidatorSet(validators)
+```
+
+This checks:
+- No nil validators
+- No zero weights
+- No empty public keys
+- No nil public key objects
+- No duplicate public keys
+
+### Chain ID Conversion
+
+```go
+// Convert ids.ID to common.Hash for EVM compatibility
+hash := warp.ChainIDToHash(chainID)
+```
+
+## Mock Validator State
+
+For testing:
+
+```go
+import "github.com/luxfi/warp/backend"
+
+validators := []*warp.Validator{v1, v2, v3}
+height := uint64(1000)
+
+mockState := backend.NewMockValidatorState(validators, height)
+```
+
+## Weight Calculations
+
+Validator weights determine signing power:
+
+```go
+// Get signed weight from a signature
+signedWeight, err := signature.GetSignedWeight(validators)
+
+// Verify weight meets quorum
+// quorumNum/quorumDen = required percentage (e.g., 67/100 = 67%)
+err := warp.VerifyWeight(signedWeight, totalWeight, quorumNum, quorumDen)
+```
+
+## Best Practices
+
+1. **Use canonical ordering** - Always use `NewCanonicalValidatorSet` for consistency
+2. **Validate inputs** - Use `ValidateValidatorSet` before creating messages
+3. **Cache validator sets** - Avoid repeated fetches for the same height
+4. **Handle weight overflow** - Use the provided safe arithmetic functions

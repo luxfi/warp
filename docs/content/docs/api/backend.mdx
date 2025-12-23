@@ -1,0 +1,233 @@
+---
+title: Backend API
+description: API reference for warp backend implementations
+---
+
+# Backend API
+
+Package: `github.com/luxfi/warp/backend`
+
+## Backend Interface
+
+```go
+type Backend interface {
+    // AddMessage adds a message to be sent
+    AddMessage(msg *warp.UnsignedMessage) error
+
+    // GetMessage retrieves a verified message by index
+    GetMessage(index uint32) (*warp.Message, error)
+
+    // GetValidatorState returns the validator state
+    GetValidatorState() warp.ValidatorState
+}
+```
+
+---
+
+## MemoryBackend
+
+In-memory implementation for testing and development.
+
+```go
+type MemoryBackend struct {
+    mu             sync.RWMutex
+    messages       []*warp.Message
+    validatorState warp.ValidatorState
+    signer         signer.Signer
+}
+```
+
+### NewMemoryBackend
+
+```go
+func NewMemoryBackend(validatorState warp.ValidatorState, s signer.Signer) *MemoryBackend
+```
+
+**Parameters:**
+- `validatorState` - Provider for validator sets
+- `s` - Signer for message signing
+
+**Example:**
+```go
+validators := []*warp.Validator{v1, v2}
+state := backend.NewMockValidatorState(validators, 100)
+localSigner := signer.NewLocalSigner(secretKey)
+
+backend := backend.NewMemoryBackend(state, localSigner)
+```
+
+### Methods
+
+#### AddMessage
+
+```go
+func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error
+```
+
+Signs and stores a message.
+
+**Process:**
+1. Gets validator set for source chain
+2. Signs message with configured signer
+3. Creates BitSetSignature with signer's index
+4. Stores signed message
+
+#### GetMessage
+
+```go
+func (b *MemoryBackend) GetMessage(index uint32) (*warp.Message, error)
+```
+
+Retrieves a signed message by index.
+
+#### GetValidatorState
+
+```go
+func (b *MemoryBackend) GetValidatorState() warp.ValidatorState
+```
+
+Returns the validator state.
+
+---
+
+## ChainBackend
+
+Backend for blockchain integration.
+
+```go
+type ChainBackend struct {
+    mu             sync.RWMutex
+    pendingMsgs    []*warp.UnsignedMessage
+    verifiedMsgs   map[uint32]*warp.Message
+    validatorState warp.ValidatorState
+    chainID        common.Hash
+}
+```
+
+### NewChainBackend
+
+```go
+func NewChainBackend(validatorState warp.ValidatorState, chainID common.Hash) *ChainBackend
+```
+
+**Example:**
+```go
+chainID := common.HexToHash("0x...")
+backend := backend.NewChainBackend(validatorState, chainID)
+```
+
+### Methods
+
+#### AddMessage
+
+```go
+func (b *ChainBackend) AddMessage(msg *warp.UnsignedMessage) error
+```
+
+Adds an unsigned message to the pending queue.
+
+#### GetMessage
+
+```go
+func (b *ChainBackend) GetMessage(index uint32) (*warp.Message, error)
+```
+
+Retrieves a verified message by index.
+
+#### AddVerifiedMessage
+
+```go
+func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.Message) error
+```
+
+Adds a pre-verified message at the given index.
+
+#### GetPendingMessages
+
+```go
+func (b *ChainBackend) GetPendingMessages() []*warp.UnsignedMessage
+```
+
+Returns all pending unsigned messages.
+
+#### ClearPendingMessages
+
+```go
+func (b *ChainBackend) ClearPendingMessages()
+```
+
+Clears the pending message queue.
+
+---
+
+## MockValidatorState
+
+For testing purposes.
+
+```go
+type MockValidatorState struct {
+    validators map[ids.NodeID]*warp.Validator
+    height     uint64
+}
+```
+
+### NewMockValidatorState
+
+```go
+func NewMockValidatorState(validators []*warp.Validator, height uint64) *MockValidatorState
+```
+
+Creates a mock that returns the same validators for any chain.
+
+### Methods
+
+#### GetValidatorSet
+
+```go
+func (m *MockValidatorState) GetValidatorSet(chainID ids.ID, height uint64) (map[ids.NodeID]*warp.Validator, error)
+```
+
+Returns the configured validators (ignores chainID).
+
+#### GetCurrentHeight
+
+```go
+func (m *MockValidatorState) GetCurrentHeight() (uint64, error)
+```
+
+Returns the configured height.
+
+---
+
+## Usage Example
+
+```go
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/backend"
+    "github.com/luxfi/warp/signer"
+    "github.com/luxfi/crypto/bls"
+)
+
+// Create test keys and validators
+sk, _ := bls.NewSecretKey()
+pk := sk.PublicKey()
+pkBytes := bls.PublicKeyToCompressedBytes(pk)
+
+validator := warp.NewValidator(pk, pkBytes, 100, nodeID)
+validators := []*warp.Validator{validator}
+
+// Create mock state and signer
+state := backend.NewMockValidatorState(validators, 1000)
+localSigner := signer.NewLocalSigner(sk)
+
+// Create memory backend
+memBackend := backend.NewMemoryBackend(state, localSigner)
+
+// Add a message
+unsigned, _ := warp.NewUnsignedMessage(1, sourceChainID, payload)
+err := memBackend.AddMessage(unsigned)
+
+// Retrieve signed message
+signed, err := memBackend.GetMessage(0)
+```
