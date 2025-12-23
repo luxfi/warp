@@ -1,0 +1,198 @@
+---
+title: Handler API
+description: API reference for P2P message handling
+---
+
+# Handler API
+
+Package: `github.com/luxfi/warp`
+
+## Handler Interface
+
+The `Handler` interface defines how VMs handle cross-node Warp messages in the P2P network.
+
+```go
+type Handler interface {
+    // Request handles an incoming request and returns a response or error
+    Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) ([]byte, *p2p.Error)
+
+    // Response handles an incoming response to a previous request
+    Response(ctx context.Context, nodeID ids.NodeID, requestID uint32, msg []byte) error
+
+    // Gossip handles an incoming gossip message
+    Gossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
+
+    // RequestFailed is called when a request fails
+    RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *p2p.Error) error
+}
+```
+
+---
+
+## Methods
+
+### Request
+
+```go
+Request(ctx context.Context, nodeID ids.NodeID, requestID uint32, deadline time.Time, msg []byte) ([]byte, *p2p.Error)
+```
+
+Handles an incoming request from another node.
+
+**Parameters:**
+- `ctx` - Context for cancellation and timeouts
+- `nodeID` - The requesting node's ID
+- `requestID` - Unique request identifier
+- `deadline` - Request deadline
+- `msg` - Request message bytes
+
+**Returns:**
+- `[]byte` - Response message bytes
+- `*p2p.Error` - Error if request cannot be fulfilled
+
+### Response
+
+```go
+Response(ctx context.Context, nodeID ids.NodeID, requestID uint32, msg []byte) error
+```
+
+Handles an incoming response to a previous request.
+
+**Parameters:**
+- `ctx` - Context for cancellation
+- `nodeID` - The responding node's ID
+- `requestID` - The original request ID
+- `msg` - Response message bytes
+
+### Gossip
+
+```go
+Gossip(ctx context.Context, nodeID ids.NodeID, msg []byte) error
+```
+
+Handles an incoming gossip message.
+
+**Parameters:**
+- `ctx` - Context for cancellation
+- `nodeID` - The gossiping node's ID
+- `msg` - Gossip message bytes
+
+### RequestFailed
+
+```go
+RequestFailed(ctx context.Context, nodeID ids.NodeID, requestID uint32, err *p2p.Error) error
+```
+
+Called when a request fails (timeout, connection error, etc.).
+
+**Parameters:**
+- `ctx` - Context for cancellation
+- `nodeID` - The target node's ID
+- `requestID` - The failed request ID
+- `err` - The error that caused the failure
+
+---
+
+## P2P Error Types
+
+From `github.com/luxfi/p2p`:
+
+```go
+type Error struct {
+    Code    int32
+    Message string
+}
+```
+
+---
+
+## Implementation Example
+
+```go
+import (
+    "context"
+    "time"
+
+    "github.com/luxfi/ids"
+    "github.com/luxfi/p2p"
+    "github.com/luxfi/warp"
+)
+
+type WarpHandler struct {
+    backend warp.Backend
+}
+
+func (h *WarpHandler) Request(
+    ctx context.Context,
+    nodeID ids.NodeID,
+    requestID uint32,
+    deadline time.Time,
+    msg []byte,
+) ([]byte, *p2p.Error) {
+    // Parse the signature request
+    req, err := warp.ParseSignatureRequest(msg)
+    if err != nil {
+        return nil, &p2p.Error{
+            Code:    1,
+            Message: "invalid request",
+        }
+    }
+
+    // Get the signed message
+    signed, err := h.backend.GetMessage(req.MessageIndex)
+    if err != nil {
+        return nil, &p2p.Error{
+            Code:    2,
+            Message: "message not found",
+        }
+    }
+
+    // Return signature bytes
+    return signed.Signature.Bytes(), nil
+}
+
+func (h *WarpHandler) Response(
+    ctx context.Context,
+    nodeID ids.NodeID,
+    requestID uint32,
+    msg []byte,
+) error {
+    // Process response from signature aggregation request
+    return nil
+}
+
+func (h *WarpHandler) Gossip(
+    ctx context.Context,
+    nodeID ids.NodeID,
+    msg []byte,
+) error {
+    // Handle gossiped warp message
+    warpMsg, err := warp.ParseMessage(msg)
+    if err != nil {
+        return err
+    }
+    // Process the message...
+    return nil
+}
+
+func (h *WarpHandler) RequestFailed(
+    ctx context.Context,
+    nodeID ids.NodeID,
+    requestID uint32,
+    err *p2p.Error,
+) error {
+    // Log or handle the failure
+    return nil
+}
+```
+
+---
+
+## Integration Notes
+
+The `Handler` interface is typically implemented by VMs (Virtual Machines) to:
+
+1. **Respond to signature requests** - Other nodes request signatures for messages
+2. **Process signature responses** - Aggregate signatures from multiple validators
+3. **Handle gossip** - Receive and propagate warp messages
+4. **Handle failures** - Retry or log failed requests

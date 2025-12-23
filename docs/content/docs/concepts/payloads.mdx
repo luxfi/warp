@@ -1,0 +1,230 @@
+---
+title: Payloads
+description: Message payload types for cross-chain operations
+---
+
+# Payloads
+
+Payloads define the structure of data carried in Warp messages. The `payload` package provides several payload types for different cross-chain operations.
+
+## Payload Interface
+
+All payloads implement this interface:
+
+```go
+type Payload interface {
+    Bytes() []byte   // Serialize the payload
+    Verify() error   // Validate the payload
+}
+```
+
+## Payload Types
+
+| ID | Type | Description |
+|----|------|-------------|
+| 0 | AddressedCall | Cross-VM contract calls |
+| 1 | Hash | Simple hash payload |
+| 2 | L1ValidatorRegistration | Validator registration status |
+| 3 | RegisterL1Validator | Add validator to subnet |
+| 4 | SubnetToL1Conversion | Subnet conversion message |
+| 5 | L1ValidatorWeight | Validator weight update |
+
+## AddressedCall
+
+For cross-VM contract calls:
+
+```go
+type AddressedCall struct {
+    SourceAddress []byte  // Originating contract address
+    Payload       []byte  // Call data
+}
+```
+
+### Creating an AddressedCall
+
+```go
+import "github.com/luxfi/warp/payload"
+
+addressedCall, err := payload.NewAddressedCall(
+    sourceAddress,  // []byte - source contract
+    callData,       // []byte - encoded function call
+)
+```
+
+### Parsing
+
+```go
+ac, err := payload.ParseAddressedCall(bytes)
+```
+
+## Hash
+
+Simple 32-byte hash payload:
+
+```go
+type Hash struct {
+    Hash []byte  // 32 bytes
+}
+```
+
+### Creating a Hash Payload
+
+```go
+hash, err := payload.NewHash(hashBytes)  // Must be 32 bytes
+```
+
+### Parsing
+
+```go
+h, err := payload.ParseHash(bytes)
+```
+
+## L1ValidatorRegistration
+
+Represents validator registration status:
+
+```go
+type L1ValidatorRegistration struct {
+    Valid      bool    // Registration validity
+    Validation []byte  // Validation data
+}
+```
+
+### Creating
+
+```go
+reg, err := payload.NewL1ValidatorRegistration(valid, validationBytes)
+```
+
+### Parsing
+
+```go
+reg, err := payload.ParseL1ValidatorRegistration(bytes)
+```
+
+## RegisterL1Validator
+
+Add a new validator to a subnet:
+
+```go
+type RegisterL1Validator struct {
+    SubnetID         []byte  // 32 bytes
+    NodeID           []byte  // Node identifier
+    Weight           uint64  // Stake weight
+    BLSPublicKey     []byte  // BLS public key
+    RegistrationTime uint64  // Unix timestamp
+}
+```
+
+### Creating
+
+```go
+reg, err := payload.NewRegisterL1Validator(
+    subnetID,         // 32 bytes
+    nodeID,           // []byte
+    weight,           // uint64
+    blsPublicKey,     // []byte
+    registrationTime, // uint64
+)
+```
+
+### Validation
+
+- SubnetID must be 32 bytes
+- NodeID must not be empty
+- Weight must be non-zero
+- BLSPublicKey must not be empty
+
+## SubnetToL1Conversion
+
+Subnet conversion message:
+
+```go
+type SubnetToL1Conversion struct {
+    SubnetID []byte    // 32 bytes
+    ChainID  []byte    // 32 bytes
+    Address  []byte    // Conversion address
+    Managers [][]byte  // Manager addresses
+}
+```
+
+### Creating
+
+```go
+conversion, err := payload.NewSubnetToL1Conversion(
+    subnetID,   // 32 bytes
+    chainID,    // 32 bytes
+    address,    // []byte
+    managers,   // [][]byte
+)
+```
+
+## L1ValidatorWeight
+
+Update validator weight:
+
+```go
+type L1ValidatorWeight struct {
+    ValidationID []byte  // 32 bytes
+    Nonce        uint64  // Replay protection
+    Weight       uint64  // New weight
+}
+```
+
+### Creating
+
+```go
+weight, err := payload.NewL1ValidatorWeight(
+    validationID,  // 32 bytes
+    nonce,         // uint64
+    weight,        // uint64
+)
+```
+
+## Generic Parsing
+
+Parse any payload type:
+
+```go
+p, err := payload.ParsePayload(bytes)
+
+// Type switch to handle
+switch v := p.(type) {
+case *payload.AddressedCall:
+    // Handle addressed call
+case *payload.Hash:
+    // Handle hash
+case *payload.RegisterL1Validator:
+    // Handle registration
+// ... etc
+}
+```
+
+## Integration with Messages
+
+```go
+// Create payload
+ac, _ := payload.NewAddressedCall(sourceAddr, callData)
+
+// Use in message
+unsigned, _ := warp.NewUnsignedMessage(
+    networkID,
+    sourceChainID,
+    ac.Bytes(),  // Serialize payload
+)
+
+// On receiving end, parse the payload
+receivedPayload, _ := payload.ParseAddressedCall(msg.Payload)
+```
+
+## Error Handling
+
+```go
+var ErrInvalidPayload = errors.New("invalid payload")
+
+// Specific validation errors include:
+// - "empty source address" (AddressedCall)
+// - "hash must be 32 bytes" (Hash)
+// - "subnet ID must be 32 bytes" (RegisterL1Validator)
+// - "zero weight" (RegisterL1Validator)
+```

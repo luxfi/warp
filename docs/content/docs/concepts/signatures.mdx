@@ -1,0 +1,153 @@
+---
+title: Signatures
+description: BLS signature aggregation in Warp
+---
+
+# Signatures
+
+Warp uses BLS (Boneh-Lynn-Shacham) signatures for efficient multi-signature aggregation. This allows multiple validators to sign a message, with all signatures combined into a single aggregate signature.
+
+## Signature Interface
+
+```go
+type Signature interface {
+    // Verify verifies the signature against the message and validator set
+    Verify(msg []byte, validators []*Validator) error
+
+    // GetSignedWeight returns the total weight of validators that signed
+    GetSignedWeight(validators []*Validator) (uint64, error)
+
+    // Equal returns true if two signatures are equal
+    Equal(other Signature) bool
+
+    // Bytes returns the bytes representation
+    Bytes() []byte
+}
+```
+
+## BitSetSignature
+
+The primary implementation uses a bit set to indicate which validators signed:
+
+```go
+type BitSetSignature struct {
+    Signers   Bits                   // Bit set of signer indices
+    Signature [bls.SignatureLen]byte // Aggregated BLS signature (96 bytes)
+}
+```
+
+### Creating a BitSetSignature
+
+```go
+sig := warp.NewBitSetSignature(signerBits, aggregatedSignature)
+```
+
+### How It Works
+
+1. Each validator is assigned an index in the canonical validator set
+2. When a validator signs, their index is added to the `Signers` bit set
+3. Individual BLS signatures are aggregated into a single 96-byte signature
+4. Verification aggregates the corresponding public keys and verifies
+
+## Signing a Message
+
+### Single Signer
+
+```go
+import "github.com/luxfi/crypto/bls"
+
+// Sign raw bytes
+signature, err := warp.Sign(msgBytes, secretKey)
+```
+
+### Multiple Signers
+
+```go
+// Sign with multiple validators
+signers := []*bls.SecretKey{sk1, sk2, sk3}
+
+signed, err := warp.SignMessage(unsigned, signers, validators)
+```
+
+### Aggregating Signatures
+
+```go
+signatures := []*bls.Signature{sig1, sig2, sig3}
+
+aggregated, err := warp.AggregateSignatures(signatures)
+```
+
+## Verification
+
+The `Verify` method on `BitSetSignature`:
+
+1. Extracts signer indices from the bit set
+2. Retrieves corresponding public keys from validators
+3. Aggregates the public keys
+4. Verifies the aggregate signature against the message
+
+```go
+err := bitSetSig.Verify(msgBytes, validators)
+if err != nil {
+    // Signature invalid
+}
+```
+
+## Weight Calculation
+
+Get the total stake weight of signers:
+
+```go
+weight, err := sig.GetSignedWeight(validators)
+```
+
+Verify quorum requirements:
+
+```go
+err := warp.VerifyWeight(signedWeight, totalWeight, quorumNum, quorumDen)
+```
+
+The quorum check uses safe integer arithmetic to prevent overflow:
+
+```go
+// Verifies: signedWeight / totalWeight >= quorumNum / quorumDen
+// Rearranged: quorumNum * totalWeight <= quorumDen * signedWeight
+```
+
+## BLS Cryptography
+
+Warp uses the BLS12-381 curve via `github.com/luxfi/crypto/bls`:
+
+| Component | Size |
+|-----------|------|
+| Public Key | 48 bytes |
+| Secret Key | 32 bytes |
+| Signature | 96 bytes |
+
+### Key Operations
+
+```go
+import "github.com/luxfi/crypto/bls"
+
+// Generate a new key pair
+sk, err := bls.NewSecretKey()
+pk := sk.PublicKey()
+
+// Serialize public key
+pkBytes := bls.PublicKeyToCompressedBytes(pk)
+
+// Parse public key
+pk, err := bls.PublicKeyFromCompressedBytes(pkBytes)
+
+// Aggregate public keys
+aggregatedPK, err := bls.AggregatePublicKeys(publicKeys)
+
+// Verify signature
+valid := bls.Verify(publicKey, signature, message)
+```
+
+## Security Considerations
+
+1. **Rogue Key Attack**: Mitigated by requiring proof of possession
+2. **Replay Protection**: Network ID and source chain ID prevent cross-chain replay
+3. **Quorum Requirements**: Typically 67% (2/3) for BFT security guarantees

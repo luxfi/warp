@@ -1,0 +1,280 @@
+---
+title: Validator Integration Guide
+description: Integrate Warp message signing into your validator node
+---
+
+# Validator Integration Guide
+
+This guide explains how to integrate Warp message signing into a validator node.
+
+## Overview
+
+Validators participate in Warp by:
+1. Receiving signature requests for messages
+2. Verifying the messages are valid
+3. Signing approved messages with their BLS key
+4. Returning signatures to requesters
+
+## Prerequisites
+
+- A running Lux Network validator node
+- BLS key pair for signing
+- Access to the validator's stake information
+
+## Step 1: Set Up the Signer
+
+### Generate BLS Keys
+
+```go
+import "github.com/luxfi/crypto/bls"
+
+// Generate a new key pair (do this once and store securely)
+secretKey, err := bls.NewSecretKey()
+if err != nil {
+    panic(err)
+}
+
+publicKey := secretKey.PublicKey()
+publicKeyBytes := bls.PublicKeyToCompressedBytes(publicKey)
+
+// Store secretKey securely (e.g., encrypted file or HSM)
+```
+
+### Create the Signer
+
+```go
+import "github.com/luxfi/warp/signer"
+
+// For local signing
+localSigner := signer.NewLocalSigner(secretKey)
+
+// For remote/HSM signing
+remoteSigner, err := signer.NewRemoteSigner(hsmClient)
+```
+
+## Step 2: Implement the Verifier
+
+Create a verifier to validate messages before signing:
+
+```go
+import (
+    "context"
+    "github.com/luxfi/warp"
+)
+
+type ValidatorVerifier struct {
+    allowedSources map[ids.ID]bool
+    stateProvider  StateProvider
+}
+
+func (v *ValidatorVerifier) Verify(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    justification []byte,
+) error {
+    // 1. Check source chain is known
+    if !v.allowedSources[msg.SourceChainID] {
+        return errors.New("unknown source chain")
+    }
+
+    // 2. Verify the message content
+    if len(msg.Payload) == 0 {
+        return errors.New("empty payload")
+    }
+
+    // 3. Verify justification (e.g., state proof)
+    if err := v.verifyProof(ctx, msg, justification); err != nil {
+        return fmt.Errorf("invalid justification: %w", err)
+    }
+
+    return nil
+}
+```
+
+## Step 3: Implement the Handler
+
+Handle incoming signature requests:
+
+```go
+import (
+    "context"
+    "time"
+    "github.com/luxfi/ids"
+    "github.com/luxfi/p2p"
+    "github.com/luxfi/warp"
+)
+
+type SignatureHandler struct {
+    signer   signer.Signer
+    verifier warp.Verifier
+}
+
+func (h *SignatureHandler) Request(
+    ctx context.Context,
+    nodeID ids.NodeID,
+    requestID uint32,
+    deadline time.Time,
+    msg []byte,
+) ([]byte, *p2p.Error) {
+    // Parse the request
+    req, err := warp.ParseSignatureRequest(msg)
+    if err != nil {
+        return nil, &p2p.Error{Code: 1, Message: "invalid request"}
+    }
+
+    // Verify before signing
+    if err := h.verifier.Verify(ctx, req.Message, req.Justification); err != nil {
+        return nil, &p2p.Error{Code: 2, Message: "verification failed"}
+    }
+
+    // Sign the message
+    sig, err := h.signer.Sign(req.Message)
+    if err != nil {
+        return nil, &p2p.Error{Code: 3, Message: "signing failed"}
+    }
+
+    return bls.SignatureToBytes(sig), nil
+}
+```
+
+## Step 4: Register with the Network
+
+Register your validator and handler:
+
+```go
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/backend"
+)
+
+// Create validator info
+validator := warp.NewValidator(
+    publicKey,
+    publicKeyBytes,
+    stakeWeight,  // Your validator's stake
+    nodeID,
+)
+
+// Create backend
+validatorState := getValidatorStateFromChain()
+memBackend := backend.NewMemoryBackend(validatorState, localSigner)
+
+// Create handler
+handler := &SignatureHandler{
+    signer:   localSigner,
+    verifier: myVerifier,
+}
+
+// Register with P2P network
+network.RegisterHandler("warp", handler)
+```
+
+## Step 5: Signature Aggregation
+
+For collecting signatures from other validators:
+
+```go
+import "github.com/luxfi/warp/signature-aggregator/api"
+
+type Aggregator struct {
+    network Network
+    handler Handler
+}
+
+func (a *Aggregator) AggregateSignatures(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    quorumPercent uint64,
+) (*warp.Message, error) {
+    // Get validator set
+    validators, totalWeight, err := warp.GetCanonicalValidatorSet(
+        validatorState,
+        msg.SourceChainID,
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    // Calculate required weight
+    requiredWeight := (totalWeight * quorumPercent) / 100
+
+    // Request signatures from validators
+    signatures := make(map[int]*bls.Signature)
+    var signedWeight uint64
+
+    for i, v := range validators {
+        sig, err := a.requestSignature(ctx, v.NodeID, msg)
+        if err != nil {
+            continue  // Try next validator
+        }
+
+        signatures[i] = sig
+        signedWeight += v.Weight
+
+        if signedWeight >= requiredWeight {
+            break
+        }
+    }
+
+    if signedWeight < requiredWeight {
+        return nil, warp.ErrInsufficientWeight
+    }
+
+    // Aggregate signatures
+    return aggregateIntoMessage(msg, signatures, validators)
+}
+```
+
+## Security Best Practices
+
+### Key Management
+
+1. **Never expose secret keys** - Keep keys encrypted at rest
+2. **Use HSMs in production** - Hardware security modules for key storage
+3. **Rotate keys periodically** - Update keys according to security policy
+4. **Backup keys securely** - Encrypted backups with offline storage
+
+### Message Verification
+
+1. **Verify all requests** - Never sign without verification
+2. **Check justification** - Require proofs for state claims
+3. **Rate limit** - Prevent DoS via excessive requests
+4. **Log all activity** - Audit trail for signing operations
+
+### Network Security
+
+1. **Authenticate peers** - Verify requesting node identity
+2. **Use TLS** - Encrypt all P2P communication
+3. **Firewall rules** - Limit network exposure
+4. **Monitor anomalies** - Alert on unusual patterns
+
+## Monitoring
+
+Track these metrics:
+
+```go
+// Prometheus metrics example
+var (
+    signaturesIssued = prometheus.NewCounter(prometheus.CounterOpts{
+        Name: "warp_signatures_issued_total",
+        Help: "Total signatures issued",
+    })
+    signaturesFailed = prometheus.NewCounter(prometheus.CounterOpts{
+        Name: "warp_signatures_failed_total",
+        Help: "Total signature requests failed",
+    })
+    signatureLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+        Name: "warp_signature_latency_seconds",
+        Help: "Signature request latency",
+    })
+)
+```
+
+## Troubleshooting
+
+| Issue | Possible Cause | Solution |
+|-------|----------------|----------|
+| Signature not accepted | Key mismatch | Verify public key in validator set |
+| Low signing rate | Network issues | Check P2P connectivity |
+| Verification failures | Invalid proofs | Review verifier logic |
+| Timeout errors | Slow signing | Optimize or use faster HSM |

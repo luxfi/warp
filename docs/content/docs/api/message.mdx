@@ -1,0 +1,222 @@
+---
+title: Message API
+description: API reference for warp message types
+---
+
+# Message API
+
+Package: `github.com/luxfi/warp`
+
+## Constants
+
+```go
+const (
+    CodecVersion   = 0
+    MaxMessageSize = 256 * KiB  // 262,144 bytes
+)
+```
+
+## Error Variables
+
+```go
+var (
+    ErrInvalidSignature   = errors.New("invalid signature")
+    ErrInvalidMessage     = errors.New("invalid message")
+    ErrUnknownValidator   = errors.New("unknown validator")
+    ErrInsufficientWeight = errors.New("insufficient weight")
+)
+```
+
+## UnsignedMessage
+
+### Type Definition
+
+```go
+type UnsignedMessage struct {
+    NetworkID     uint32   `serialize:"true"`
+    SourceChainID ids.ID   `serialize:"true"`
+    Payload       []byte   `serialize:"true"`
+}
+```
+
+### NewUnsignedMessage
+
+Creates a new unsigned message with validation.
+
+```go
+func NewUnsignedMessage(networkID uint32, sourceChainID ids.ID, payload []byte) (*UnsignedMessage, error)
+```
+
+**Parameters:**
+- `networkID` - Network identifier (1 for mainnet)
+- `sourceChainID` - 32-byte source chain identifier
+- `payload` - Message payload (max 256 KiB when serialized)
+
+**Returns:**
+- `*UnsignedMessage` - The created message
+- `error` - Error if validation fails
+
+### Methods
+
+#### Verify
+
+```go
+func (u *UnsignedMessage) Verify() error
+```
+
+Validates the message size.
+
+#### Bytes
+
+```go
+func (u *UnsignedMessage) Bytes() []byte
+```
+
+Returns the serialized message.
+
+#### ID
+
+```go
+func (u *UnsignedMessage) ID() ids.ID
+```
+
+Returns the message hash as an identifier.
+
+### ParseUnsignedMessage
+
+```go
+func ParseUnsignedMessage(b []byte) (*UnsignedMessage, error)
+```
+
+Parses and validates an unsigned message from bytes.
+
+---
+
+## Message
+
+### Type Definition
+
+```go
+type Message struct {
+    UnsignedMessage *UnsignedMessage `serialize:"true"`
+    Signature       Signature        `serialize:"true"`
+}
+```
+
+### NewMessage
+
+Creates a signed message.
+
+```go
+func NewMessage(unsigned *UnsignedMessage, signature Signature) (*Message, error)
+```
+
+### Methods
+
+#### Verify
+
+```go
+func (m *Message) Verify() error
+```
+
+Validates the message structure.
+
+#### Bytes
+
+```go
+func (m *Message) Bytes() []byte
+```
+
+Returns the serialized signed message.
+
+#### ID
+
+```go
+func (m *Message) ID() ids.ID
+```
+
+Returns the ID of the underlying unsigned message.
+
+#### GetSourceChainID
+
+```go
+func (m *Message) GetSourceChainID() ids.ID
+```
+
+Returns the source chain ID.
+
+#### SourceChainIDHash
+
+```go
+func (m *Message) SourceChainIDHash() common.Hash
+```
+
+Returns the source chain ID as an EVM-compatible hash.
+
+#### Equal
+
+```go
+func (m *Message) Equal(other *Message) bool
+```
+
+Compares two messages for equality.
+
+#### EncodeRLP / DecodeRLP
+
+```go
+func (m *Message) EncodeRLP(w io.Writer) error
+func (m *Message) DecodeRLP(s *rlp.Stream) error
+```
+
+RLP encoding for EVM compatibility.
+
+### ParseMessage
+
+```go
+func ParseMessage(b []byte) (*Message, error)
+```
+
+Parses and validates a signed message from bytes.
+
+---
+
+## Verification Functions
+
+### VerifyMessage
+
+```go
+func VerifyMessage(
+    msg *Message,
+    networkID uint32,
+    validatorState ValidatorState,
+    quorumNum uint64,
+    quorumDen uint64,
+) error
+```
+
+Fully verifies a message:
+1. Validates message structure
+2. Checks network ID matches
+3. Retrieves validator set
+4. Verifies signature weight meets quorum
+5. Verifies aggregated signature
+
+**Parameters:**
+- `msg` - The signed message
+- `networkID` - Expected network ID
+- `validatorState` - Validator state provider
+- `quorumNum`, `quorumDen` - Quorum fraction (e.g., 67/100)
+
+### VerifyWeight
+
+```go
+func VerifyWeight(signedWeight, totalWeight, quorumNum, quorumDen uint64) error
+```
+
+Verifies that signed weight meets the quorum threshold.
+
+**Example:**
+```go
+// Require 67% quorum
+err := warp.VerifyWeight(signedWeight, totalWeight, 67, 100)
+```

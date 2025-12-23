@@ -1,0 +1,232 @@
+---
+title: Signature API
+description: API reference for BLS signature operations
+---
+
+# Signature API
+
+Package: `github.com/luxfi/warp`
+
+## Signature Interface
+
+```go
+type Signature interface {
+    // Verify verifies the signature against the message and validator set
+    Verify(msg []byte, validators []*Validator) error
+
+    // GetSignedWeight returns the total weight of validators that signed
+    GetSignedWeight(validators []*Validator) (uint64, error)
+
+    // Equal returns true if two signatures are equal
+    Equal(other Signature) bool
+
+    // Bytes returns the bytes representation of the signature
+    Bytes() []byte
+}
+```
+
+---
+
+## BitSetSignature
+
+### Type Definition
+
+```go
+type BitSetSignature struct {
+    Signers   Bits                   `serialize:"true"`
+    Signature [bls.SignatureLen]byte `serialize:"true"`
+}
+```
+
+### NewBitSetSignature
+
+```go
+func NewBitSetSignature(signers Bits, signature [bls.SignatureLen]byte) *BitSetSignature
+```
+
+Creates a new bit set signature.
+
+**Parameters:**
+- `signers` - Bit set indicating which validator indices signed
+- `signature` - Aggregated 96-byte BLS signature
+
+### Methods
+
+#### Verify
+
+```go
+func (s *BitSetSignature) Verify(msg []byte, validators []*Validator) error
+```
+
+Verifies the aggregated signature:
+1. Extracts signer indices from bit set
+2. Collects corresponding public keys
+3. Aggregates public keys
+4. Verifies the BLS signature
+
+**Errors:**
+- `"no signers"` - Empty signers bit set
+- `"signer index exceeds validator count"` - Invalid signer index
+- `"validator has nil public key"` - Missing public key
+- `ErrInvalidSignature` - Signature verification failed
+
+#### GetSignedWeight
+
+```go
+func (s *BitSetSignature) GetSignedWeight(validators []*Validator) (uint64, error)
+```
+
+Calculates total stake weight of signers.
+
+#### Equal
+
+```go
+func (s *BitSetSignature) Equal(other Signature) bool
+```
+
+Compares two signatures for equality.
+
+#### Bytes
+
+```go
+func (s *BitSetSignature) Bytes() []byte
+```
+
+Returns the raw signature bytes.
+
+---
+
+## Signing Functions
+
+### Sign
+
+```go
+func Sign(msg []byte, sk *bls.SecretKey) (*bls.Signature, error)
+```
+
+Signs a message with a single secret key.
+
+**Example:**
+```go
+sig, err := warp.Sign(msgBytes, secretKey)
+```
+
+### SignMessage
+
+```go
+func SignMessage(
+    msg *UnsignedMessage,
+    signers []*bls.SecretKey,
+    validators []*Validator,
+) (*Message, error)
+```
+
+Signs a message with multiple signers and creates a complete signed message.
+
+**Process:**
+1. Finds each signer's index in the validator set
+2. Signs the message with each signer
+3. Aggregates all signatures
+4. Creates the bit set signature
+5. Returns the signed message
+
+**Example:**
+```go
+signers := []*bls.SecretKey{sk1, sk2, sk3}
+signed, err := warp.SignMessage(unsigned, signers, validators)
+```
+
+### AggregateSignatures
+
+```go
+func AggregateSignatures(signatures []*bls.Signature) (*bls.Signature, error)
+```
+
+Aggregates multiple BLS signatures into one.
+
+**Example:**
+```go
+aggregated, err := warp.AggregateSignatures([]*bls.Signature{sig1, sig2, sig3})
+```
+
+---
+
+## Bits Type
+
+The `Bits` type represents a variable-length bit set:
+
+```go
+type Bits []byte
+```
+
+### NewBitSet
+
+```go
+func NewBitSet() Bits
+```
+
+Creates a new empty bit set.
+
+### Methods
+
+#### Add
+
+```go
+func (b *Bits) Add(index int)
+```
+
+Sets the bit at the given index.
+
+#### Contains
+
+```go
+func (b Bits) Contains(index int) bool
+```
+
+Checks if a bit is set.
+
+#### BitLen
+
+```go
+func (b Bits) BitLen() int
+```
+
+Returns the number of bits that can be represented.
+
+#### Len
+
+```go
+func (b Bits) Len() int
+```
+
+Returns the count of set bits.
+
+#### HighestSetBit
+
+```go
+func (b Bits) HighestSetBit() int
+```
+
+Returns the index of the highest set bit + 1.
+
+#### Equal
+
+```go
+func (b Bits) Equal(other Bits) bool
+```
+
+Compares two bit sets.
+
+---
+
+## BLS Constants
+
+From `github.com/luxfi/crypto/bls`:
+
+```go
+const (
+    SignatureLen = 96   // BLS signature size
+    PublicKeyLen = 48   // Compressed public key size
+    SecretKeyLen = 32   // Secret key size
+)
+```

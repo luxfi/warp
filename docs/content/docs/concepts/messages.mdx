@@ -1,0 +1,131 @@
+---
+title: Messages
+description: Understanding Warp message types and structure
+---
+
+# Messages
+
+Warp messages are the core data structures for cross-chain communication. There are two main types: `UnsignedMessage` and `Message`.
+
+## UnsignedMessage
+
+An `UnsignedMessage` contains the raw message data without any signatures:
+
+```go
+type UnsignedMessage struct {
+    NetworkID     uint32   // Network identifier (e.g., 1 for mainnet)
+    SourceChainID ids.ID   // 32-byte chain identifier
+    Payload       []byte   // Application-specific data
+}
+```
+
+### Creating an Unsigned Message
+
+```go
+msg, err := warp.NewUnsignedMessage(
+    networkID,      // uint32
+    sourceChainID,  // ids.ID
+    payload,        // []byte
+)
+```
+
+### Message ID
+
+Each message has a unique ID computed as the hash of its serialized bytes:
+
+```go
+id := msg.ID()  // Returns ids.ID
+```
+
+### Serialization
+
+Messages are serialized using Lux's codec:
+
+```go
+bytes := msg.Bytes()
+```
+
+### Parsing
+
+Parse an unsigned message from bytes:
+
+```go
+msg, err := warp.ParseUnsignedMessage(bytes)
+```
+
+## Message (Signed)
+
+A `Message` wraps an `UnsignedMessage` with a signature:
+
+```go
+type Message struct {
+    UnsignedMessage *UnsignedMessage
+    Signature       Signature
+}
+```
+
+### Creating a Signed Message
+
+```go
+signed, err := warp.NewMessage(unsigned, signature)
+```
+
+Or sign directly with validators:
+
+```go
+signed, err := warp.SignMessage(unsigned, signers, validators)
+```
+
+### Verification
+
+Verify a message against a validator set:
+
+```go
+err := warp.VerifyMessage(
+    msg,            // *Message
+    networkID,      // uint32
+    validatorState, // ValidatorState
+    quorumNum,      // uint64 (numerator)
+    quorumDen,      // uint64 (denominator)
+)
+```
+
+### EVM Compatibility
+
+For EVM integration, messages can be RLP encoded:
+
+```go
+// Encode for EVM
+rlpBytes, err := rlp.EncodeToBytes(msg)
+
+// Decode from RLP
+var decoded Message
+err = rlp.DecodeBytes(rlpBytes, &decoded)
+```
+
+## Message Limits
+
+```go
+const (
+    CodecVersion   = 0
+    MaxMessageSize = 256 * KiB  // 262,144 bytes
+)
+```
+
+## Error Types
+
+```go
+var (
+    ErrInvalidSignature   = errors.New("invalid signature")
+    ErrInvalidMessage     = errors.New("invalid message")
+    ErrUnknownValidator   = errors.New("unknown validator")
+    ErrInsufficientWeight = errors.New("insufficient weight")
+)
+```
+
+## Best Practices
+
+1. **Always verify messages** before processing payloads
+2. **Check network ID** to prevent cross-network replay attacks
+3. **Use appropriate quorum** - typically 67% (2/3) for BFT security
+4. **Handle errors** - message parsing and verification can fail

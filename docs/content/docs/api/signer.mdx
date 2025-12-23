@@ -1,0 +1,250 @@
+---
+title: Signer API
+description: API reference for message signing infrastructure
+---
+
+# Signer API
+
+Package: `github.com/luxfi/warp/signer`
+
+## Signer Interface
+
+```go
+type Signer interface {
+    // Sign signs a message
+    Sign(msg *warp.UnsignedMessage) (*bls.Signature, error)
+
+    // GetPublicKey returns the public key
+    GetPublicKey() *bls.PublicKey
+}
+```
+
+---
+
+## LocalSigner
+
+Signs messages with a local secret key.
+
+```go
+type LocalSigner struct {
+    sk *bls.SecretKey
+    pk *bls.PublicKey
+}
+```
+
+### NewLocalSigner
+
+```go
+func NewLocalSigner(sk *bls.SecretKey) *LocalSigner
+```
+
+Creates a signer from a BLS secret key.
+
+**Example:**
+```go
+import (
+    "github.com/luxfi/crypto/bls"
+    "github.com/luxfi/warp/signer"
+)
+
+sk, _ := bls.NewSecretKey()
+localSigner := signer.NewLocalSigner(sk)
+```
+
+### Methods
+
+#### Sign
+
+```go
+func (s *LocalSigner) Sign(msg *warp.UnsignedMessage) (*bls.Signature, error)
+```
+
+Signs the message bytes with the local secret key.
+
+#### GetPublicKey
+
+```go
+func (s *LocalSigner) GetPublicKey() *bls.PublicKey
+```
+
+Returns the public key corresponding to the secret key.
+
+---
+
+## RemoteSigner
+
+Signs messages via RPC to a remote service.
+
+```go
+type RemoteSigner struct {
+    client SignerClient
+    pk     *bls.PublicKey
+}
+```
+
+### SignerClient Interface
+
+```go
+type SignerClient interface {
+    // Sign signs a message remotely
+    Sign(ctx context.Context, msg []byte) ([]byte, error)
+
+    // GetPublicKey gets the public key
+    GetPublicKey(ctx context.Context) ([]byte, error)
+}
+```
+
+### NewRemoteSigner
+
+```go
+func NewRemoteSigner(client SignerClient) (*RemoteSigner, error)
+```
+
+Creates a remote signer from a client implementation.
+
+**Process:**
+1. Calls `GetPublicKey` to retrieve the remote public key
+2. Parses and caches the public key
+
+### Methods
+
+#### Sign
+
+```go
+func (s *RemoteSigner) Sign(msg *warp.UnsignedMessage) (*bls.Signature, error)
+```
+
+Signs by calling the remote service.
+
+#### GetPublicKey
+
+```go
+func (s *RemoteSigner) GetPublicKey() *bls.PublicKey
+```
+
+Returns the cached public key.
+
+---
+
+## Backend Interface
+
+For managing multiple signers.
+
+```go
+type Backend interface {
+    // Sign signs a message with multiple signers
+    Sign(ctx context.Context, msg *warp.UnsignedMessage, signerIndices []int) (*warp.Message, error)
+
+    // GetValidators returns the current validator set
+    GetValidators(ctx context.Context) ([]*warp.Validator, error)
+}
+```
+
+---
+
+## SignerBackend
+
+Manages multiple signers for a validator set.
+
+```go
+type SignerBackend struct {
+    signers    map[int]Signer
+    validators []*warp.Validator
+}
+```
+
+### NewSignerBackend
+
+```go
+func NewSignerBackend(validators []*warp.Validator) *SignerBackend
+```
+
+Creates a signer backend for a validator set.
+
+### Methods
+
+#### AddSigner
+
+```go
+func (b *SignerBackend) AddSigner(index int, signer Signer) error
+```
+
+Adds a signer for a validator at the given index.
+
+**Validation:**
+- Index must be valid (0 to len(validators)-1)
+- Signer's public key must match the validator's public key
+
+**Example:**
+```go
+backend := signer.NewSignerBackend(validators)
+
+// Add signers for validators we control
+err := backend.AddSigner(0, localSigner1)
+err = backend.AddSigner(2, localSigner2)
+```
+
+#### Sign
+
+```go
+func (b *SignerBackend) Sign(
+    ctx context.Context,
+    msg *warp.UnsignedMessage,
+    signerIndices []int,
+) (*warp.Message, error)
+```
+
+Signs a message with specified validator indices.
+
+**Example:**
+```go
+// Sign with validators 0 and 2
+signed, err := backend.Sign(ctx, unsigned, []int{0, 2})
+```
+
+#### GetValidators
+
+```go
+func (b *SignerBackend) GetValidators(ctx context.Context) ([]*warp.Validator, error)
+```
+
+Returns the validator set.
+
+---
+
+## Complete Example
+
+```go
+import (
+    "context"
+    "github.com/luxfi/crypto/bls"
+    "github.com/luxfi/warp"
+    "github.com/luxfi/warp/signer"
+)
+
+// Generate keys for 3 validators
+keys := make([]*bls.SecretKey, 3)
+validators := make([]*warp.Validator, 3)
+for i := 0; i < 3; i++ {
+    sk, _ := bls.NewSecretKey()
+    pk := sk.PublicKey()
+    keys[i] = sk
+    validators[i] = warp.NewValidator(
+        pk,
+        bls.PublicKeyToCompressedBytes(pk),
+        100,
+        nodeIDs[i],
+    )
+}
+
+// Create signer backend
+backend := signer.NewSignerBackend(validators)
+
+// Add local signers (we control validators 0 and 1)
+backend.AddSigner(0, signer.NewLocalSigner(keys[0]))
+backend.AddSigner(1, signer.NewLocalSigner(keys[1]))
+
+// Create and sign a message
+unsigned, _ := warp.NewUnsignedMessage(1, chainID, payload)
+signed, err := backend.Sign(context.Background(), unsigned, []int{0, 1})
+```

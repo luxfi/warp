@@ -1,0 +1,290 @@
+---
+title: Precompile Integration Guide
+description: Integrate Warp messaging into EVM precompiles
+---
+
+# Precompile Integration Guide
+
+This guide covers integrating Warp messaging into EVM chains using precompiles.
+
+## Overview
+
+The Warp precompile provides a native interface for EVM contracts to:
+- Send cross-chain messages
+- Receive and verify cross-chain messages
+- Access validator sets
+
+## Precompile Address
+
+The Warp precompile is deployed at a fixed address:
+
+```solidity
+address constant WARP_PRECOMPILE = 0x0200000000000000000000000000000000000005;
+```
+
+## IWarpMessenger Interface
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface IWarpMessenger {
+    // Warp message structure
+    struct WarpMessage {
+        bytes32 sourceChainID;
+        bytes32 originSenderAddress;
+        bytes payload;
+    }
+
+    // Send a warp message
+    function sendWarpMessage(bytes calldata payload) external returns (bytes32 messageID);
+
+    // Get the blockchain ID (source chain ID for this chain)
+    function getBlockchainID() external view returns (bytes32);
+
+    // Get a verified warp message by index
+    function getVerifiedWarpMessage(uint32 index)
+        external view
+        returns (WarpMessage memory message, bool valid);
+
+    // Get a verified warp block hash
+    function getVerifiedWarpBlockHash(uint32 index)
+        external view
+        returns (bytes32 blockHash, bool valid);
+}
+```
+
+## Sending Messages
+
+### Basic Send
+
+```solidity
+contract CrossChainSender {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    
+    event MessageSent(bytes32 messageID, bytes payload);
+    
+    function sendMessage(bytes calldata payload) external returns (bytes32) {
+        bytes32 messageID = warp.sendWarpMessage(payload);
+        emit MessageSent(messageID, payload);
+        return messageID;
+    }
+}
+```
+
+### Structured Payload
+
+```solidity
+contract TokenBridgeSender {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    
+    struct TransferPayload {
+        address recipient;
+        uint256 amount;
+        uint256 nonce;
+    }
+    
+    uint256 public nonce;
+    
+    function bridgeTokens(
+        bytes32 destinationChain,
+        address recipient
+    ) external payable {
+        // Encode the transfer
+        bytes memory payload = abi.encode(TransferPayload({
+            recipient: recipient,
+            amount: msg.value,
+            nonce: nonce++
+        }));
+        
+        // Send the warp message
+        warp.sendWarpMessage(payload);
+    }
+}
+```
+
+## Receiving Messages
+
+### Basic Receive
+
+```solidity
+contract CrossChainReceiver {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    
+    bytes32 public allowedSourceChain;
+    address public allowedSender;
+    
+    event MessageReceived(bytes32 sourceChain, bytes payload);
+    
+    function receiveMessage(uint32 messageIndex) external {
+        // Get verified message
+        (IWarpMessenger.WarpMessage memory message, bool valid) = 
+            warp.getVerifiedWarpMessage(messageIndex);
+        
+        require(valid, "Invalid warp message");
+        require(message.sourceChainID == allowedSourceChain, "Wrong source chain");
+        require(bytes32(bytes20(allowedSender)) == message.originSenderAddress, "Wrong sender");
+        
+        emit MessageReceived(message.sourceChainID, message.payload);
+        
+        // Process the payload
+        processPayload(message.payload);
+    }
+    
+    function processPayload(bytes memory payload) internal {
+        // Application-specific logic
+    }
+}
+```
+
+### Token Bridge Receiver
+
+```solidity
+contract TokenBridgeReceiver {
+    IWarpMessenger public warp = IWarpMessenger(0x0200000000000000000000000000000000000005);
+    
+    bytes32 public sourceChain;
+    bytes32 public sourceBridge;
+    
+    mapping(uint256 => bool) public processedNonces;
+    
+    event TokensReceived(address recipient, uint256 amount, uint256 nonce);
+    
+    function receiveTokens(uint32 messageIndex) external {
+        (IWarpMessenger.WarpMessage memory message, bool valid) = 
+            warp.getVerifiedWarpMessage(messageIndex);
+        
+        require(valid, "Invalid message");
+        require(message.sourceChainID == sourceChain, "Wrong chain");
+        require(message.originSenderAddress == sourceBridge, "Wrong bridge");
+        
+        // Decode payload
+        (address recipient, uint256 amount, uint256 nonce) = 
+            abi.decode(message.payload, (address, uint256, uint256));
+        
+        // Prevent replay
+        require(!processedNonces[nonce], "Already processed");
+        processedNonces[nonce] = true;
+        
+        // Transfer tokens
+        payable(recipient).transfer(amount);
+        
+        emit TokensReceived(recipient, amount, nonce);
+    }
+    
+    receive() external payable {}
+}
+```
+
+## Go Precompile Implementation
+
+For VM developers implementing the precompile:
+
+```go
+package precompile
+
+import (
+    "github.com/luxfi/warp"
+    "github.com/luxfi/geth/common"
+)
+
+const WarpPrecompileAddress = common.HexToAddress("0x0200000000000000000000000000000000000005")
+
+type WarpPrecompile struct {
+    backend warp.Backend
+}
+
+func (p *WarpPrecompile) SendWarpMessage(
+    caller common.Address,
+    payload []byte,
+) ([]byte, error) {
+    // Get chain ID
+    chainID := p.backend.GetChainID()
+    
+    // Create unsigned message
+    msg, err := warp.NewUnsignedMessage(
+        p.backend.GetNetworkID(),
+        chainID,
+        payload,
+    )
+    if err != nil {
+        return nil, err
+    }
+    
+    // Store for signing
+    if err := p.backend.AddMessage(msg); err != nil {
+        return nil, err
+    }
+    
+    // Return message ID
+    return msg.ID().Bytes(), nil
+}
+
+func (p *WarpPrecompile) GetVerifiedWarpMessage(
+    index uint32,
+) (*WarpMessage, bool, error) {
+    msg, err := p.backend.GetMessage(index)
+    if err != nil {
+        return nil, false, nil
+    }
+    
+    // Verify the message
+    err = warp.VerifyMessage(
+        msg,
+        p.backend.GetNetworkID(),
+        p.backend.GetValidatorState(),
+        67, 100,  // 67% quorum
+    )
+    if err != nil {
+        return nil, false, nil
+    }
+    
+    return &WarpMessage{
+        SourceChainID:       msg.SourceChainIDHash(),
+        OriginSenderAddress: extractSender(msg),
+        Payload:             msg.UnsignedMessage.Payload,
+    }, true, nil
+}
+```
+
+## Gas Costs
+
+Estimated gas costs for precompile operations:
+
+| Operation | Gas Cost |
+|-----------|----------|
+| `sendWarpMessage` | 21,000 + 16 * len(payload) |
+| `getBlockchainID` | 100 |
+| `getVerifiedWarpMessage` | 30,000 + signature verification |
+
+## Security Considerations
+
+1. **Verify source chain** - Always check `sourceChainID`
+2. **Verify sender** - Check `originSenderAddress` is trusted
+3. **Prevent replay** - Track processed nonces/message IDs
+4. **Validate payloads** - Decode and validate all payload data
+5. **Handle failures** - Revert on invalid messages
+
+## Testing
+
+Test with mock validator state:
+
+```solidity
+contract WarpTest {
+    function testSendAndReceive() external {
+        // Deploy sender and receiver
+        CrossChainSender sender = new CrossChainSender();
+        CrossChainReceiver receiver = new CrossChainReceiver();
+        
+        // Configure receiver
+        receiver.setAllowedSource(sender.getChainID(), address(sender));
+        
+        // Send message
+        bytes32 msgID = sender.sendMessage("test payload");
+        
+        // In real scenario, wait for signature aggregation
+        // Then receive on destination
+        // receiver.receiveMessage(0);
+    }
+}
+```
