@@ -8,7 +8,7 @@ require (
 	github.com/luxfi/geth v1.16.53
 	github.com/luxfi/ids v1.2.5
 	github.com/luxfi/log v1.1.26
-	github.com/luxfi/math v1.0.5
+	github.com/luxfi/math v1.2.0
 	github.com/luxfi/p2p v1.4.6
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
@@ -34,7 +34,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/gorilla/rpc v1.2.1 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
@@ -42,7 +41,6 @@ require (
 	github.com/luxfi/consensus v1.22.26 // indirect
 	github.com/luxfi/metric v1.4.8 // indirect
 	github.com/luxfi/sampler v1.0.0 // indirect
-	github.com/luxfi/utils v1.0.3 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
