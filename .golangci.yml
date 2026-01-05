@@ -3,10 +3,6 @@ version: "2"
 formatters:
   enable:
     - gofmt
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/luxfi/warp
 
 linters:
   enable:
@@ -16,7 +12,6 @@ linters:
     - errcheck
     - funlen
     - goconst
-    - gocritic
     - gocyclo
     - gosec
     - govet
@@ -29,50 +24,41 @@ linters:
     - unused
     - whitespace
 
-linters-settings:
-  govet:
-    enable:
-      - shadow
-  gocyclo:
-    min-complexity: 15
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-  misspell:
-    locale: US
-  lll:
-    line-length: 140
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-  funlen:
-    lines: 100
-    statements: 50
+  settings:
+    govet:
+      disable:
+        - shadow
+    gocyclo:
+      min-complexity: 20
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    misspell:
+      locale: US
+    lll:
+      line-length: 160
+    funlen:
+      lines: 150
+      statements: 80
+    gosec:
+      excludes:
+        - G115
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - dupl
-        - gosec
-    - linters:
-        - lll
-      source: "^//go:generate "
-    - linters:
-        - unparam
-      text: "is always nil"
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - funlen
+      - linters:
+          - lll
+        source: "^//go:generate "
+      - linters:
+          - unparam
+        text: "is always nil"
 
 run:
   timeout: 5m

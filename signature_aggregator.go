@@ -131,13 +131,13 @@ func (s *SignatureAggregator) AggregateSignatures(
 	minThreshold.Div(minThreshold, new(big.Int).SetUint64(quorumDen))
 
 	// Block until:
-	// 1. The context is cancelled
+	// 1. The context is canceled
 	// 2. We get responses from all validators
 	// 3. The specified security threshold is reached
 	for i := 0; i < len(nonSigners); i++ {
 		select {
 		case <-ctx.Done():
-			// Try to return whatever progress we have if the context is cancelled
+			// Try to return whatever progress we have if the context is canceled
 			msg, err := newAggregatedMessage(message, signerBitSet, signatures)
 			if err != nil {
 				return nil, nil, nil, err
