@@ -24,8 +24,8 @@ message ValidatorSet {
   // Total weight of all validators
   uint64 total_weight = 2;
   
-  // Subnet ID this validator set belongs to
-  bytes subnet_id = 3;
+  // Chain ID this validator set belongs to
+  bytes chain_id = 3;
   
   // Height at which this validator set is valid
   uint64 height = 4;

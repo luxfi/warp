@@ -10,8 +10,8 @@ import (
 	"slices"
 
 	"github.com/luxfi/ids"
-	"github.com/luxfi/log"
-	"github.com/luxfi/vm/utils/wrappers"
+	log "github.com/luxfi/log"
+	"github.com/luxfi/codec/wrappers"
 )
 
 const (

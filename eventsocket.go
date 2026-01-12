@@ -10,10 +10,9 @@ import (
 	"syscall"
 
 	consensuscore "github.com/luxfi/consensus/core"
+	"github.com/luxfi/codec/wrappers"
 	"github.com/luxfi/ids"
-	"github.com/luxfi/log"
-	"github.com/luxfi/vm/utils"
-	"github.com/luxfi/vm/utils/wrappers"
+	log "github.com/luxfi/log"
 	"github.com/luxfi/warp/socket"
 )
 
@@ -168,10 +167,10 @@ func (eis *eventSocket) Accept(_ context.Context, _ ids.ID, container []byte) er
 // stop unregisters the event handler and closes the eventSocket
 func (eis *eventSocket) stop() error {
 	eis.log.Info("closing Chain IPC")
-	return utils.Err(
-		eis.unregisterFn(),
-		eis.socket.Close(),
-	)
+	if err := eis.unregisterFn(); err != nil {
+		return err
+	}
+	return eis.socket.Close()
 }
 
 // URL returns the URL of the socket

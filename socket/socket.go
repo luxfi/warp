@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/luxfi/log"
-	"github.com/luxfi/vm/utils/wrappers"
+	log "github.com/luxfi/log"
+	"github.com/luxfi/codec/wrappers"
 )
 
 var (

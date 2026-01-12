@@ -24,8 +24,8 @@ const (
 	// RegisterL1Validator payload type ID
 	RegisterL1ValidatorID uint32 = 3
 
-	// SubnetToL1Conversion payload type ID
-	SubnetToL1ConversionID uint32 = 4
+	// ChainToL1Conversion payload type ID
+	ChainToL1ConversionID uint32 = 4
 
 	// L1ValidatorWeight payload type ID
 	L1ValidatorWeightID uint32 = 5
@@ -205,9 +205,9 @@ func (r *L1ValidatorRegistration) Bytes() []byte {
 	return bytes
 }
 
-// RegisterL1Validator adds a validator to a subnet
+// RegisterL1Validator adds a validator to a chain
 type RegisterL1Validator struct {
-	SubnetID         []byte `serialize:"true"`
+	ChainID          []byte `serialize:"true"`
 	NodeID           []byte `serialize:"true"`
 	Weight           uint64 `serialize:"true"`
 	BLSPublicKey     []byte `serialize:"true"`
@@ -216,14 +216,14 @@ type RegisterL1Validator struct {
 
 // NewRegisterL1Validator creates a new register L1 validator payload
 func NewRegisterL1Validator(
-	subnetID []byte,
+	chainID []byte,
 	nodeID []byte,
 	weight uint64,
 	blsPublicKey []byte,
 	registrationTime uint64,
 ) (*RegisterL1Validator, error) {
 	r := &RegisterL1Validator{
-		SubnetID:         subnetID,
+		ChainID:          chainID,
 		NodeID:           nodeID,
 		Weight:           weight,
 		BLSPublicKey:     blsPublicKey,
@@ -237,8 +237,8 @@ func NewRegisterL1Validator(
 
 // Verify verifies the register validator payload
 func (r *RegisterL1Validator) Verify() error {
-	if len(r.SubnetID) != 32 {
-		return fmt.Errorf("%w: subnet ID must be 32 bytes", ErrInvalidPayload)
+	if len(r.ChainID) != 32 {
+		return fmt.Errorf("%w: chain ID must be 32 bytes", ErrInvalidPayload)
 	}
 	if len(r.NodeID) == 0 {
 		return fmt.Errorf("%w: empty node ID", ErrInvalidPayload)
@@ -258,26 +258,26 @@ func (r *RegisterL1Validator) Bytes() []byte {
 	return bytes
 }
 
-// SubnetToL1Conversion represents a subnet conversion message
-type SubnetToL1Conversion struct {
-	SubnetID []byte   `serialize:"true"`
-	ChainID  []byte   `serialize:"true"`
-	Address  []byte   `serialize:"true"`
-	Managers [][]byte `serialize:"true"`
+// ChainToL1Conversion represents a chain conversion message
+type ChainToL1Conversion struct {
+	ChainID        []byte   `serialize:"true"`
+	ManagerChainID []byte   `serialize:"true"`
+	Address        []byte   `serialize:"true"`
+	Managers       [][]byte `serialize:"true"`
 }
 
-// NewSubnetToL1Conversion creates a new subnet to L1 conversion payload
-func NewSubnetToL1Conversion(
-	subnetID []byte,
+// NewChainToL1Conversion creates a new chain to L1 conversion payload
+func NewChainToL1Conversion(
 	chainID []byte,
+	managerChainID []byte,
 	address []byte,
 	managers [][]byte,
-) (*SubnetToL1Conversion, error) {
-	c := &SubnetToL1Conversion{
-		SubnetID: subnetID,
-		ChainID:  chainID,
-		Address:  address,
-		Managers: managers,
+) (*ChainToL1Conversion, error) {
+	c := &ChainToL1Conversion{
+		ChainID:        chainID,
+		ManagerChainID: managerChainID,
+		Address:        address,
+		Managers:       managers,
 	}
 	if err := c.Verify(); err != nil {
 		return nil, err
@@ -286,9 +286,9 @@ func NewSubnetToL1Conversion(
 }
 
 // Verify verifies the conversion payload
-func (c *SubnetToL1Conversion) Verify() error {
-	if len(c.SubnetID) != 32 {
-		return fmt.Errorf("%w: subnet ID must be 32 bytes", ErrInvalidPayload)
+func (c *ChainToL1Conversion) Verify() error {
+	if len(c.ChainID) != 32 {
+		return fmt.Errorf("%w: chain ID must be 32 bytes", ErrInvalidPayload)
 	}
 	if len(c.ChainID) != 32 {
 		return fmt.Errorf("%w: chain ID must be 32 bytes", ErrInvalidPayload)
@@ -297,7 +297,7 @@ func (c *SubnetToL1Conversion) Verify() error {
 }
 
 // Bytes returns the byte representation of the payload
-func (c *SubnetToL1Conversion) Bytes() []byte {
+func (c *ChainToL1Conversion) Bytes() []byte {
 	bytes, _ := rlp.EncodeToBytes(c)
 	return bytes
 }
