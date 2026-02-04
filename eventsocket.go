@@ -9,14 +9,43 @@ import (
 	"os"
 	"syscall"
 
-	consensuscore "github.com/luxfi/consensus/core"
 	"github.com/luxfi/codec/wrappers"
 	"github.com/luxfi/ids"
 	log "github.com/luxfi/log"
 	"github.com/luxfi/warp/socket"
 )
 
-var _ consensuscore.Acceptor = (*EventSockets)(nil)
+// AcceptorContext is a minimal interface for acceptor callbacks.
+// This avoids importing runtime which would create a circular dependency.
+type AcceptorContext interface {
+	GetChainID() ids.ID
+}
+
+// Acceptor is implemented when a struct is monitoring if a message is accepted.
+// This mirrors the interface in github.com/luxfi/node/consensus but uses
+// AcceptorContext instead of *runtime.Runtime to avoid circular imports.
+type Acceptor interface {
+	Accept(ctx AcceptorContext, containerID ids.ID, container []byte) error
+}
+
+// AcceptorGroup manages multiple acceptors per chain.
+// This mirrors the interface in github.com/luxfi/node/consensus but uses
+// the local Acceptor interface to avoid circular imports.
+type AcceptorGroup interface {
+	RegisterAcceptor(chainID ids.ID, acceptorName string, acceptor Acceptor, dieOnError bool) error
+	DeregisterAcceptor(chainID ids.ID, acceptorName string) error
+}
+
+var _ Acceptor = (*eventSocketAcceptor)(nil)
+
+// eventSocketAcceptor adapts an eventSocket to the Acceptor interface
+type eventSocketAcceptor struct {
+	socket *eventSocket
+}
+
+func (a *eventSocketAcceptor) Accept(_ AcceptorContext, containerID ids.ID, container []byte) error {
+	return a.socket.Accept(context.Background(), containerID, container)
+}
 
 // EventSockets is a set of named eventSockets
 type EventSockets struct {
@@ -28,9 +57,9 @@ type EventSockets struct {
 func newEventSockets(
 	ctx ipcContext,
 	chainID ids.ID,
-	blockAcceptorGroup interface{},
-	txAcceptorGroup interface{},
-	vertexAcceptorGroup interface{},
+	blockAcceptorGroup AcceptorGroup,
+	txAcceptorGroup AcceptorGroup,
+	vertexAcceptorGroup AcceptorGroup,
 ) (*EventSockets, error) {
 	consensusIPC, err := newEventIPCSocket(
 		ctx,
@@ -116,8 +145,8 @@ func newEventIPCSocket(
 	ctx ipcContext,
 	chainID ids.ID,
 	name string,
-	linearAcceptorGroup interface{},
-	luxAcceptorGroup interface{},
+	linearAcceptorGroup AcceptorGroup,
+	luxAcceptorGroup AcceptorGroup,
 ) (*eventSocket, error) {
 	var (
 		url     = ipcURL(ctx, chainID, name)
@@ -133,27 +162,37 @@ func newEventIPCSocket(
 		log:    ctx.log,
 		url:    url,
 		socket: socket.NewSocket(url, ctx.log),
-		unregisterFn: func() error {
-			// TODO: AcceptorGroup interface removed from consensus package
-			// Need to implement proper registration mechanism or remove this feature
-			ctx.log.Warn("acceptor deregistration not implemented")
-			return nil
-		},
 	}
 
-	if err := eis.socket.Listen(); err != nil {
-		if err := eis.socket.Close(); err != nil {
-			return nil, err
-		}
+	// Create the adapter that implements Acceptor
+	acceptor := &eventSocketAcceptor{socket: eis}
+
+	// Register with both acceptor groups
+	if err := linearAcceptorGroup.RegisterAcceptor(chainID, ipcName, acceptor, false); err != nil {
+		return nil, err
+	}
+	if err := luxAcceptorGroup.RegisterAcceptor(chainID, ipcName, acceptor, false); err != nil {
+		// Rollback the first registration on failure
+		_ = linearAcceptorGroup.DeregisterAcceptor(chainID, ipcName)
 		return nil, err
 	}
 
-	// TODO: AcceptorGroup interface removed from consensus package
-	// Need to implement proper registration mechanism or remove this feature
-	ctx.log.Warn("acceptor registration not implemented",
-		log.Stringer("chainID", chainID),
-		log.String("name", ipcName),
-	)
+	// Set up the deregistration function for cleanup
+	eis.unregisterFn = func() error {
+		errs := wrappers.Errs{}
+		errs.Add(linearAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
+		errs.Add(luxAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
+		return errs.Err
+	}
+
+	if err := eis.socket.Listen(); err != nil {
+		// Clean up registrations on listen failure
+		_ = eis.unregisterFn()
+		if closeErr := eis.socket.Close(); closeErr != nil {
+			return nil, closeErr
+		}
+		return nil, err
+	}
 
 	return eis, nil
 }
