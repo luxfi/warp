@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/luxfi/codec/wrappers"
 	"github.com/luxfi/ids"
 	log "github.com/luxfi/log"
-	"github.com/luxfi/codec/wrappers"
 )
 
 const (
@@ -33,9 +33,9 @@ type ipcContext struct {
 type ChainIPCs struct {
 	ipcContext
 	chains              map[ids.ID]*EventSockets
-	blockAcceptorGroup  interface{}
-	txAcceptorGroup     interface{}
-	vertexAcceptorGroup interface{}
+	blockAcceptorGroup  AcceptorGroup
+	txAcceptorGroup     AcceptorGroup
+	vertexAcceptorGroup AcceptorGroup
 }
 
 // NewChainIPCs creates a new *ChainIPCs that writes consensus and decision
@@ -44,9 +44,9 @@ func NewChainIPCs(
 	log log.Logger,
 	path string,
 	networkID uint32,
-	blockAcceptorGroup interface{},
-	txAcceptorGroup interface{},
-	vertexAcceptorGroup interface{},
+	blockAcceptorGroup AcceptorGroup,
+	txAcceptorGroup AcceptorGroup,
+	vertexAcceptorGroup AcceptorGroup,
 	defaultChainIDs []ids.ID,
 ) (*ChainIPCs, error) {
 	cipcs := &ChainIPCs{
