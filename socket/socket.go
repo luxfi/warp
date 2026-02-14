@@ -166,7 +166,7 @@ func (c *Client) Recv() ([]byte, error) {
 	var sz uint64
 	if err := binary.Read(c.Conn, binary.BigEndian, &sz); err != nil {
 		if isTimeoutError(err) {
-			return nil, errReadTimeout{c.Conn.RemoteAddr()}
+			return nil, errReadTimeout{c.RemoteAddr()}
 		}
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (c *Client) Recv() ([]byte, error) {
 	msg := make([]byte, sz)
 	if _, err := io.ReadFull(c.Conn, msg); err != nil {
 		if isTimeoutError(err) {
-			return nil, errReadTimeout{c.Conn.RemoteAddr()}
+			return nil, errReadTimeout{c.RemoteAddr()}
 		}
 		return nil, err
 	}
