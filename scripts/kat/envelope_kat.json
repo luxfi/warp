@@ -1,0 +1,97 @@
+{
+  "spec": "Warp-2.0-envelope",
+  "version": "v1",
+  "entries": [
+    {
+      "name": "default-pulse-cert",
+      "network_id": 1,
+      "source_chain_id_hex": "a1a2a3a400000000000000000000000000000000000000000000000000000000",
+      "payload_hex": "656e76656c6f70652d746573742d7061796c6f6164",
+      "signers_indices": [
+        0,
+        2,
+        4
+      ],
+      "signature_byte": 171,
+      "source_nebula_root_hex": "deadbeef00000000000000000000000000000000000000000000000000000000",
+      "source_key_era_id": 7,
+      "source_generation": 11,
+      "hash_suite_id": "Pulsar-SHA3",
+      "pulsar_pulse_byte": 66,
+      "pulsar_pulse_len": 64,
+      "mldsa_cert_set_byte": 195,
+      "mldsa_cert_set_len": 192,
+      "envelope_wire_hex": "02f901d5f8a0f83801a0a1a2a3a40000000000000000000000000000000000000000000000000000000095656e76656c6f70652d746573742d7061796c6f616480f86315b860ababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababa0deadbeef00000000000000000000000000000000000000000000000000000000070b8b50756c7361722d53484133b84042424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242424242b8c0c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "envelope_wire_sha256": "4d7969457c2a0f4a0649e78e8cb430fbc7cf2d049152ebfbe34c3be892ca0555",
+      "envelope_id_hex": "b559e771a67346bf4c52bdbd8bef190e35b94e6dcc824290f979f7b95879d1a8"
+    },
+    {
+      "name": "no-pulse-no-cert",
+      "network_id": 1,
+      "source_chain_id_hex": "a1a2a3a400000000000000000000000000000000000000000000000000000000",
+      "payload_hex": "656e76656c6f70652d746573742d7061796c6f6164",
+      "signers_indices": [
+        0,
+        2,
+        4
+      ],
+      "signature_byte": 171,
+      "source_nebula_root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_key_era_id": 0,
+      "source_generation": 0,
+      "hash_suite_id": "",
+      "pulsar_pulse_byte": 0,
+      "pulsar_pulse_len": 0,
+      "mldsa_cert_set_byte": 0,
+      "mldsa_cert_set_len": 0,
+      "envelope_wire_hex": "02f8c8f8a0f83801a0a1a2a3a40000000000000000000000000000000000000000000000000000000095656e76656c6f70652d746573742d7061796c6f616480f86315b860ababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababa000000000000000000000000000000000000000000000000000000000000000008080808080",
+      "envelope_wire_sha256": "d6a4c59e0b59f5f417c04de248a5ed05b9f003a595f908181066ba92037ea851",
+      "envelope_id_hex": "b559e771a67346bf4c52bdbd8bef190e35b94e6dcc824290f979f7b95879d1a8"
+    },
+    {
+      "name": "pulse-only",
+      "network_id": 2,
+      "source_chain_id_hex": "b0b0b0b000000000000000000000000000000000000000000000000000000000",
+      "payload_hex": "70756c73652d6f6e6c792d7061796c6f6164",
+      "signers_indices": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "signature_byte": 119,
+      "source_nebula_root_hex": "deadbeef00000000000000000000000000000000000000000000000000000000",
+      "source_key_era_id": 99,
+      "source_generation": 1,
+      "hash_suite_id": "Pulsar-SHA3",
+      "pulsar_pulse_byte": 51,
+      "pulsar_pulse_len": 96,
+      "mldsa_cert_set_byte": 0,
+      "mldsa_cert_set_len": 0,
+      "envelope_wire_hex": "02f90131f89df502a0b0b0b0b0000000000000000000000000000000000000000000000000000000009270756c73652d6f6e6c792d7061796c6f616480f86481aab860777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777a0deadbeef0000000000000000000000000000000000000000000000000000000063018b50756c7361722d53484133b86033333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333380",
+      "envelope_wire_sha256": "ad2e3adf73723952486a2cafd060e3febcd673aa311f09dac6dd0867c0e854c7",
+      "envelope_id_hex": "d7904c5afd1917c623c90d9e36a9aa1aba406752c10c3c2a491562a54b3e80a6"
+    },
+    {
+      "name": "cert-only",
+      "network_id": 1,
+      "source_chain_id_hex": "a1a2a3a400000000000000000000000000000000000000000000000000000000",
+      "payload_hex": "",
+      "signers_indices": [
+        0
+      ],
+      "signature_byte": 17,
+      "source_nebula_root_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_key_era_id": 0,
+      "source_generation": 0,
+      "hash_suite_id": "Pulsar-SHA3",
+      "pulsar_pulse_byte": 0,
+      "pulsar_pulse_len": 0,
+      "mldsa_cert_set_byte": 238,
+      "mldsa_cert_set_len": 128,
+      "envelope_wire_hex": "02f9013ef88ae301a0a1a2a3a4000000000000000000000000000000000000000000000000000000008080f86301b860111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111a0000000000000000000000000000000000000000000000000000000000000000080808b50756c7361722d5348413380b880eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "envelope_wire_sha256": "0ef15914db3b05c91fcf7861f55dd78b6d4a8abc8d745c506bb52ed187bc05b7",
+      "envelope_id_hex": "134931dacb4f1287ed7bad28ed97c57456f7de55a48811ab7368cc4a35a88d6b"
+    }
+  ]
+}

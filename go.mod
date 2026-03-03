@@ -10,14 +10,23 @@ require (
 	github.com/luxfi/crypto v1.17.45
 	github.com/luxfi/geth v1.16.79
 	github.com/luxfi/ids v1.2.9
+	github.com/luxfi/lattice/v7 v7.0.1
 	github.com/luxfi/log v1.4.1
 	github.com/luxfi/math v1.2.4
 	github.com/luxfi/p2p v1.19.2
+	github.com/luxfi/pulsar v0.1.0-rc1-pq-consensus-freeze
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
 
+// Local-dev replace directive. Tagged version above pins the
+// March 3, 2026 PQ Consensus Architecture Freeze. See
+// ~/work/lux/consensus/CROSS-REPO-VERSION-PIN.md for the canonical commit
+// SHA → tag mapping.
+replace github.com/luxfi/pulsar => ../pulsar // pinned to v0.1.0-rc1-pq-consensus-freeze; see go-mod-pin.md
+
 require (
+	github.com/ALTree/bigfloat v0.2.0 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260311194731-d5b7577c683d // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
@@ -34,6 +43,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gorilla/rpc v1.2.1 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -61,6 +71,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
+	github.com/montanaflynn/stats v0.9.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
@@ -69,6 +80,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
