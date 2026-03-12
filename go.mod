@@ -1,6 +1,6 @@
 module github.com/luxfi/warp
 
-go 1.26
+go 1.26.1
 
 require (
 	github.com/Microsoft/go-winio v0.6.2

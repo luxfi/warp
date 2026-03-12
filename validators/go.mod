@@ -1,3 +1,3 @@
 module github.com/luxfi/warp/validators
 
-go 1.26
+go 1.26.1
