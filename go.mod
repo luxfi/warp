@@ -10,11 +10,11 @@ require (
 	github.com/luxfi/crypto v1.17.45
 	github.com/luxfi/geth v1.16.79
 	github.com/luxfi/ids v1.2.9
-	github.com/luxfi/lattice/v7 v7.0.1
+	github.com/luxfi/lattice/v7 v7.1.0
 	github.com/luxfi/log v1.4.1
-	github.com/luxfi/math v1.2.4
+	github.com/luxfi/math v1.4.0
 	github.com/luxfi/p2p v1.19.2
-	github.com/luxfi/pulsar v0.1.0-rc1-pq-consensus-freeze
+	github.com/luxfi/corona v0.1.0-rc1-pq-consensus-freeze
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
@@ -23,7 +23,7 @@ require (
 // March 3, 2026 PQ Consensus Architecture Freeze. See
 // ~/work/lux/consensus/CROSS-REPO-VERSION-PIN.md for the canonical commit
 // SHA → tag mapping.
-replace github.com/luxfi/pulsar => ../pulsar // pinned to v0.1.0-rc1-pq-consensus-freeze; see go-mod-pin.md
+replace github.com/luxfi/corona => ../corona // pinned to v0.1.0-rc1-pq-consensus-freeze; see go-mod-pin.md
 
 require (
 	github.com/ALTree/bigfloat v0.2.0 // indirect

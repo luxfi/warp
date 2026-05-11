@@ -26,7 +26,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	pulsarKernel "github.com/luxfi/pulsar/threshold"
+	corona "github.com/luxfi/corona/threshold"
 )
 
 // FuzzPulseDeserialize runs DeserializePulse over arbitrary bytes and
@@ -51,7 +51,7 @@ func FuzzPulseDeserialize(f *testing.F) {
 }
 
 // FuzzPulseSerialize runs the full SerializePulse → DeserializePulse →
-// pulsarKernel.Verify round trip over valid pulses, then mutates one
+// corona.Verify round trip over valid pulses, then mutates one
 // byte at a time and confirms either a parse error or a Verify failure
 // — never a silent-success / panic outcome.
 //
@@ -85,7 +85,7 @@ func FuzzPulseSerialize(f *testing.F) {
 		// original message and group key MUST fail — flipping any byte
 		// in a valid threshold signature breaks the verification
 		// equation with overwhelming probability.
-		if pulsarKernel.Verify(gk, message, sig) {
+		if corona.Verify(gk, message, sig) {
 			t.Fatalf("byte-flip at %d still verified — collision in pulse encoding", i)
 		}
 	})
@@ -99,7 +99,7 @@ func TestFuzzCorpus_PulseReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed: deserialize failed: %v", err)
 	}
-	if !pulsarKernel.Verify(gk, message, sig) {
+	if !corona.Verify(gk, message, sig) {
 		t.Fatalf("seed: verify failed")
 	}
 	wire, err := SerializePulse(sig)
@@ -113,11 +113,11 @@ func TestFuzzCorpus_PulseReplay(t *testing.T) {
 
 // mustGoodPulse runs a 3-of-2 Pulsar threshold ceremony and returns
 // (serialized pulse, signed message, group key).
-func mustGoodPulse() (wire []byte, msg string, gk *pulsarKernel.GroupKey) {
+func mustGoodPulse() (wire []byte, msg string, gk *corona.GroupKey) {
 	const n, threshold = 3, 2
 	const message = "fuzz-pulse-seed"
 
-	shares, key, err := pulsarKernel.GenerateKeys(threshold, n, rand.Reader)
+	shares, key, err := corona.GenerateKeys(threshold, n, rand.Reader)
 	if err != nil {
 		panic(err)
 	}
@@ -129,15 +129,15 @@ func mustGoodPulse() (wire []byte, msg string, gk *pulsarKernel.GroupKey) {
 	if _, err := rand.Read(prfKey); err != nil {
 		panic(err)
 	}
-	parties := make([]*pulsarKernel.Signer, n)
+	parties := make([]*corona.Signer, n)
 	for i := range parties {
-		parties[i] = pulsarKernel.NewSigner(shares[i])
+		parties[i] = corona.NewSigner(shares[i])
 	}
-	r1 := make(map[int]*pulsarKernel.Round1Data, n)
+	r1 := make(map[int]*corona.Round1Data, n)
 	for i, p := range parties {
 		r1[i] = p.Round1(1, prfKey, signers)
 	}
-	r2 := make(map[int]*pulsarKernel.Round2Data, n)
+	r2 := make(map[int]*corona.Round2Data, n)
 	for i, p := range parties {
 		d, err := p.Round2(1, message, prfKey, signers, r1)
 		if err != nil {

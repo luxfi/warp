@@ -14,16 +14,16 @@ import (
 	"github.com/luxfi/warp"
 	"github.com/stretchr/testify/require"
 
-	pulsarKernel "github.com/luxfi/pulsar/threshold"
+	corona "github.com/luxfi/corona/threshold"
 )
 
 // runPulsarCeremony runs a full t-of-n threshold signing ceremony
 // against the given message and returns the resulting Signature plus
 // the GroupKey verifiers can match against.
-func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*pulsarKernel.Signature, *pulsarKernel.GroupKey) {
+func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*corona.Signature, *corona.GroupKey) {
 	t.Helper()
 
-	shares, gk, err := pulsarKernel.GenerateKeys(threshold, n, rand.Reader)
+	shares, gk, err := corona.GenerateKeys(threshold, n, rand.Reader)
 	require.NoError(t, err)
 	require.Len(t, shares, n)
 
@@ -35,17 +35,17 @@ func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*pulsarK
 	_, err = rand.Read(prfKey)
 	require.NoError(t, err)
 
-	parties := make([]*pulsarKernel.Signer, n)
+	parties := make([]*corona.Signer, n)
 	for i := range parties {
-		parties[i] = pulsarKernel.NewSigner(shares[i])
+		parties[i] = corona.NewSigner(shares[i])
 	}
 
-	r1 := make(map[int]*pulsarKernel.Round1Data, n)
+	r1 := make(map[int]*corona.Round1Data, n)
 	for i, p := range parties {
 		r1[i] = p.Round1(1, prfKey, signers)
 	}
 
-	r2 := make(map[int]*pulsarKernel.Round2Data, n)
+	r2 := make(map[int]*corona.Round2Data, n)
 	for i, p := range parties {
 		d, err := p.Round2(1, message, prfKey, signers, r1)
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*pulsarK
 
 	sig, err := parties[0].Finalize(r2)
 	require.NoError(t, err)
-	require.True(t, pulsarKernel.Verify(gk, message, sig))
+	require.True(t, corona.Verify(gk, message, sig))
 	return sig, gk
 }
 
@@ -87,12 +87,12 @@ func envFixture(t *testing.T, eraID, generation uint64) (*warp.EnvelopeV2, *warp
 }
 
 type stubResolver struct {
-	gk      *pulsarKernel.GroupKey
+	gk      *corona.GroupKey
 	suiteID string
 	err     error
 }
 
-func (s *stubResolver) ResolveGroupKey(_ [32]byte, _ uint64, _ uint64) (*pulsarKernel.GroupKey, string, error) {
+func (s *stubResolver) ResolveGroupKey(_ [32]byte, _ uint64, _ uint64) (*corona.GroupKey, string, error) {
 	return s.gk, s.suiteID, s.err
 }
 
@@ -105,7 +105,7 @@ func TestSerializeDeserializePulseRoundTrip(t *testing.T) {
 
 	parsed, err := DeserializePulse(wire)
 	require.NoError(t, err)
-	require.True(t, pulsarKernel.Verify(gk, "round-trip", parsed))
+	require.True(t, corona.Verify(gk, "round-trip", parsed))
 }
 
 func TestKernelVerifierAcceptsValidPulse(t *testing.T) {
