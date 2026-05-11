@@ -41,8 +41,8 @@ import (
 
 	"github.com/luxfi/warp"
 
-	pulsarHash "github.com/luxfi/pulsar/hash"
-	pulsarKernel "github.com/luxfi/pulsar/threshold"
+	"github.com/luxfi/corona/hash"
+	corona "github.com/luxfi/corona/threshold"
 
 	"github.com/luxfi/lattice/v7/ring"
 	"github.com/luxfi/lattice/v7/utils/buffer"
@@ -93,7 +93,7 @@ type GroupKeyResolver interface {
 		sourceChainID [32]byte,
 		keyEraID uint64,
 		generation uint64,
-	) (gk *pulsarKernel.GroupKey, suiteID string, err error)
+	) (gk *corona.GroupKey, suiteID string, err error)
 }
 
 // KernelVerifier is the production PulseVerifier. It uses a
@@ -120,8 +120,8 @@ func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
 //     HashSuiteOrDefault().
 //  4. Build the canonical signing bytes (BuildSigningBytes).
 //  5. Deserialize the envelope's PulsarPulse into a
-//     pulsarKernel.Signature.
-//  6. Call pulsarKernel.Verify(gk, signingBytes, sig).
+//     corona.Signature.
+//  6. Call corona.Verify(gk, signingBytes, sig).
 func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) error {
 	if env == nil || !env.HasPulse() {
 		return ErrPulseAbsent
@@ -140,7 +140,7 @@ func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) erro
 		return fmt.Errorf("%w: nil GroupKey", ErrGroupKeyResolverFailed)
 	}
 	if suiteID == "" {
-		suiteID = pulsarHash.DefaultID
+		suiteID = hash.DefaultID
 	}
 	if env.HashSuiteOrDefault() != suiteID {
 		return fmt.Errorf("%w: envelope=%q resolver=%q",
@@ -154,7 +154,7 @@ func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) erro
 		return fmt.Errorf("%w: %v", ErrPulseVerifyFailed, err)
 	}
 
-	if !pulsarKernel.Verify(gk, string(signing), sig) {
+	if !corona.Verify(gk, string(signing), sig) {
 		return ErrPulseVerifyFailed
 	}
 	return nil
@@ -226,7 +226,7 @@ func BuildSigningBytes(env *warp.EnvelopeV2, msgBytes []byte) []byte {
 // buffer.NewBuffer (the recommended lattigo path for slice-backed
 // reads). Total length grows by 12 bytes versus a raw concatenation
 // — negligible relative to the ~33 KB lattice signature.
-func SerializePulse(sig *pulsarKernel.Signature) ([]byte, error) {
+func SerializePulse(sig *corona.Signature) ([]byte, error) {
 	if sig == nil {
 		return nil, errors.New("warp pulsar: nil pulse")
 	}
@@ -378,7 +378,7 @@ func validateVectorPolyFrame(frame []byte) error {
 // against attacker-controlled length prefixes and lattigo
 // deserialization panics: every code path returns a clean error and
 // no panic crosses the boundary.
-func DeserializePulse(b []byte) (sig *pulsarKernel.Signature, err error) {
+func DeserializePulse(b []byte) (sig *corona.Signature, err error) {
 	if len(b) == 0 {
 		return nil, errors.New("warp pulsar: empty pulse")
 	}
@@ -431,7 +431,7 @@ func DeserializePulse(b []byte) (sig *pulsarKernel.Signature, err error) {
 		return nil, fmt.Errorf("warp pulsar: %d trailing bytes after pulse", len(rest))
 	}
 
-	sig = &pulsarKernel.Signature{}
+	sig = &corona.Signature{}
 	if _, err := sig.C.ReadFrom(buffer.NewBuffer(cBytes)); err != nil {
 		return nil, fmt.Errorf("warp pulsar: decode C: %w", err)
 	}
