@@ -45,11 +45,33 @@ type SecurityProfile int
 
 const (
 	// ProfileClassical accepts envelopes without an MLDSACertSet.
-	// Refuses to boot a strict-PQ Liquid chain.
+	// BLS Beam is the trust root. Refuses to boot a strict-PQ
+	// Liquid chain. Suitable for legacy Lux/Zoo chains that have
+	// not yet generated ML-DSA validator material.
 	ProfileClassical SecurityProfile = iota
 
+	// ProfileHybrid runs classical + PQ side-by-side. Every
+	// envelope still serializes the BLS Beam (for cross-profile
+	// peer compatibility) and SHOULD also carry an MLDSACertSet.
+	// The verifier:
+	//   - if MLDSACertSet present → MUST verify under ML-DSA-65;
+	//     a forged BLS Beam alone CANNOT promote a hybrid-profile
+	//     envelope past acceptance.
+	//   - if MLDSACertSet absent → falls back to BLS Beam
+	//     verification with a "stale-PQ" warning event so audit
+	//     pipelines can observe the migration cliff.
+	// Hybrid is the safe migration middle: a chain can flip on
+	// PQ validation today and turn off classical trust later,
+	// without a hard cut-over that strands envelopes already in
+	// flight at the migration boundary.
+	ProfileHybrid
+
 	// ProfileStrictPQ requires every envelope to carry an
-	// MLDSACertSet. Canonical Liquid Warp profile.
+	// MLDSACertSet AND refuses to trust the BLS Beam as the auth
+	// root. Canonical Liquid Warp profile. The Beam still
+	// serializes (so a strict-PQ chain can ECHO envelopes to a
+	// classical chain across a bridge) but the Beam bytes are
+	// NEVER the verification root on a strict-PQ chain.
 	ProfileStrictPQ
 )
 
@@ -59,6 +81,8 @@ func (p SecurityProfile) String() string {
 	switch p {
 	case ProfileClassical:
 		return "classical"
+	case ProfileHybrid:
+		return "hybrid"
 	case ProfileStrictPQ:
 		return "strict-pq"
 	default:
@@ -66,21 +90,53 @@ func (p SecurityProfile) String() string {
 	}
 }
 
-// IsPostQuantum reports whether this profile rejects classical-
-// only envelopes.
+// IsPostQuantum reports whether this profile REJECTS classical-
+// only envelopes (no MLDSACertSet → refuse). Hybrid is NOT
+// strict-PQ in this sense — it allows classical-only envelopes
+// with a stale-PQ warning. Only strict-PQ returns true.
 func (p SecurityProfile) IsPostQuantum() bool {
 	return p == ProfileStrictPQ
+}
+
+// IsPQAware reports whether this profile validates an
+// MLDSACertSet WHEN PRESENT. Both Hybrid and StrictPQ return
+// true; only Classical ignores the field.
+func (p SecurityProfile) IsPQAware() bool {
+	return p == ProfileHybrid || p == ProfileStrictPQ
 }
 
 // ProfileFromPQFlag lifts a chain-config "pq" boolean (the same
 // flag liquidity/operator writes into the EVM, DEX, and FHE chain
 // configs) into a Warp SecurityProfile. One JSON flag flips Warp,
 // EVM, DEX, and FHE strict-PQ posture in lockstep.
+//
+// Hybrid is not selectable via the boolean flag — operators that
+// want hybrid pin the profile explicitly via ProfileFromString or
+// the operator-level config field. The boolean is intentionally
+// binary: a chain that wants strict-PQ shouldn't have a fallback
+// path opened by a future operator turning the same flag from
+// true → "hybrid". Strict-PQ is a one-way door.
 func ProfileFromPQFlag(pq bool) SecurityProfile {
 	if pq {
 		return ProfileStrictPQ
 	}
 	return ProfileClassical
+}
+
+// ProfileFromString parses an operator-supplied profile string.
+// Refuses unknown values rather than defaulting; the gate at
+// every layer assumes the profile is well-known.
+func ProfileFromString(s string) (SecurityProfile, error) {
+	switch s {
+	case "classical":
+		return ProfileClassical, nil
+	case "hybrid":
+		return ProfileHybrid, nil
+	case "strict-pq":
+		return ProfileStrictPQ, nil
+	default:
+		return ProfileClassical, fmt.Errorf("warp: unknown profile %q (want classical|hybrid|strict-pq)", s)
+	}
 }
 
 // ErrClassicalAuthForbidden is returned when a strict-PQ chain is
@@ -91,14 +147,56 @@ func ProfileFromPQFlag(pq bool) SecurityProfile {
 var ErrClassicalAuthForbidden = errors.New(
 	"warp: classical authentication forbidden under strict-PQ profile (MLDSACertSet required)")
 
+// VerificationLane reports which lane(s) the profile says the
+// verifier MUST validate to accept an envelope.
+//
+//   - LaneClassical: classical BLS Beam.
+//   - LanePQ: FIPS 204 ML-DSA-65 attestations in MLDSACertSet.
+type VerificationLane int
+
+const (
+	LaneClassical VerificationLane = 1 << iota
+	LanePQ
+)
+
+// LanesForProfile returns the bitwise set of lanes a verifier
+// MUST validate. Pass the envelope's HasMLDSACertSet() result
+// for the hybrid fall-through: hybrid + MLDSACertSet present →
+// LanePQ only (BLS Beam is best-effort); hybrid + absent →
+// LaneClassical with a stale-PQ warning the caller should log.
+//
+//	classical                    → LaneClassical
+//	hybrid + MLDSACertSet present → LanePQ
+//	hybrid + MLDSACertSet absent  → LaneClassical (with warning)
+//	strict-pq                    → LanePQ (envelope MUST have MLDSACertSet)
+func LanesForProfile(profile SecurityProfile, hasMLDSACertSet bool) VerificationLane {
+	switch profile {
+	case ProfileStrictPQ:
+		return LanePQ
+	case ProfileHybrid:
+		if hasMLDSACertSet {
+			return LanePQ
+		}
+		return LaneClassical
+	case ProfileClassical:
+		return LaneClassical
+	default:
+		// Unknown profile defaults to classical — but RequireMLDSACertSetForProfile
+		// will refuse it explicitly at the gate before we get here.
+		return LaneClassical
+	}
+}
+
 // RequireMLDSACertSetForProfile is the single seam every Warp
 // verifier should call BEFORE validating the BLS Beam / Pulsar
 // Pulse / ML-DSA cert set. It enforces the profile-level
-// invariant that strict-PQ envelopes carry their PQ lane.
+// invariant about which lane MUST be present.
 //
-// Classical profile: always returns nil (BLS Beam is sufficient).
-// Strict-PQ profile: returns ErrClassicalAuthForbidden if the
-// envelope is missing an MLDSACertSet.
+//   - ProfileClassical: returns nil (BLS Beam alone is sufficient).
+//   - ProfileHybrid: returns nil regardless — the verifier
+//     can fall back to BLS Beam if MLDSACertSet is absent.
+//   - ProfileStrictPQ: returns ErrClassicalAuthForbidden if the
+//     envelope is missing an MLDSACertSet.
 //
 // Direct calls to Verify / BLS aggregate verification on a
 // strict-PQ chain that bypass this gate would silently trust
