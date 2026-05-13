@@ -27,8 +27,6 @@ github.com/ethereum/c-kzg-4844/v2 v2.1.7 h1:aat3CuITdDbPC6pmEGRT0zJ5eOxzrZj8TJT5
 github.com/ethereum/c-kzg-4844/v2 v2.1.7/go.mod h1:8HMkUZ5JRv4hpw/XUrYWSQNAUzhHMg2UDb/U+5m+XNw=
 github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab h1:rvv6MJhy07IMfEKuARQ9TKojGqLVNxQajaXEp/BoqSk=
 github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab/go.mod h1:IuLm4IsPipXKF7CW5Lzf68PIbZ5yl7FFd74l/E0o9A8=
-github.com/ethereum/go-verkle v0.2.2 h1:I2W0WjnrFUIzzVPwm8ykY+7pL2d4VhlsePn4j7cnFk8=
-github.com/ethereum/go-verkle v0.2.2/go.mod h1:M3b90YRnzqKyyzBEWJGqj8Qff4IDeXnzFw0P9bFw3uk=
 github.com/ferranbt/fastssz v1.0.0 h1:9EXXYsracSqQRBQiHeaVsG/KQeYblPf40hsQPb9Dzk8=
 github.com/ferranbt/fastssz v1.0.0/go.mod h1:Ea3+oeoRGGLGm5shYAeDgu6PGUlcvQhE2fILyD9+tGg=
 github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
@@ -80,10 +78,12 @@ github.com/luxfi/constants v1.4.7 h1:e/Qs+DQP3pugle3Zncq6fZCxKgqqtbyD/z7Gm4ZjsYg
 github.com/luxfi/constants v1.4.7/go.mod h1:hOszZ2NDQ8gMZKncfcZ67PXkb5OIbnwAzXC3oFbQwW0=
 github.com/luxfi/container v0.0.4 h1:BXhF82WyfqVP5mjlNcr7tP0Fcnvl0Ap1rkiu+rq5XuM=
 github.com/luxfi/container v0.0.4/go.mod h1:Z3SpmMF5d4t77MM0nHYXURpn+EMVaeu1fhbd/3BGaek=
-github.com/luxfi/crypto v1.17.45 h1:uGK0y4+aLipE/M0YIQ5hcsWv0ZG0E4cPv03a94K/eLE=
-github.com/luxfi/crypto v1.17.45/go.mod h1:GnAkhQ7HNs3X0Tzx5nOONS3kl0yRmWHbDcRO5ffILsg=
+github.com/luxfi/corona v0.3.1 h1:Mzhv65snVc5Z3mb7HQMTLWhSp7EWbqba4ynCWqo1dgY=
+github.com/luxfi/corona v0.3.1/go.mod h1:ggyyXItOMyv14pvfr/9CINBCMbRkqk1Y8njK705AcD8=
 github.com/luxfi/crypto v1.19.0 h1:VtH6kvZrCEjCnkHPkhExDU+GJ0ZulYX4rnA+lXJdJHw=
 github.com/luxfi/crypto v1.19.0/go.mod h1:ee525i8Recbpb0jVTDZYZBr1MmvJ27OITJHZ/nlNMBw=
+github.com/luxfi/crypto/ipa v1.2.4 h1:6xfwhI9/HrcDkF3Ti5/NxsNQIWbwYDJmRSNIHRQ/xfU=
+github.com/luxfi/crypto/ipa v1.2.4/go.mod h1:43J6f6rcfUMrZt4cQectMOZb6Ps+fAEj8ZTPC3Kk+gE=
 github.com/luxfi/database v1.17.44 h1:hfiTls7sqbweW+o4iaZqB8P997paC+vpgWmhN6v5MJ0=
 github.com/luxfi/database v1.17.44/go.mod h1:6Ey5y3I0WNLHbxIlIdFqUuKfBg+b0fAgTA8FgRgQ8zg=
 github.com/luxfi/geth v1.16.79 h1:MtP8ZUuSVZDjmZDa1kTJCl0PpG8+wGbQft652GO6a3A=
