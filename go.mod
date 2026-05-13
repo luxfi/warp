@@ -7,7 +7,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/luxfi/codec v1.1.4
 	github.com/luxfi/constants v1.4.7
-	github.com/luxfi/corona v0.1.0-rc1-pq-consensus-freeze
+	github.com/luxfi/corona v0.3.1
 	github.com/luxfi/crypto v1.19.0
 	github.com/luxfi/geth v1.16.79
 	github.com/luxfi/ids v1.2.9
@@ -19,12 +19,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
-
-// Local-dev replace directive. Tagged version above pins the
-// March 3, 2026 PQ Consensus Architecture Freeze. See
-// ~/work/lux/consensus/CROSS-REPO-VERSION-PIN.md for the canonical commit
-// SHA → tag mapping.
-replace github.com/luxfi/corona => ../corona // pinned to v0.1.0-rc1-pq-consensus-freeze; see go-mod-pin.md
 
 require (
 	github.com/ALTree/bigfloat v0.2.0 // indirect
@@ -39,7 +33,6 @@ require (
 	github.com/emicklei/dot v1.11.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.7 // indirect
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
-	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/ferranbt/fastssz v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gofrs/flock v0.13.0 // indirect
@@ -57,6 +50,7 @@ require (
 	github.com/luxfi/concurrent v0.0.3 // indirect
 	github.com/luxfi/consensus v1.22.70 // indirect
 	github.com/luxfi/container v0.0.4 // indirect
+	github.com/luxfi/crypto/ipa v1.2.4 // indirect
 	github.com/luxfi/database v1.17.44 // indirect
 	github.com/luxfi/math/big v0.1.0 // indirect
 	github.com/luxfi/metric v1.5.1 // indirect
