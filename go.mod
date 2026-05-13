@@ -7,6 +7,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/luxfi/codec v1.1.4
 	github.com/luxfi/constants v1.4.7
+	github.com/luxfi/corona v0.1.0-rc1-pq-consensus-freeze
 	github.com/luxfi/crypto v1.17.45
 	github.com/luxfi/geth v1.16.79
 	github.com/luxfi/ids v1.2.9
@@ -14,7 +15,6 @@ require (
 	github.com/luxfi/log v1.4.1
 	github.com/luxfi/math v1.4.0
 	github.com/luxfi/p2p v1.19.2
-	github.com/luxfi/corona v0.1.0-rc1-pq-consensus-freeze
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
@@ -60,6 +60,7 @@ require (
 	github.com/luxfi/math/big v0.1.0 // indirect
 	github.com/luxfi/metric v1.5.1 // indirect
 	github.com/luxfi/mock v0.1.1 // indirect
+	github.com/luxfi/pq v1.0.3 // indirect
 	github.com/luxfi/precompile v0.5.6 // indirect
 	github.com/luxfi/runtime v1.0.1 // indirect
 	github.com/luxfi/sampler v1.0.0 // indirect
