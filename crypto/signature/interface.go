@@ -17,10 +17,12 @@ const (
 	// SchemeBLS uses BLS signatures (Warp V1 compatible)
 	SchemeBLS Scheme = "bls"
 
-	// SchemeCorona uses post-quantum ring signatures
+	// SchemeCorona uses Lux's production R-LWE post-quantum threshold
+	// scheme (github.com/luxfi/corona). Replaces the older "corona"
+	// enum value carried over from the academic upstream naming.
 	SchemeCorona Scheme = "corona"
 
-	// SchemeHybrid uses both BLS and Corona for migration period
+	// SchemeHybrid uses both BLS and Corona for migration period.
 	SchemeHybrid Scheme = "hybrid"
 )
 
