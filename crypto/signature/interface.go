@@ -2,7 +2,7 @@
 // See the file LICENSE for licensing terms.
 
 // Package signature provides modular signature verification for Warp messages.
-// This allows swapping between different signature schemes (BLS, Ringtail, Hybrid).
+// This allows swapping between different signature schemes (BLS, Corona, Hybrid).
 package signature
 
 import (
@@ -17,10 +17,12 @@ const (
 	// SchemeBLS uses BLS signatures (Warp V1 compatible)
 	SchemeBLS Scheme = "bls"
 
-	// SchemeRingtail uses post-quantum ring signatures
-	SchemeRingtail Scheme = "ringtail"
+	// SchemeCorona uses Lux's production R-LWE post-quantum threshold
+	// scheme (github.com/luxfi/corona). Replaces the older "ringtail"
+	// enum value carried over from the academic upstream naming.
+	SchemeCorona Scheme = "corona"
 
-	// SchemeHybrid uses both BLS and Ringtail for migration period
+	// SchemeHybrid uses both BLS and Corona for migration period.
 	SchemeHybrid Scheme = "hybrid"
 )
 
