@@ -5,6 +5,18 @@ at genesis. The profile decides which lane(s) of an EnvelopeV2 the
 verifier MUST validate, and which lanes are best-effort or
 forbidden.
 
+**Two layers gate classical primitives.** Tier A introduces a
+second, decomplected gate at the **registry** layer in addition
+to the existing chain-mode gate. Both must agree for a classical
+envelope to verify:
+
+| Gate | Where | What |
+|---|---|---|
+| Registry | `signature.Config.LegacyClassicalEnabled` | Controls which schemes the registry will install. Default `false` = PQ-only. |
+| Chain mode | `pq.Mode` (one of `classical` / `hybrid` / `strict-pq`) | Controls which schemes the chain trusts as the verification root. Default for new strict deployments = `strict-pq`. |
+
+See `LEGACY-CLASSICAL.md` for the operator-facing flag documentation.
+
 ## The three profiles
 
 | profile      | BLS Beam               | MLDSACertSet               | use case                                                            |
