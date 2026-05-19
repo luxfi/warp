@@ -4,12 +4,19 @@ This document is the normative wire-format spec for Warp 1.x and
 Warp 2.0. The Go canonical at this commit is the byte oracle; ports
 to other languages MUST produce byte-equal serialisation.
 
+**Posture default**: PQ-native. The reference signature registry
+(`signature.NewPQNativeRegistry`) is the canonical entrypoint
+and refuses classical primitives without an explicit
+`Config.LegacyClassicalEnabled` opt-in. See `LEGACY-CLASSICAL.md`
+for the policy and `PQ_PROFILES.md` for the chain-level posture
+taxonomy.
+
 ## Table of versions
 
 | Version | Envelope | Lanes | Status |
 |---|---|---|---|
 | 1.x | bare RLP `Message` | Beam (BLS aggregate) | shipping |
-| 2.0 | `0x02` + RLP `EnvelopeV2` | Beam + ML-DSA cert set + Pulse | shipping |
+| 2.0 | `0x02` + RLP `EnvelopeV2` | Beam + ML-DSA cert set + Pulse | shipping (Tier A) |
 | Private | `0x02` + envelope w/ FHE payload | FHE ciphertext + Pulse | production-research |
 
 ## Common types
@@ -119,6 +126,38 @@ consensus-side prefix (`QUASAR-PULSAR-BUNDLE-v1`, etc., see LP-073
 §"Domain-separated message prefixes"). Re-using a prefix across
 domains would let a Pulse over a Quasar bundle root be replayed as a
 Pulse over a Warp envelope — explicitly rejected.
+
+### MLDSACertSet context binding
+
+When the source chain produces the `MLDSACertSet` lane, every
+per-validator ML-DSA-65 (FIPS 204) signature MUST be produced
+under the canonical context string:
+
+```
+ctx = "lux-warp-cross-chain-v1"
+```
+
+This corresponds to `signature.SignContextWarpV1` in the Go
+reference. The context binding follows FIPS 204 §5.2: the
+signer's `Sign(sk, M, ctx)` call uses `ctx` as the context-string
+argument, not as part of the message `M`. A signature produced
+under any other context (including an empty context) is REFUSED
+by the destination's verifier as a domain-separation violation.
+
+The same rule applies to SLH-DSA (FIPS 205) signatures per
+FIPS 205 §10.2.
+
+This tag is DISTINCT from the Pulse lane's `SigningPrefix`
+(`"WARP-PULSAR-ENVELOPE-v1"`) and from the Pulsar consensus-side
+prefix (`"QUASAR-PULSAR-BUNDLE-v1"`). The three tags partition the
+signature domain into:
+
+- ML-DSA-65 cross-chain envelope attestations (this tag).
+- Pulsar R-LWE threshold pulses (WARP-PULSAR-ENVELOPE-v1).
+- Pulsar consensus-bundle pulses (QUASAR-PULSAR-BUNDLE-v1).
+
+A signature on any of these contexts cannot replay as a
+signature on either of the other two.
 
 ### PulsarPulse byte format
 
