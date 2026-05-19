@@ -1,4 +1,4 @@
-# Lux Warp — Cross-Chain Messaging
+# Lux Warp — Cross-Chain Messaging (Tier A)
 
 > Lux is not merely adding post-quantum signatures to a chain; it defines a hybrid finality architecture for DAG-native consensus, with protocol-agnostic threshold lifecycle, post-quantum threshold sealing, and cross-chain propagation of Horizon finality.
 
@@ -7,6 +7,37 @@ See [LP-105 §Claims and evidence](https://github.com/luxfi/lps/blob/main/LP-105
 Cross-chain messaging protocol for the Lux Network. Source-chain
 validators sign an outbound message; the destination chain verifies
 the signature against the source's registered validator set.
+
+**Status**: Tier A (production wire format, PQ-native posture default).
+
+**Tier A submission docs**:
+
+- [SUBMISSION.md](SUBMISSION.md) — cover sheet, scope, headline claim.
+- [PROOF-CLAIMS.md](PROOF-CLAIMS.md) — what is and is NOT established.
+- [TRUSTED-COMPUTING-BASE.md](TRUSTED-COMPUTING-BASE.md) — TCB inventory.
+- [PATENTS.md](PATENTS.md) — royalty-free grant.
+- [CRYPTOGRAPHER-SIGN-OFF.md](CRYPTOGRAPHER-SIGN-OFF.md) — review verdict (APPROVED WITH GATES).
+- [DEPLOYMENT-RUNBOOK.md](DEPLOYMENT-RUNBOOK.md) — operator guide.
+- [SPECIFICATION.md](SPECIFICATION.md) — wire format.
+- [PQ_PROFILES.md](PQ_PROFILES.md) — posture taxonomy.
+- [LEGACY-CLASSICAL.md](LEGACY-CLASSICAL.md) — classical opt-in policy.
+- [TRANSPORT.md](TRANSPORT.md) — transport-layer integration notes.
+- [CHANGELOG.md](CHANGELOG.md) — Tier A push notes.
+
+**PQ-native posture**: the canonical signature registry constructor
+`signature.NewPQNativeRegistry()` is PQ-native by construction.
+ML-DSA-65 is preferred; classical primitives (BLS, Ed25519,
+secp256k1) require an explicit `Config.LegacyClassicalEnabled` opt-in.
+See `LEGACY-CLASSICAL.md` for the policy and deprecation timeline.
+
+**Related modules**:
+
+- [`luxfi/pulsar`](https://github.com/luxfi/pulsar) — Pulsar R-LWE threshold kernel (powers the Pulse lane).
+- [`luxfi/corona`](https://github.com/luxfi/corona) — Corona R-LWE threshold (alternate Pulse implementation).
+- [`luxfi/magnetar`](https://github.com/luxfi/magnetar) — SLH-DSA certificate profile.
+- [`luxfi/quasar`](https://github.com/luxfi/quasar) — Quasar consensus engine (consumes warp envelopes for Horizon finality).
+- [`luxfi/pq`](https://github.com/luxfi/pq) — canonical `pq.Mode` and posture gate (`pq.ValidateMode`).
+- [`luxfi/zap`](https://github.com/luxfi/zap) — inter-node transport for warp envelopes (see `TRANSPORT.md`).
 
 ## Versions
 
