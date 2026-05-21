@@ -179,7 +179,7 @@ func TestLP105ContainsGroth16Disclaimer(t *testing.T) {
 // freeze to lock the documentation contract on the paper that ships
 // the protocol.
 func TestLP073ContainsGroth16DisclaimerSection11(t *testing.T) {
-	path := lookupRepoFile(t, "lps/LP-073-pulsar.md")
+	path := lookupRepoFile(t, "lps/archive/LP-073-pre-2026-05-18.md")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read LP-073: %v", err)
