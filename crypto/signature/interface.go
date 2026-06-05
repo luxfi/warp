@@ -96,8 +96,8 @@ const (
 //
 //   - Lux primary-network validator-identity signatures (use
 //     "lux-validator-identity-v1" — see luxfi/ids).
-//   - Hanzo / Zoo / Pars subnet-internal signatures (use their
-//     own per-subnet context strings).
+//   - Hanzo / Zoo / Pars chain-internal signatures (use their
+//     own per-chain context strings).
 //   - Pulsar consensus pulses (use "QUASAR-PULSAR-BUNDLE-v1" — see
 //     LP-073 §"Domain-separated message prefixes").
 //
