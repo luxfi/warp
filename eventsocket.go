@@ -9,11 +9,26 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/luxfi/codec/wrappers"
 	"github.com/luxfi/ids"
 	log "github.com/luxfi/log"
 	"github.com/luxfi/warp/socket"
 )
+
+// firstErr collects the first non-nil error from a series of operations.
+// Mirrors the historical wrappers.Errs "first error wins" semantics.
+type firstErr struct{ err error }
+
+func (e *firstErr) add(errs ...error) {
+	if e.err != nil {
+		return
+	}
+	for _, err := range errs {
+		if err != nil {
+			e.err = err
+			return
+		}
+	}
+}
 
 // AcceptorContext is a minimal interface for acceptor callbacks.
 // This avoids importing runtime which would create a circular dependency.
@@ -108,17 +123,17 @@ func (ipcs *EventSockets) Accept(ctx context.Context, containerID ids.ID, contai
 
 // stop closes the underlying eventSockets
 func (ipcs *EventSockets) stop() error {
-	errs := wrappers.Errs{}
+	errs := firstErr{}
 
 	if ipcs.consensusSocket != nil {
-		errs.Add(ipcs.consensusSocket.stop())
+		errs.add(ipcs.consensusSocket.stop())
 	}
 
 	if ipcs.decisionsSocket != nil {
-		errs.Add(ipcs.decisionsSocket.stop())
+		errs.add(ipcs.decisionsSocket.stop())
 	}
 
-	return errs.Err
+	return errs.err
 }
 
 // ConsensusURL returns the URL of socket receiving consensus events
@@ -179,10 +194,10 @@ func newEventIPCSocket(
 
 	// Set up the deregistration function for cleanup
 	eis.unregisterFn = func() error {
-		errs := wrappers.Errs{}
-		errs.Add(linearAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
-		errs.Add(luxAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
-		return errs.Err
+		errs := firstErr{}
+		errs.add(linearAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
+		errs.add(luxAcceptorGroup.DeregisterAcceptor(chainID, ipcName))
+		return errs.err
 	}
 
 	if err := eis.socket.Listen(); err != nil {

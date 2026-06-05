@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/luxfi/codec/wrappers"
 	"github.com/luxfi/ids"
 	log "github.com/luxfi/log"
 )
@@ -119,11 +118,11 @@ func (cipcs *ChainIPCs) GetPublishedBlockchains() []ids.ID {
 func (cipcs *ChainIPCs) Shutdown() error {
 	cipcs.log.Info("shutting down chain IPCs")
 
-	errs := wrappers.Errs{}
+	errs := firstErr{}
 	for _, ch := range cipcs.chains {
-		errs.Add(ch.stop())
+		errs.add(ch.stop())
 	}
-	return errs.Err
+	return errs.err
 }
 
 func ipcURL(ctx ipcContext, chainID ids.ID, eventType string) string {

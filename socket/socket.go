@@ -14,9 +14,24 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/luxfi/codec/wrappers"
 	log "github.com/luxfi/log"
 )
+
+// firstErr collects the first non-nil error from a series of operations.
+// Mirrors the historical wrappers.Errs "first error wins" semantics.
+type firstErr struct{ err error }
+
+func (e *firstErr) add(errs ...error) {
+	if e.err != nil {
+		return
+	}
+	for _, err := range errs {
+		if err != nil {
+			e.err = err
+			return
+		}
+	}
+}
 
 var (
 	// ErrMessageTooLarge is returned when reading a message that is larger than
@@ -134,13 +149,13 @@ func (s *Socket) Close() error {
 	s.connLock.Unlock()
 
 	// Close all connections that were open at the time of shutdown
-	errs := wrappers.Errs{Err: err}
+	errs := firstErr{err: err}
 	for conn := range conns {
 		if conn != nil {
-			errs.Add(conn.Close())
+			errs.add(conn.Close())
 		}
 	}
-	return errs.Err
+	return errs.err
 }
 
 func (s *Socket) Running() bool {
