@@ -5,7 +5,6 @@ go 1.26.3
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/holiman/uint256 v1.3.2
-	github.com/luxfi/codec v1.1.4
 	github.com/luxfi/constants v1.4.7
 	github.com/luxfi/corona v0.4.1
 	github.com/luxfi/crypto v1.19.3
@@ -44,6 +43,7 @@ require (
 	github.com/luxfi/accel v1.1.0 // indirect
 	github.com/luxfi/atomic v1.0.0 // indirect
 	github.com/luxfi/cache v1.2.1 // indirect
+	github.com/luxfi/codec v1.1.4 // indirect
 	github.com/luxfi/compress v0.0.5 // indirect
 	github.com/luxfi/concurrent v0.0.3 // indirect
 	github.com/luxfi/consensus v1.22.84 // indirect
