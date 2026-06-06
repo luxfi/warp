@@ -9,7 +9,7 @@ require (
 	github.com/luxfi/corona v0.7.6
 	github.com/luxfi/crypto v1.19.17
 	github.com/luxfi/geth v1.16.98
-	github.com/luxfi/ids v1.2.10
+	github.com/luxfi/ids v1.2.15
 	github.com/luxfi/lattice/v7 v7.1.4
 	github.com/luxfi/log v1.4.1
 	github.com/luxfi/math v1.4.1
@@ -43,7 +43,6 @@ require (
 	github.com/luxfi/accel v1.1.9 // indirect
 	github.com/luxfi/atomic v1.0.0 // indirect
 	github.com/luxfi/cache v1.2.1 // indirect
-	github.com/luxfi/codec v1.1.4 // indirect
 	github.com/luxfi/compress v0.0.5 // indirect
 	github.com/luxfi/concurrent v0.0.3 // indirect
 	github.com/luxfi/consensus v1.25.0 // indirect
