@@ -51,7 +51,7 @@ const (
 	// scheme (github.com/luxfi/corona). Used by Warp 2.0 as an
 	// alternate Pulse implementation; the wire format is identical
 	// to SchemePulsar (Pulse byte layout, not algorithm-identifying).
-	// Replaces the older "ringtail" enum value carried over from
+	// Replaces the older "Corona" enum value carried over from
 	// the academic upstream naming.
 	SchemeCorona Scheme = "corona"
 
