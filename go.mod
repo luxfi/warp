@@ -54,11 +54,11 @@ require (
 	github.com/luxfi/mock v0.1.1 // indirect
 	github.com/luxfi/precompile v0.5.27 // indirect
 	github.com/luxfi/runtime v1.1.0 // indirect
-	github.com/luxfi/sampler v1.0.0 // indirect
+	github.com/luxfi/sampler v1.1.0 // indirect
 	github.com/luxfi/utils v1.1.5 // indirect
 	github.com/luxfi/validators v1.2.0 // indirect
 	github.com/luxfi/version v1.0.1 // indirect
-	github.com/luxfi/vm v1.1.10 // indirect
+	github.com/luxfi/vm v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
