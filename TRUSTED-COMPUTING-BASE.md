@@ -30,7 +30,7 @@ unsound regardless of how well-implemented the envelope verifier is.
 
 | Layer | What you trust | Reproducibility |
 |---|---|---|
-| **Go toolchain** | Go 1.26.3 compiler + runtime; `crypto/rand` randomness quality | Version pinned in `go.mod` (`go 1.26.3`) |
+| **Go toolchain** | Go 1.26.4 compiler + runtime; `crypto/rand` randomness quality | Version pinned in `go.mod` (`go 1.26.4`) |
 | **`luxfi/geth/rlp`** | RLP encoder / decoder correctness; bounded recursion; refuses oversized inputs | go-ethereum upstream RLP; reviewed |
 | **`luxfi/codec`** | Codec versioning + length-prefix correctness for v1 Message wire format | Reviewed; KAT-locked |
 | **`luxfi/ids`** | 32-byte ID type + SHAKE-256 derivation | Reviewed; pinned by FIPS 202 |
