@@ -95,7 +95,6 @@ The Tier A push (this revision, 2026-05-18):
 - Adds explicit `LegacyClassicalEnabled` opt-in for classical.
 - Keeps classical primitives **available** under opt-in so
   existing wallets can migrate.
-- Liquid mainnet pinned `strict-pq`.
 - Lux primary network + Hanzo + Zoo + Pars chains pinned
   `hybrid` (classical fallback during validator-key rotation).
 
