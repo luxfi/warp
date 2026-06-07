@@ -12,7 +12,7 @@
 |---|---|
 | `classical` | Legacy chain with no ML-DSA validator material yet generated. **Discouraged** for new deployments. |
 | `hybrid` | Migration middle. Chain validators sign both BLS Beam AND MLDSACertSet; verifier accepts either path. **Default for non-strict-PQ Lux primary network deployments.** |
-| `strict-pq` | Pure post-quantum. Classical envelopes refused at the verifier boundary. **Canonical default for Liquid mainnet, strict Lux + Zoo deployments.** |
+| `strict-pq` | Pure post-quantum. Classical envelopes refused at the verifier boundary. **Canonical default for strict Lux + Zoo deployments.** |
 
 The posture is pinned at **genesis** of the destination chain and
 flipped only by a hard fork (never at runtime). Pin it in the
