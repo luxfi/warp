@@ -1,14 +1,11 @@
 // Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// Warp 1.x wire-format fuzz harnesses.
+// ZAP signature / envelope decoder fuzz harnesses.
 //
-// FuzzBLSAggregateCert  — BitSetSignature codec round-trip
-// FuzzWarpV1Envelope    — legacy v1 Message codec round-trip; asserts
-//                         v1 verifiers reject 0x02-prefixed envelopes
-//
-// Property: every decoder path under MaxMessageSize never escapes a
-// panic, and v1 verifiers correctly reject v2 envelopes.
+// FuzzBeamCodec       — Beam (Signers bitset + [96] sig) decode never panics.
+// FuzzWarpEnvelopeRaw  — ParseWarpEnvelope never panics; legacy RLP / 0x02
+//                        lead bytes are rejected at the magic.
 
 package warp
 
@@ -20,9 +17,8 @@ import (
 
 const fuzzMaxRawSize = 64 * 1024
 
-// fuzzBLSAggregateCertCodec round-trips raw bytes through the warp
-// codec into a BitSetSignature and back. Property: 0 panics.
-func fuzzBLSAggregateCertCodec(raw []byte) (err error) {
+// fuzzBeamCodec decodes raw bytes through parseBeam. Property: 0 panics.
+func fuzzBeamCodec(raw []byte) (err error) {
 	if len(raw) > fuzzMaxRawSize {
 		return fmt.Errorf("input exceeds fuzzMaxRawSize")
 	}
@@ -31,110 +27,75 @@ func fuzzBLSAggregateCertCodec(raw []byte) (err error) {
 			err = fmt.Errorf("decode panic recovered: %v", r)
 		}
 	}()
-	sig := &BitSetSignature{}
-	_, derr := Codec.Unmarshal(raw, sig)
+	_, derr := parseBeam(newZapReader(raw))
 	return derr
-}
-
-// fuzzWarpV1MessageCodec round-trips raw bytes through the warp v1
-// codec into a Message. Property: 0 panics, and a v1 verifier called
-// on bytes whose first byte is EnvelopeVersion2 (0x02) MUST reject
-// rather than silently accept (this is the v1/v2 cross-version
-// safety property).
-func fuzzWarpV1MessageCodec(raw []byte) (err error) {
-	if len(raw) > fuzzMaxRawSize {
-		return fmt.Errorf("input exceeds fuzzMaxRawSize")
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("decode panic recovered: %v", r)
-		}
-	}()
-
-	msg := &Message{}
-	_, derr := Codec.Unmarshal(raw, msg)
-	if derr != nil {
-		return derr
-	}
-
-	// V1/V2 safety: if the bytes happened to round-trip as a v1
-	// Message AND start with 0x02, ParseEnvelope MUST treat them as
-	// a v2 envelope (i.e., NOT as a v1 Message). Otherwise an
-	// attacker can craft bytes that decode as both versions.
-	if len(raw) > 0 && raw[0] == EnvelopeVersion2 {
-		// We don't require this to succeed — the v2 RLP body may be
-		// invalid — but we do require it not to silently treat the
-		// bytes as a valid v1 Message.
-		_, _ = ParseEnvelopeV2(raw)
-	}
-	return nil
 }
 
 func addSmallSeeds(f *testing.F) {
 	f.Add([]byte{})
 	f.Add([]byte{0x00})
 	f.Add(bytes.Repeat([]byte{0xff}, 32))
-	f.Add([]byte{EnvelopeVersion2}) // 0x02 prefix alone
-	// Plausible-looking signed message header.
-	f.Add(append([]byte{0x00, 0x00}, bytes.Repeat([]byte{0x00}, 64)...))
+	f.Add(wireMagic[:])
+	f.Add(append([]byte{0xc0}, bytes.Repeat([]byte{0x00}, 64)...)) // legacy RLP lead
 }
 
-// FuzzBLSAggregateCert fuzzes the BitSetSignature codec.
-func FuzzBLSAggregateCert(f *testing.F) {
+// FuzzBeamCodec fuzzes the Beam decoder.
+func FuzzBeamCodec(f *testing.F) {
 	addSmallSeeds(f)
-
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		_ = fuzzBLSAggregateCertCodec(raw)
-	})
-}
-
-// FuzzWarpV1Envelope fuzzes the legacy v1 Message codec.
-func FuzzWarpV1Envelope(f *testing.F) {
-	addSmallSeeds(f)
-
-	f.Fuzz(func(t *testing.T, raw []byte) {
-		_ = fuzzWarpV1MessageCodec(raw)
-	})
-}
-
-// TestFuzzCorpus_BLSAggregateCertReplay replays the small-seed corpus.
-func TestFuzzCorpus_BLSAggregateCertReplay(t *testing.T) {
-	for _, raw := range [][]byte{
-		{},
-		{0x00},
-		bytes.Repeat([]byte{0xff}, 32),
-	} {
-		_ = fuzzBLSAggregateCertCodec(raw)
-	}
-}
-
-// TestFuzzCorpus_WarpV1EnvelopeReplay replays the small-seed corpus
-// and explicitly verifies that a 0x02-prefixed input does not pass v1
-// validation as a Message.
-func TestFuzzCorpus_WarpV1EnvelopeReplay(t *testing.T) {
-	for _, raw := range [][]byte{
-		{},
-		{0x00},
-		{EnvelopeVersion2},
-		append([]byte{EnvelopeVersion2}, bytes.Repeat([]byte{0x00}, 32)...),
-	} {
-		_ = fuzzWarpV1MessageCodec(raw)
-	}
-
-	// Specific v1/v2 cross-version safety check: a 0x02-prefixed
-	// random body should be rejected by ParseEnvelopeV2 (because
-	// the body is not valid RLP), and should NOT be valid as a v1
-	// Message either.
-	hostile := append([]byte{EnvelopeVersion2}, bytes.Repeat([]byte{0xab}, 64)...)
-	if _, err := ParseEnvelopeV2(hostile); err == nil {
-		t.Fatalf("ParseEnvelopeV2 accepted random 0x02-prefixed bytes")
-	}
-	msg := &Message{}
-	if _, err := Codec.Unmarshal(hostile, msg); err == nil {
-		// Decoding as v1 might succeed (the codec is lenient), but
-		// Verify() must fail.
-		if verr := msg.Verify(); verr == nil {
-			t.Fatalf("v1 Verify accepted hostile bytes that decoded")
+		if err := fuzzBeamCodec(raw); err != nil &&
+			!bytes.Contains([]byte(err.Error()), []byte("warp zap")) &&
+			!bytes.Contains([]byte(err.Error()), []byte("beam")) {
+			// Any decode error is acceptable; only a recovered panic
+			// (reported via the recover path) is a failure.
+			if bytes.Contains([]byte(err.Error()), []byte("panic")) {
+				t.Fatalf("beam decode panicked: %v", err)
+			}
 		}
+	})
+}
+
+// FuzzWarpEnvelopeRaw fuzzes ParseWarpEnvelope. Property: never panics,
+// and legacy RLP / 0x02 lead bytes never parse as a valid envelope.
+func FuzzWarpEnvelopeRaw(f *testing.F) {
+	addSmallSeeds(f)
+	f.Add(makeFuzzSeed(1, 1, true, true))
+
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("ParseWarpEnvelope panicked: %v", r)
+				}
+			}()
+			_, _ = ParseWarpEnvelope(raw)
+		}()
+
+		// Legacy-format safety: any byte stream whose first byte is an
+		// RLP list lead (0xc0..0xff) or the legacy 0x02 envelope byte
+		// MUST NOT parse as a valid ZAP envelope.
+		if len(raw) > 0 && (raw[0] >= 0xc0 || raw[0] == 0x02) {
+			if _, err := ParseWarpEnvelope(raw); err == nil {
+				t.Fatalf("ParseWarpEnvelope accepted legacy-lead bytes: %x", raw[:1])
+			}
+		}
+	})
+}
+
+// TestFuzzCorpus_SignatureReplay replays the small-seed corpus and the
+// explicit legacy-rejection check.
+func TestFuzzCorpus_SignatureReplay(t *testing.T) {
+	for _, raw := range [][]byte{{}, {0x00}, bytes.Repeat([]byte{0xff}, 32)} {
+		_ = fuzzBeamCodec(raw)
+	}
+	// A 0x02-prefixed random body must be rejected.
+	hostile := append([]byte{0x02}, bytes.Repeat([]byte{0xab}, 64)...)
+	if _, err := ParseWarpEnvelope(hostile); err == nil {
+		t.Fatalf("ParseWarpEnvelope accepted 0x02-prefixed bytes")
+	}
+	// An RLP list-prefixed body must be rejected.
+	rlpish := append([]byte{0xf8, 0x40}, bytes.Repeat([]byte{0xcd}, 64)...)
+	if _, err := ParseWarpEnvelope(rlpish); err == nil {
+		t.Fatalf("ParseWarpEnvelope accepted RLP-shaped bytes")
 	}
 }

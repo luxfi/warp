@@ -52,7 +52,7 @@ import (
 //   - VerifyV2 with RequirePulse=true returns an error mentioning the
 //     missing PQ lane.
 func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
-	env, _ := envFixture(t, 7, 11)
+	env := envFixture(t, 7, 11)
 
 	// "Groth16 of ML-DSA" rollup bytes — convention only; classification
 	// does not inspect them. The envelope IS NOT Horizon-final because
@@ -78,11 +78,11 @@ func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
 	// VerifyV2 with RequirePulse=true must reject — Beam / Pulse /
 	// CertSet are independent lanes; missing Pulse is fatal under
 	// RequirePulse.
-	opts := warp.VerifyV2Options{
+	opts := warp.VerifyOptions{
 		SkipBeam:     true,
 		RequirePulse: true,
 	}
-	verifyErr := warp.VerifyV2(env, opts)
+	verifyErr := warp.VerifyWithOptions(env, opts)
 	require.Error(t, verifyErr)
 }
 
@@ -91,7 +91,7 @@ func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
 // a Groth16-only envelope, the IsPQFinal classification pin still
 // rejects it. The marshaller does not verify; the predicate does.
 func TestHorizonFromEnvelopeFlowsLanesButClassificationCatchesIt(t *testing.T) {
-	env, _ := envFixture(t, 7, 11)
+	env := envFixture(t, 7, 11)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xAB}, 192)
 	// No Pulse.
 
@@ -147,8 +147,8 @@ func TestIsPQRootOfTrustClassification(t *testing.T) {
 // shaped (the actual lane verification is exercised in pulsar_test.go;
 // this test only pins the predicate).
 func TestPulseAndCertSetTogetherIsHorizonFinalShape(t *testing.T) {
-	env, _ := envFixture(t, 7, 11)
-	env.PulsarPulse = bytes.Repeat([]byte{0x42}, 64)
+	env := envFixture(t, 7, 11)
+	env.PulseSig = bytes.Repeat([]byte{0x42}, 64)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xAB}, 192)
 
 	require.True(t, IsPQFinal(env))

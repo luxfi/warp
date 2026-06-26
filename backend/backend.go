@@ -19,10 +19,10 @@ import (
 // Backend is the interface for warp message handling
 type Backend interface {
 	// AddMessage adds a message to be sent
-	AddMessage(msg *warp.UnsignedMessage) error
+	AddMessage(core *warp.SignedCore) error
 
 	// GetMessage retrieves a verified message by index
-	GetMessage(index uint32) (*warp.Message, error)
+	GetMessage(index uint32) (*warp.WarpEnvelope, error)
 
 	// GetValidatorState returns the validator state
 	GetValidatorState() warp.ValidatorState
@@ -31,7 +31,7 @@ type Backend interface {
 // MemoryBackend is an in-memory implementation of the warp backend
 type MemoryBackend struct {
 	mu             sync.RWMutex
-	messages       []*warp.Message
+	messages       []*warp.WarpEnvelope
 	validatorState warp.ValidatorState
 	signer         signer.Signer
 }
@@ -39,14 +39,14 @@ type MemoryBackend struct {
 // NewMemoryBackend creates a new memory backend
 func NewMemoryBackend(validatorState warp.ValidatorState, s signer.Signer) *MemoryBackend {
 	return &MemoryBackend{
-		messages:       make([]*warp.Message, 0),
+		messages:       make([]*warp.WarpEnvelope, 0),
 		validatorState: validatorState,
 		signer:         s,
 	}
 }
 
 // AddMessage adds a message to be sent
-func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error {
+func (b *MemoryBackend) AddMessage(core *warp.SignedCore) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -57,14 +57,14 @@ func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error {
 	// Get validator set
 	validators, _, err := warp.GetCanonicalValidatorSet(
 		b.validatorState,
-		unsignedMsg.SourceChainID,
+		core.SourceChainID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get validator set: %w", err)
 	}
 
-	// Sign the message
-	sig, err := b.signer.Sign(unsignedMsg)
+	// Sign the message over the Beam domain.
+	sig, err := b.signer.Sign(core)
 	if err != nil {
 		return fmt.Errorf("failed to sign message: %w", err)
 	}
@@ -84,12 +84,9 @@ func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error {
 	sigBytes := [warp.SignatureLen]byte{}
 	copy(sigBytes[:], bls.SignatureToBytes(sig))
 
-	bitSetSig := &warp.BitSetSignature{
-		Signers:   bitSet,
-		Signature: sigBytes,
-	}
+	beam := warp.NewBitSetSignature(bitSet, sigBytes)
 
-	msg, err := warp.NewMessage(unsignedMsg, bitSetSig)
+	msg, err := warp.NewWarpEnvelope(core, beam, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
@@ -99,7 +96,7 @@ func (b *MemoryBackend) AddMessage(unsignedMsg *warp.UnsignedMessage) error {
 }
 
 // GetMessage retrieves a verified message by index
-func (b *MemoryBackend) GetMessage(index uint32) (*warp.Message, error) {
+func (b *MemoryBackend) GetMessage(index uint32) (*warp.WarpEnvelope, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -146,8 +143,8 @@ func (m *MockValidatorState) GetCurrentHeight() (uint64, error) {
 // ChainBackend is a backend that integrates with blockchain state
 type ChainBackend struct {
 	mu             sync.RWMutex
-	pendingMsgs    []*warp.UnsignedMessage
-	verifiedMsgs   map[uint32]*warp.Message
+	pendingMsgs    []*warp.SignedCore
+	verifiedMsgs   map[uint32]*warp.WarpEnvelope
 	validatorState warp.ValidatorState
 	chainID        common.Hash
 }
@@ -155,24 +152,24 @@ type ChainBackend struct {
 // NewChainBackend creates a new chain backend
 func NewChainBackend(validatorState warp.ValidatorState, chainID common.Hash) *ChainBackend {
 	return &ChainBackend{
-		pendingMsgs:    make([]*warp.UnsignedMessage, 0),
-		verifiedMsgs:   make(map[uint32]*warp.Message),
+		pendingMsgs:    make([]*warp.SignedCore, 0),
+		verifiedMsgs:   make(map[uint32]*warp.WarpEnvelope),
 		validatorState: validatorState,
 		chainID:        chainID,
 	}
 }
 
 // AddMessage adds a message to be sent
-func (b *ChainBackend) AddMessage(msg *warp.UnsignedMessage) error {
+func (b *ChainBackend) AddMessage(core *warp.SignedCore) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.pendingMsgs = append(b.pendingMsgs, msg)
+	b.pendingMsgs = append(b.pendingMsgs, core)
 	return nil
 }
 
 // GetMessage retrieves a verified message by index
-func (b *ChainBackend) GetMessage(index uint32) (*warp.Message, error) {
+func (b *ChainBackend) GetMessage(index uint32) (*warp.WarpEnvelope, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -190,7 +187,7 @@ func (b *ChainBackend) GetValidatorState() warp.ValidatorState {
 }
 
 // AddVerifiedMessage adds a pre-verified message
-func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.Message) error {
+func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.WarpEnvelope) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -199,11 +196,11 @@ func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.Message) error
 }
 
 // GetPendingMessages returns all pending unsigned messages
-func (b *ChainBackend) GetPendingMessages() []*warp.UnsignedMessage {
+func (b *ChainBackend) GetPendingMessages() []*warp.SignedCore {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	msgs := make([]*warp.UnsignedMessage, len(b.pendingMsgs))
+	msgs := make([]*warp.SignedCore, len(b.pendingMsgs))
 	copy(msgs, b.pendingMsgs)
 	return msgs
 }

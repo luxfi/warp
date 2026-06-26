@@ -1,30 +1,86 @@
-// Copyright (C) 2019-2025, Lux Partners Limited. All rights reserved.
+// Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package warp
 
 import (
-	"github.com/luxfi/geth/rlp"
+	"errors"
+
+	"github.com/luxfi/ids"
+	"golang.org/x/crypto/sha3"
 )
 
-// CodecImpl is used for serializing/deserializing warp messages
-type CodecImpl struct{}
+// codec.go — the Warp ZAP profile: the domain-specific constants and
+// signing-domain construction layered on top of the generic canonical
+// TLV mechanism in zap.go. There is exactly ONE codec (ZAP) and exactly
+// ONE signing digest (D). No RLP, no codec version, no type registry.
 
-// Codec is the default codec instance
-var Codec = &CodecImpl{}
+// Kind discriminators. zapKindSignedCore is the first byte of a SignedCore
+// c14n stream; kindWarpEnvelope is the envelope kind byte that follows the
+// wire magic. They are distinct so a SignedCore can never be mistaken for
+// a full envelope and vice-versa.
+const (
+	zapKindSignedCore byte = 0x01
+	kindWarpEnvelope  byte = 0x02
+)
 
-// Marshal serializes the value
-func (c *CodecImpl) Marshal(version uint16, v interface{}) ([]byte, error) {
-	return rlp.EncodeToBytes(v)
+// Size limits. MaxMessageSize bounds a SignedCore's canonical encoding;
+// MaxEnvelopeSize bounds the full envelope (core + Beam + the two PQ
+// lanes). Both are hard ceilings checked at the decode boundary.
+const (
+	// MaxMessageSize is the maximum canonical SignedCore size.
+	MaxMessageSize = 256 * KiB
+
+	// MaxEnvelopeSize is the maximum WarpEnvelope wire size. Bounded at
+	// 4×MaxMessageSize to leave room for the Pulse (~33 KB) and the
+	// ML-DSA cert set alongside the core and Beam.
+	MaxEnvelopeSize = 4 * MaxMessageSize
+)
+
+// Cross-cutting errors. Envelope-shape errors live in envelope.go.
+var (
+	ErrInvalidSignature   = errors.New("invalid signature")
+	ErrInvalidMessage     = errors.New("invalid message")
+	ErrUnknownValidator   = errors.New("unknown validator")
+	ErrInsufficientWeight = errors.New("insufficient weight")
+)
+
+// Domain-separation tags. D = keccak256(coreDST ‖ zap_c14n(SignedCore))
+// is the single signed digest (the "Prism" transcript): message ID,
+// replay key, and on-chain messageHash all at once. Each lane signs the
+// SAME D under its OWN tag, so a signature in one lane can never be
+// replayed into another (BLS objects vs lattice objects are already
+// non-interchangeable; the distinct tags close the door regardless).
+const (
+	coreDST  = "LUX-WARP-ZAP-CORE-v1"
+	beamDST  = "LUX-WARP-ZAP-BEAM-v1"
+	pulseDST = "LUX-WARP-ZAP-PULSE-v1"
+	mldsaDST = "LUX-WARP-ZAP-MLDSA-v1"
+)
+
+// keccak256 is Ethereum's keccak256 — golang.org/x/crypto/sha3
+// NewLegacyKeccak256 (Keccak padding 0x01), NOT NIST SHA3 (pad 0x06) and
+// NOT crypto/sha256. The on-chain keccak256 opcode computes exactly this,
+// so the digest D matches byte-for-byte between Go and Solidity.
+func keccak256(parts ...[]byte) [32]byte {
+	h := sha3.NewLegacyKeccak256()
+	for _, p := range parts {
+		_, _ = h.Write(p)
+	}
+	var out [32]byte
+	copy(out[:], h.Sum(nil))
+	return out
 }
 
-// Unmarshal deserializes the bytes
-func (c *CodecImpl) Unmarshal(b []byte, v interface{}) (uint16, error) {
-	err := rlp.DecodeBytes(b, v)
-	return CodecVersion, err
-}
+// BeamSigningBytes returns the exact bytes the BLS Beam lane signs and
+// verifies: beamDST ‖ D. The Beam now authenticates the full SignedCore
+// (including PQ lineage) rather than only the unsigned message body.
+func BeamSigningBytes(d ids.ID) []byte { return append([]byte(beamDST), d[:]...) }
 
-// RegisterType is a no-op for RLP codec
-func (c *CodecImpl) RegisterType(v interface{}) error {
-	return nil
-}
+// PulseSigningBytes returns the exact bytes the Pulsar Pulse lane signs
+// and verifies: pulseDST ‖ D.
+func PulseSigningBytes(d ids.ID) []byte { return append([]byte(pulseDST), d[:]...) }
+
+// MLDSASigningBytes returns the exact bytes the ML-DSA cert-set lane signs
+// and verifies: mldsaDST ‖ D.
+func MLDSASigningBytes(d ids.ID) []byte { return append([]byte(mldsaDST), d[:]...) }

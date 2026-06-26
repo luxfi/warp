@@ -5,19 +5,17 @@ package teleport
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"math/big"
 	"testing"
 
 	"github.com/luxfi/geth/common"
-	"github.com/luxfi/geth/rlp"
 	"github.com/luxfi/ids"
 	"github.com/luxfi/warp"
 )
 
-func TestRoundTrip(t *testing.T) {
-	pl := &TeleportPayload{
+func sample(t *testing.T) *TeleportPayload {
+	t.Helper()
+	return &TeleportPayload{
 		Version:     TeleportBindingVersion,
 		DestChainID: 96369,
 		Token:       common.HexToAddress("0x1111111111111111111111111111111111111111"),
@@ -26,17 +24,22 @@ func TestRoundTrip(t *testing.T) {
 		VaultIsZero: true,
 		Nonce:       42,
 	}
+}
 
-	encoded, err := pl.MarshalRLP()
+func TestRoundTrip(t *testing.T) {
+	pl := sample(t)
+	encoded, err := pl.MarshalBinary()
 	if err != nil {
-		t.Fatalf("MarshalRLP: %v", err)
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	if len(encoded) != PayloadSize {
+		t.Fatalf("payload size = %d, want %d", len(encoded), PayloadSize)
 	}
 
 	var decoded TeleportPayload
-	if err := decoded.UnmarshalRLP(encoded); err != nil {
-		t.Fatalf("UnmarshalRLP: %v", err)
+	if err := decoded.UnmarshalBinary(encoded); err != nil {
+		t.Fatalf("UnmarshalBinary: %v", err)
 	}
-
 	if decoded.Version != pl.Version ||
 		decoded.DestChainID != pl.DestChainID ||
 		decoded.Token != pl.Token ||
@@ -48,12 +51,27 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-// TestEnvelopeIDMatchesComputeMessageHash pins the invariant that
-// EnvelopeV2.ID() for a Teleport envelope is byte-equal to
-// ComputeMessageHash(NetworkID, SourceChainID, payload). Without this,
-// validators sign one preimage and the contract verifies another (the
-// RED-2 wire-format split). Any reorganisation of the wire format
-// MUST keep this round-trip green.
+// TestAmountIsFull32Bytes proves the amount field is the FULL 32-byte
+// big-endian value with no leading-zero stripping.
+func TestAmountIsFull32Bytes(t *testing.T) {
+	pl := sample(t)
+	pl.Amount = big.NewInt(1) // 1 wei => 31 leading zero bytes + 0x01
+	b, err := pl.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	// Amount occupies bytes [29:61]; for value 1 it must be 31 zeros + 0x01.
+	amount := b[29:61]
+	want := make([]byte, 32)
+	want[31] = 0x01
+	if !bytes.Equal(amount, want) {
+		t.Fatalf("amount not full-32 big-endian: %x", amount)
+	}
+}
+
+// TestEnvelopeIDMatchesComputeMessageHash pins D == warp.SignedCore.ID()
+// for a core whose payload is the 90-byte teleport block. Validators sign
+// one D and the contract verifies the same D — one canonical preimage.
 func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
 	pl := &TeleportPayload{
 		Version:     TeleportBindingVersion,
@@ -64,111 +82,99 @@ func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
 		VaultIsZero: false,
 		Nonce:       7,
 	}
-	payload, err := pl.MarshalRLP()
+	payload, err := pl.MarshalBinary()
 	if err != nil {
-		t.Fatalf("MarshalRLP: %v", err)
+		t.Fatalf("MarshalBinary: %v", err)
 	}
 
 	var sourceChainID ids.ID
 	copy(sourceChainID[:], []byte("the-source-chain-id-32-bytes-pad"))
 	networkID := uint32(96369)
 
-	// Path A: via the package's canonical hash.
 	want, err := ComputeMessageHash(networkID, sourceChainID, pl)
 	if err != nil {
 		t.Fatalf("ComputeMessageHash: %v", err)
 	}
 
-	// Path B: build a real UnsignedMessage and take its ID via warp.
-	unsigned := &warp.UnsignedMessage{
-		NetworkID:     networkID,
-		SourceChainID: sourceChainID,
-		Payload:       payload,
+	// The canonical preimage is exactly the SignedCore NewSignedCore builds.
+	core, err := warp.NewSignedCore(networkID, sourceChainID, payload)
+	if err != nil {
+		t.Fatalf("NewSignedCore: %v", err)
 	}
-	got := unsigned.ID()
-
+	got := core.ID()
 	if !bytes.Equal(want[:], got[:]) {
-		t.Fatalf("canonical hash mismatch:\n want = %s\n  got = %s",
-			hex.EncodeToString(want[:]), hex.EncodeToString(got[:]))
-	}
-
-	// Belt-and-braces: sha256(rlp([networkID, sourceChainID[:], payload])) == want.
-	body, _ := rlp.EncodeToBytes([]interface{}{networkID, sourceChainID[:], payload})
-	check := sha256.Sum256(body)
-	if !bytes.Equal(want[:], check[:]) {
-		t.Fatalf("explicit sha256 mismatch:\n want = %s\n  got = %s",
-			hex.EncodeToString(want[:]), hex.EncodeToString(check[:]))
+		t.Fatalf("D mismatch:\n want = %x\n  got = %x", want[:], got[:])
 	}
 }
 
 func TestVerifyRejectsWrongVersion(t *testing.T) {
-	pl := &TeleportPayload{
-		Version:     TeleportBindingVersion + 1,
-		DestChainID: 1,
-		Token:       common.Address{},
-		Amount:      big.NewInt(1),
-		Recipient:   common.Address{},
-		VaultIsZero: true,
-		Nonce:       0,
-	}
+	pl := sample(t)
+	pl.Version = TeleportBindingVersion + 1
 	if err := pl.Verify(); err == nil {
 		t.Fatal("expected version mismatch error")
 	}
-	if _, err := pl.MarshalRLP(); err == nil {
-		t.Fatal("expected MarshalRLP to refuse wrong version")
+	if _, err := pl.MarshalBinary(); err == nil {
+		t.Fatal("expected MarshalBinary to refuse wrong version")
 	}
 }
 
 func TestVerifyRejectsZeroDestChain(t *testing.T) {
-	pl := &TeleportPayload{
-		Version:     TeleportBindingVersion,
-		DestChainID: 0,
-		Token:       common.Address{},
-		Amount:      big.NewInt(1),
-		Recipient:   common.Address{},
-		VaultIsZero: true,
-		Nonce:       0,
-	}
+	pl := sample(t)
+	pl.DestChainID = 0
 	if err := pl.Verify(); err == nil {
 		t.Fatal("expected zero destChain error")
 	}
 }
 
 func TestVerifyRejectsNegativeAmount(t *testing.T) {
-	pl := &TeleportPayload{
-		Version:     TeleportBindingVersion,
-		DestChainID: 1,
-		Token:       common.Address{},
-		Amount:      big.NewInt(-1),
-		Recipient:   common.Address{},
-		VaultIsZero: true,
-		Nonce:       0,
-	}
+	pl := sample(t)
+	pl.Amount = big.NewInt(-1)
 	if err := pl.Verify(); err == nil {
 		t.Fatal("expected negative amount error")
 	}
 }
 
-// TestAmountUint256Boundary confirms the canonical-amount encoding
-// matches uint256 semantics: 2^256-1 encodes as 32 bytes, anything
-// larger rejects.
 func TestAmountUint256Boundary(t *testing.T) {
-	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
-	pl := &TeleportPayload{
-		Version:     TeleportBindingVersion,
-		DestChainID: 1,
-		Token:       common.Address{},
-		Amount:      max,
-		Recipient:   common.Address{},
-		VaultIsZero: false,
-		Nonce:       0,
+	pl := sample(t)
+	pl.Amount = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)) // 2^256-1
+	if _, err := pl.MarshalBinary(); err != nil {
+		t.Fatalf("MarshalBinary at uint256 max: %v", err)
 	}
-	if _, err := pl.MarshalRLP(); err != nil {
-		t.Fatalf("MarshalRLP at uint256 max: %v", err)
-	}
-	too := new(big.Int).Lsh(big.NewInt(1), 256) // 2^256, one too many
-	pl.Amount = too
-	if _, err := pl.MarshalRLP(); err == nil {
+	pl.Amount = new(big.Int).Lsh(big.NewInt(1), 256) // 2^256, one too many
+	if _, err := pl.MarshalBinary(); err == nil {
 		t.Fatal("expected ErrAmountTooLarge for amount > uint256")
+	}
+}
+
+// TestUnmarshalRejectsWrongLength proves decode is strict on the 90-byte
+// length.
+func TestUnmarshalRejectsWrongLength(t *testing.T) {
+	pl := sample(t)
+	b, err := pl.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	var d TeleportPayload
+	if err := d.UnmarshalBinary(b[:len(b)-1]); err == nil {
+		t.Fatal("expected length error on short payload")
+	}
+	if err := d.UnmarshalBinary(append(b, 0x00)); err == nil {
+		t.Fatal("expected length error on long payload")
+	}
+}
+
+// TestUnmarshalRejectsBadVaultByte proves the vault flag is a strict
+// {0x00,0x01} boolean.
+func TestUnmarshalRejectsBadVaultByte(t *testing.T) {
+	pl := sample(t)
+	b, err := pl.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	// VaultIsZero byte sits at offset 81.
+	b[81] = 0x02
+	var d TeleportPayload
+	if err := d.UnmarshalBinary(b); err == nil {
+		t.Fatal("expected error on out-of-domain vault byte")
 	}
 }

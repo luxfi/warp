@@ -1,16 +1,17 @@
 // Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// Command fixtures emits the canonical TeleportPayload byte fixtures
-// used by the Solidity round-trip test. The output is a JSON document
-// at the path given by `-out` (defaults to
-// teleport/contracts/test/fixtures/teleport_payload.json relative to
-// the lux workspace root).
+// Command fixtures emits the canonical TeleportPayload byte fixtures used
+// by the Solidity round-trip test. The output is a JSON document at the
+// path given by `-out` (defaults to
+// teleport/contracts/test/fixtures/teleport_payload.json relative to the
+// lux workspace root).
 //
 // The Solidity test reads the JSON and asserts that its on-chain
-// _computeMessageHash matches `messageHash`, and that its on-chain
-// _rlpEncodeTeleportPayload matches `payloadRLP`. Drift between the
-// Go encoder and the Solidity encoder is a CI failure.
+// _computeMessageHash matches `messageHash` (= D), and that its on-chain
+// teleport-payload packing matches `payload` (the fixed 90-byte block)
+// and the canonical SignedCore preimage matches `coreC14n`. Drift between
+// the Go encoder and the Solidity encoder is a CI failure.
 package main
 
 import (
@@ -23,6 +24,7 @@ import (
 
 	"github.com/luxfi/geth/common"
 	"github.com/luxfi/ids"
+	"github.com/luxfi/warp"
 	"github.com/luxfi/warp/teleport"
 )
 
@@ -39,9 +41,9 @@ type Fixture struct {
 	Nonce         string `json:"nonce"` // decimal string (uint64)
 
 	// Outputs (Go-computed; Solidity must match byte-for-byte).
-	PayloadRLP      string `json:"payloadRLP"`      // hex of rlp(TeleportPayload)
-	UnsignedMessage string `json:"unsignedMessage"` // hex of rlp([networkID, sourceChainID[:], payload])
-	MessageHash     string `json:"messageHash"`     // hex of sha256(unsignedMessage), == EnvelopeV2.ID()
+	Payload     string `json:"payload"`     // hex of the fixed 90-byte TeleportPayload block
+	CoreC14n    string `json:"coreC14n"`    // hex of zap_c14n(SignedCore) — the digest preimage
+	MessageHash string `json:"messageHash"` // hex of D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ coreC14n)
 }
 
 func parseSrcChain(hexStr string) (ids.ID, error) {
@@ -71,11 +73,11 @@ func emit(name string, networkID uint32, sourceChainID, token, recipient string,
 		VaultIsZero: vaultIsZero,
 		Nonce:       nonce,
 	}
-	payload, err := pl.MarshalRLP()
+	payload, err := pl.MarshalBinary()
 	if err != nil {
 		return Fixture{}, err
 	}
-	unsigned, err := teleport.EncodeUnsignedMessage(networkID, src, payload)
+	core, err := warp.NewSignedCore(networkID, src, payload)
 	if err != nil {
 		return Fixture{}, err
 	}
@@ -84,19 +86,19 @@ func emit(name string, networkID uint32, sourceChainID, token, recipient string,
 		return Fixture{}, err
 	}
 	return Fixture{
-		Name:            name,
-		NetworkID:       fmt.Sprintf("%d", networkID),
-		SourceChainID:   "0x" + hex.EncodeToString(src[:]),
-		Version:         pl.Version,
-		DestChainID:     fmt.Sprintf("%d", pl.DestChainID),
-		Token:           "0x" + hex.EncodeToString(pl.Token.Bytes()),
-		Amount:          pl.Amount.String(),
-		Recipient:       "0x" + hex.EncodeToString(pl.Recipient.Bytes()),
-		VaultIsZero:     pl.VaultIsZero,
-		Nonce:           fmt.Sprintf("%d", pl.Nonce),
-		PayloadRLP:      "0x" + hex.EncodeToString(payload),
-		UnsignedMessage: "0x" + hex.EncodeToString(unsigned),
-		MessageHash:     "0x" + hex.EncodeToString(hash[:]),
+		Name:          name,
+		NetworkID:     fmt.Sprintf("%d", networkID),
+		SourceChainID: "0x" + hex.EncodeToString(src[:]),
+		Version:       pl.Version,
+		DestChainID:   fmt.Sprintf("%d", pl.DestChainID),
+		Token:         "0x" + hex.EncodeToString(pl.Token.Bytes()),
+		Amount:        pl.Amount.String(),
+		Recipient:     "0x" + hex.EncodeToString(pl.Recipient.Bytes()),
+		VaultIsZero:   pl.VaultIsZero,
+		Nonce:         fmt.Sprintf("%d", pl.Nonce),
+		Payload:       "0x" + hex.EncodeToString(payload),
+		CoreC14n:      "0x" + hex.EncodeToString(core.Bytes()),
+		MessageHash:   "0x" + hex.EncodeToString(hash[:]),
 	}, nil
 }
 

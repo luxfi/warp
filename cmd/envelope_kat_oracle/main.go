@@ -1,29 +1,30 @@
 // Copyright (c) 2025-2026 Lux Industries Inc.
 // SPDX-License-Identifier: BSD-3-Clause-Eco
 //
-// envelope_kat_oracle — emits byte-equal KAT vectors for the Warp 2.0
-// envelope (LP-105 §"Warp evolution"). Drives warp.EnvelopeV2 through
-// its canonical RLP serialization plus the version-byte framing.
+// envelope_kat_oracle — emits byte-equal KAT vectors for the Warp ZAP
+// envelope. Drives warp.WarpEnvelope through its canonical ZAP
+// serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ SignedCore ‖ Beam ‖
+// PulseSig ‖ MLDSACertSet).
 //
 // Wire format (per entry):
 //
 //	name                       short label
-//	network_id                 v1 UnsignedMessage.NetworkID
-//	source_chain_id_hex        v1 UnsignedMessage.SourceChainID
-//	payload_hex                v1 UnsignedMessage.Payload
-//	signers_indices            BitSetSignature signer indices
+//	network_id                 SignedCore.NetworkID
+//	source_chain_id_hex        SignedCore.SourceChainID
+//	payload_hex                SignedCore.Payload
+//	signers_indices            Beam (BitSetSignature) signer indices
 //	signature_byte             Pattern byte filling the 96-byte BLS sig
-//	source_nebula_root_hex     EnvelopeV2.SourceNebulaRoot ([32]byte)
-//	source_key_era_id          EnvelopeV2.SourceKeyEraID
-//	source_generation          EnvelopeV2.SourceGeneration
-//	hash_suite_id              EnvelopeV2.HashSuiteID ("" or "Pulsar-SHA3")
+//	source_nebula_root_hex     SignedCore.SourceNebulaRoot ([32]byte)
+//	source_key_era_id          SignedCore.SourceKeyEraID
+//	source_generation          SignedCore.SourceGeneration
+//	hash_suite_id              SignedCore.HashSuiteID ("" or "Pulsar-SHA3")
 //	pulsar_pulse_byte          Pattern byte filling pulse bytes (0 = absent)
 //	pulsar_pulse_len           Pulse byte length
 //	mldsa_cert_set_byte        Pattern byte filling cert set bytes (0 = absent)
 //	mldsa_cert_set_len         Cert set byte length
-//	envelope_wire_hex          Full wire bytes (version byte + RLP body)
+//	envelope_wire_hex          Full ZAP wire bytes (magic ‖ kind ‖ body)
 //	envelope_wire_sha256       sha256 of envelope_wire_hex (port fingerprint)
-//	envelope_id_hex            EnvelopeV2.ID() (= embedded v1 message ID)
+//	envelope_id_hex            WarpEnvelope.ID() = D (legacy-keccak)
 //
 // Determinism contract: every entry is byte-identical across hosts /
 // builds / OSes. Cross-language ports consume (network_id,
@@ -94,8 +95,16 @@ type fixture struct {
 }
 
 func build(f fixture) Entry {
-	unsigned, err := warp.NewUnsignedMessage(f.networkID, f.sourceChainID, f.payload)
-	if err != nil {
+	core := warp.SignedCore{
+		NetworkID:        f.networkID,
+		SourceChainID:    f.sourceChainID,
+		SourceNebulaRoot: f.sourceNebulaRoot,
+		SourceKeyEraID:   f.sourceKeyEraID,
+		SourceGeneration: f.sourceGeneration,
+		HashSuiteID:      f.hashSuiteID,
+		Payload:          f.payload,
+	}
+	if err := core.Verify(); err != nil {
 		fail(err)
 	}
 
@@ -105,11 +114,7 @@ func build(f fixture) Entry {
 	}
 	var sigBytes [bls.SignatureLen]byte
 	copy(sigBytes[:], bytes.Repeat([]byte{f.signatureByte}, bls.SignatureLen))
-	sig := warp.NewBitSetSignature(sigSet, sigBytes)
-	msg, err := warp.NewMessage(unsigned, sig)
-	if err != nil {
-		fail(err)
-	}
+	beam := warp.NewBitSetSignature(sigSet, sigBytes)
 
 	var pulse []byte
 	if f.pulsarPulseLen > 0 {
@@ -120,16 +125,8 @@ func build(f fixture) Entry {
 		cert = bytes.Repeat([]byte{f.mldsaCertSetByte}, f.mldsaCertSetLen)
 	}
 
-	env := &warp.EnvelopeV2{
-		Message:          msg,
-		SourceNebulaRoot: f.sourceNebulaRoot,
-		SourceKeyEraID:   f.sourceKeyEraID,
-		SourceGeneration: f.sourceGeneration,
-		HashSuiteID:      f.hashSuiteID,
-		PulsarPulse:      pulse,
-		MLDSACertSet:     cert,
-	}
-	if err := env.Verify(); err != nil {
+	env, err := warp.NewWarpEnvelope(&core, beam, pulse, cert)
+	if err != nil {
 		fail(err)
 	}
 	wire, err := env.Bytes()

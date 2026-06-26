@@ -45,12 +45,14 @@ func UnmarshalSignatureRequest(data []byte) (*SignatureRequest, error) {
 	if len(data) < 8 {
 		return nil, fmt.Errorf("data too short: %d", len(data))
 	}
-	msgLen := binary.BigEndian.Uint32(data[0:4])
-	if len(data) < int(4+msgLen+4) {
+	// uint64 arithmetic: a u32 length near 2^32 must not wrap the bound check
+	// (red MEDIUM — a wrapped guard let data[4:0] panic the signature handler).
+	msgLen := uint64(binary.BigEndian.Uint32(data[0:4]))
+	if uint64(len(data)) < msgLen+8 {
 		return nil, fmt.Errorf("data too short for message: %d", len(data))
 	}
-	justLen := binary.BigEndian.Uint32(data[4+msgLen : 8+msgLen])
-	if len(data) < int(8+msgLen+justLen) {
+	justLen := uint64(binary.BigEndian.Uint32(data[4+msgLen : 8+msgLen]))
+	if uint64(len(data)) < 8+msgLen+justLen {
 		return nil, fmt.Errorf("data too short for justification: %d", len(data))
 	}
 	return &SignatureRequest{
@@ -73,8 +75,8 @@ func UnmarshalSignatureResponse(data []byte) (*SignatureResponse, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("data too short: %d", len(data))
 	}
-	sigLen := binary.BigEndian.Uint32(data[0:4])
-	if len(data) < int(4+sigLen) {
+	sigLen := uint64(binary.BigEndian.Uint32(data[0:4])) // uint64: no wrap (red MEDIUM)
+	if uint64(len(data)) < 4+sigLen {
 		return nil, fmt.Errorf("data too short for signature: %d", len(data))
 	}
 	return &SignatureResponse{
@@ -125,20 +127,23 @@ func (h *CachedSignatureHandler) Request(ctx context.Context, nodeID ids.NodeID,
 		return nil, err
 	}
 
-	unsignedMessage, err := ParseUnsignedMessage(req.Message)
+	// The request carries the canonical SignedCore bytes; recompute D
+	// locally from the parsed core. We never sign an opaque caller-
+	// supplied digest (no blind-sign oracle).
+	core, err := ParseSignedCore(req.Message)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check cache
-	messageID := unsignedMessage.ID()
+	messageID := core.ID()
 	if signatureBytes, ok := h.cache.Get(messageID); ok {
 		return MarshalSignatureResponse(signatureBytes)
 	}
 
 	// Verify if backend is a Verifier
 	if verifier, ok := h.backend.(Verifier); ok {
-		if appErr := verifier.Verify(ctx, unsignedMessage, req.Justification); appErr != nil {
+		if appErr := verifier.Verify(ctx, core, req.Justification); appErr != nil {
 			return nil, appErr
 		}
 	}
@@ -147,7 +152,7 @@ func (h *CachedSignatureHandler) Request(ctx context.Context, nodeID ids.NodeID,
 	if h.signer == nil {
 		return nil, fmt.Errorf("signer is nil")
 	}
-	signatureBytes, err := h.signer.Sign(unsignedMessage)
+	signatureBytes, err := h.signer.Sign(core)
 	if err != nil {
 		return nil, err
 	}

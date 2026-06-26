@@ -16,13 +16,12 @@
 // Architecture:
 //
 //	warp                      (root pkg; no Pulsar import)
-//	  ├── EnvelopeV2          (the v2 envelope type)
+//	  ├── WarpEnvelope        (the single envelope type)
 //	  ├── PulseVerifier       (interface)
-//	  └── VerifyV2 / VerifyPQLanes
+//	  └── VerifyWithOptions / VerifyPQLanes
 //
 //	warp/pulsar (this pkg; imports github.com/luxfi/pulsar)
-//	  ├── KernelVerifier      (PulseVerifier impl)
-//	  ├── BuildSigningBytes   (canonical transcript bytes)
+//	  ├── KernelVerifier      (PulseVerifier impl; Pulse over PulseSigningBytes(D))
 //	  └── HorizonCertificate  (LP-105 §"HorizonCertificate" helper)
 //
 // The KernelVerifier accepts a function that pulls a (GroupKey,
@@ -49,18 +48,7 @@ import (
 	"github.com/luxfi/lattice/v7/utils/structs"
 )
 
-// SigningPrefix is the domain-separation tag binding a Warp 2.0
-// envelope's Pulse to its transcript. Distinct from any Pulsar
-// consensus-side prefix (per LP-073 §"Domain-separated message
-// prefixes" and pulsar/DESIGN.md): consensus uses
-// QUASAR-PULSAR-BUNDLE-v1 to sign Nebula bundle roots, and Warp uses
-// this prefix to sign cross-chain message envelopes. Re-using one
-// prefix for both would let a Pulse over a bundle root be replayed
-// as a Pulse over a Warp envelope (or vice versa) — explicitly
-// rejected.
-const SigningPrefix = "WARP-PULSAR-ENVELOPE-v1"
-
-// Errors returned by the Warp 2.0 Pulse path.
+// Errors returned by the Warp Pulse path.
 var (
 	// ErrPulseAbsent is returned when a verifier is asked to verify a
 	// Pulse that the envelope does not carry.
@@ -117,12 +105,16 @@ func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
 //  1. Envelope must carry a non-empty Pulse.
 //  2. Resolve the source-chain GroupKey for (KeyEraID, Generation).
 //  3. Confirm the resolver-supplied suiteID matches the envelope's
-//     HashSuiteOrDefault().
-//  4. Build the canonical signing bytes (BuildSigningBytes).
-//  5. Deserialize the envelope's PulsarPulse into a
-//     corona.Signature.
+//     resolved HashSuiteID.
+//  4. Recompute D from the envelope's SignedCore and build the Pulse
+//     signing bytes warp.PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1"‖D.
+//  5. Deserialize the envelope's PulseSig into a corona.Signature.
 //  6. Call corona.Verify(gk, signingBytes, sig).
-func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) error {
+//
+// D folds in SourceNebulaRoot / SourceKeyEraID / SourceGeneration /
+// HashSuiteID / SourceChainID / NetworkID / Payload, so verifying the
+// Pulse over PulseSigningBytes(D) binds the Pulse to every one of them.
+func (v *KernelVerifier) VerifyPulse(env *warp.WarpEnvelope) error {
 	if env == nil || !env.HasPulse() {
 		return ErrPulseAbsent
 	}
@@ -130,9 +122,9 @@ func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) erro
 		return fmt.Errorf("%w: nil resolver", ErrGroupKeyResolverFailed)
 	}
 
-	src := env.Message.UnsignedMessage.SourceChainID
+	src := env.Core.SourceChainID
 
-	gk, suiteID, err := v.Resolver.ResolveGroupKey(src, env.SourceKeyEraID, env.SourceGeneration)
+	gk, suiteID, err := v.Resolver.ResolveGroupKey(src, env.Core.SourceKeyEraID, env.Core.SourceGeneration)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrGroupKeyResolverFailed, err)
 	}
@@ -142,14 +134,14 @@ func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) erro
 	if suiteID == "" {
 		suiteID = hash.DefaultID
 	}
-	if env.HashSuiteOrDefault() != suiteID {
+	if env.Core.HashSuiteOrDefault() != suiteID {
 		return fmt.Errorf("%w: envelope=%q resolver=%q",
-			ErrSuiteMismatch, env.HashSuiteOrDefault(), suiteID)
+			ErrSuiteMismatch, env.Core.HashSuiteOrDefault(), suiteID)
 	}
 
-	signing := BuildSigningBytes(env, msgBytes)
+	signing := warp.PulseSigningBytes(env.Core.ID())
 
-	sig, err := DeserializePulse(env.PulsarPulse)
+	sig, err := DeserializePulse(env.PulseSig)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPulseVerifyFailed, err)
 	}
@@ -160,56 +152,7 @@ func (v *KernelVerifier) VerifyPulse(env *warp.EnvelopeV2, msgBytes []byte) erro
 	return nil
 }
 
-// BuildSigningBytes produces the canonical byte stream a Warp 2.0
-// Pulse signs over. The transcript binds:
-//
-//	SigningPrefix             ("WARP-PULSAR-ENVELOPE-v1")
-//	source_chain_id           (32 bytes, from UnsignedMessage)
-//	source_nebula_root        (32 bytes, from envelope)
-//	source_key_era_id         (8 bytes, big-endian)
-//	source_generation         (8 bytes, big-endian)
-//	hash_suite_id_len         (4 bytes, big-endian) || hash_suite_id
-//	unsigned_message_len      (4 bytes, big-endian) || unsigned_message_bytes
-//
-// All multi-byte ints are big-endian. msgBytes MUST be the byte
-// stream of the envelope's UnsignedMessage (i.e. env.Message.UnsignedMessage.Bytes()).
-//
-// The transcript intentionally does NOT include the BLS Beam (v1
-// Message bytes include the signature; we only sign the unsigned
-// portion). A Pulse over the Warp envelope binds to the message
-// content + Pulsar lineage; the Beam is verified independently and
-// does not contaminate the PQ transcript.
-func BuildSigningBytes(env *warp.EnvelopeV2, msgBytes []byte) []byte {
-	if env == nil {
-		return nil
-	}
-	suite := env.HashSuiteOrDefault()
-	src := env.Message.UnsignedMessage.SourceChainID
-
-	// Prealloc upper bound: prefix + 32 + 32 + 8 + 8 + 4 + len(suite) + 4 + len(msgBytes).
-	out := make([]byte, 0, len(SigningPrefix)+32+32+8+8+4+len(suite)+4+len(msgBytes))
-	out = append(out, []byte(SigningPrefix)...)
-	out = append(out, src[:]...)
-	out = append(out, env.SourceNebulaRoot[:]...)
-
-	var u64 [8]byte
-	binary.BigEndian.PutUint64(u64[:], env.SourceKeyEraID)
-	out = append(out, u64[:]...)
-	binary.BigEndian.PutUint64(u64[:], env.SourceGeneration)
-	out = append(out, u64[:]...)
-
-	var u32 [4]byte
-	binary.BigEndian.PutUint32(u32[:], uint32(len(suite)))
-	out = append(out, u32[:]...)
-	out = append(out, []byte(suite)...)
-
-	binary.BigEndian.PutUint32(u32[:], uint32(len(msgBytes)))
-	out = append(out, u32[:]...)
-	out = append(out, msgBytes...)
-	return out
-}
-
-// SerializePulse returns the byte stream the envelope's PulsarPulse
+// SerializePulse returns the byte stream the envelope's Pulse
 // field carries for a given pulsar threshold signature. The wire
 // format wraps the kernel's canonical Vector/Matrix WriteTo stream
 // (LP-073 §"Wire Format") in three length-prefixed frames:
@@ -517,20 +460,20 @@ type HorizonCertificate struct {
 // HorizonFromEnvelope lifts a Warp 2.0 envelope into a HorizonCertificate.
 // The envelope MUST already have been verified via VerifyV2 — this
 // helper does no signature checks.
-func HorizonFromEnvelope(env *warp.EnvelopeV2) (*HorizonCertificate, error) {
-	if env == nil || env.Message == nil || env.Message.UnsignedMessage == nil {
-		return nil, errors.New("warp pulsar: nil envelope or message")
+func HorizonFromEnvelope(env *warp.WarpEnvelope) (*HorizonCertificate, error) {
+	if env == nil {
+		return nil, errors.New("warp pulsar: nil envelope")
 	}
 	return &HorizonCertificate{
-		SourceChainID:        env.Message.UnsignedMessage.SourceChainID,
-		Beam:                 env.Message.Signature.Bytes(),
+		SourceChainID:        env.Core.SourceChainID,
+		Beam:                 append([]byte(nil), env.Beam.Signature[:]...),
 		MLDSACertSet:         append([]byte(nil), env.MLDSACertSet...),
-		Pulse:                append([]byte(nil), env.PulsarPulse...),
-		SourceNebulaRoot:     env.SourceNebulaRoot,
-		SourceKeyEraID:       env.SourceKeyEraID,
-		SourceGeneration:     env.SourceGeneration,
-		HashSuiteID:          env.HashSuiteOrDefault(),
-		UnsignedMessageBytes: env.Message.UnsignedMessage.Bytes(),
+		Pulse:                append([]byte(nil), env.PulseSig...),
+		SourceNebulaRoot:     env.Core.SourceNebulaRoot,
+		SourceKeyEraID:       env.Core.SourceKeyEraID,
+		SourceGeneration:     env.Core.SourceGeneration,
+		HashSuiteID:          env.Core.HashSuiteOrDefault(),
+		UnsignedMessageBytes: env.Core.Bytes(),
 	}, nil
 }
 

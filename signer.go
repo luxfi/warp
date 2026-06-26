@@ -17,9 +17,11 @@ var (
 	ErrWrongNetworkID     = errors.New("wrong networkID")
 )
 
-// Signer signs warp messages
+// Signer signs warp messages. It signs the Beam domain
+// (BeamSigningBytes(core.ID())), never the bare core bytes or an opaque
+// caller-supplied digest.
 type Signer interface {
-	Sign(msg *UnsignedMessage) ([]byte, error)
+	Sign(core *SignedCore) ([]byte, error)
 }
 
 // NewSigner creates a new warp message signer using a bls.Signer interface
@@ -37,15 +39,15 @@ type signer struct {
 	chainID   ids.ID
 }
 
-func (s *signer) Sign(msg *UnsignedMessage) ([]byte, error) {
-	if msg.SourceChainID != s.chainID {
+func (s *signer) Sign(core *SignedCore) ([]byte, error) {
+	if core.SourceChainID != s.chainID {
 		return nil, ErrWrongSourceChainID
 	}
-	if msg.NetworkID != s.networkID {
+	if core.NetworkID != s.networkID {
 		return nil, ErrWrongNetworkID
 	}
 
-	sig, err := s.sk.Sign(msg.Bytes())
+	sig, err := s.sk.Sign(BeamSigningBytes(core.ID()))
 	if err != nil {
 		return nil, err
 	}

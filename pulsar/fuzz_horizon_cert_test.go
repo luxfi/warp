@@ -156,33 +156,8 @@ func TestFuzzCorpus_HorizonReplay(t *testing.T) {
 	}
 }
 
-// mustHorizonSeedFull builds a fully-populated HorizonCertificate seed.
-func mustHorizonSeedFull() []byte {
-	const networkID = uint32(1)
-	chainID := ids.ID{0xDE, 0xAD, 0xBE, 0xEF}
-	payload := []byte("horizon-fuzz-seed")
-	unsigned, err := warp.NewUnsignedMessage(networkID, chainID, payload)
-	if err != nil {
-		panic(err)
-	}
-	signers := warp.NewBitSet()
-	signers.Add(0)
-	var sig [bls.SignatureLen]byte
-	copy(sig[:], bytes.Repeat([]byte{0xAB}, bls.SignatureLen))
-	bsig := warp.NewBitSetSignature(signers, sig)
-	msg, err := warp.NewMessage(unsigned, bsig)
-	if err != nil {
-		panic(err)
-	}
-	env := &warp.EnvelopeV2{
-		Message:          msg,
-		SourceKeyEraID:   7,
-		SourceGeneration: 11,
-		HashSuiteID:      warp.DefaultHashSuiteID,
-		SourceNebulaRoot: [32]byte{0xC0, 0xDE},
-		PulsarPulse:      bytes.Repeat([]byte{0x42}, 64),
-		MLDSACertSet:     bytes.Repeat([]byte{0xC3}, 192),
-	}
+// horizonSeed builds a HorizonCertificate wire seed from a WarpEnvelope.
+func horizonSeed(env *warp.WarpEnvelope) []byte {
 	h, err := HorizonFromEnvelope(env)
 	if err != nil {
 		panic(err)
@@ -192,74 +167,47 @@ func mustHorizonSeedFull() []byte {
 		panic(err)
 	}
 	return out
+}
+
+func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64, pulse, cert []byte) *warp.WarpEnvelope {
+	core := &warp.SignedCore{
+		NetworkID:        1,
+		SourceChainID:    chainID,
+		SourceKeyEraID:   eraID,
+		SourceGeneration: gen,
+		HashSuiteID:      warp.DefaultHashSuiteID,
+		Payload:          payload,
+	}
+	signers := warp.NewBitSet()
+	signers.Add(0)
+	var sig [bls.SignatureLen]byte
+	copy(sig[:], bytes.Repeat([]byte{sigByte}, bls.SignatureLen))
+	env, err := warp.NewWarpEnvelope(core, warp.NewBitSetSignature(signers, sig), pulse, cert)
+	if err != nil {
+		panic(err)
+	}
+	return env
+}
+
+// mustHorizonSeedFull builds a fully-populated HorizonCertificate seed.
+func mustHorizonSeedFull() []byte {
+	env := horizonEnv(
+		ids.ID{0xDE, 0xAD, 0xBE, 0xEF}, []byte("horizon-fuzz-seed"), 0xAB, 7, 11,
+		bytes.Repeat([]byte{0x42}, 64), bytes.Repeat([]byte{0xC3}, 192),
+	)
+	env.Core.SourceNebulaRoot = [32]byte{0xC0, 0xDE}
+	return horizonSeed(env)
 }
 
 // mustHorizonSeedBeamOnly returns a Beam-only HorizonCertificate seed.
 func mustHorizonSeedBeamOnly() []byte {
-	const networkID = uint32(1)
-	chainID := ids.ID{0xC0, 0xDE}
-	unsigned, err := warp.NewUnsignedMessage(networkID, chainID, []byte("beam-only"))
-	if err != nil {
-		panic(err)
-	}
-	signers := warp.NewBitSet()
-	signers.Add(1)
-	var sig [bls.SignatureLen]byte
-	copy(sig[:], bytes.Repeat([]byte{0x55}, bls.SignatureLen))
-	bsig := warp.NewBitSetSignature(signers, sig)
-	msg, err := warp.NewMessage(unsigned, bsig)
-	if err != nil {
-		panic(err)
-	}
-	env := &warp.EnvelopeV2{
-		Message:     msg,
-		HashSuiteID: warp.DefaultHashSuiteID,
-	}
-	h, err := HorizonFromEnvelope(env)
-	if err != nil {
-		panic(err)
-	}
-	out, err := h.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return out
+	return horizonSeed(horizonEnv(ids.ID{0xC0, 0xDE}, []byte("beam-only"), 0x55, 0, 0, nil, nil))
 }
 
 // mustHorizonSeedPulseOnly returns a Pulse-only HorizonCertificate seed.
-// Beam is constructed minimally because the v1 Message always carries a
-// signature; the Beam lane is "present but unused" by the destination
-// when only the Pulse lane is required.
 func mustHorizonSeedPulseOnly() []byte {
-	const networkID = uint32(1)
-	chainID := ids.ID{0xFA, 0xCE}
-	unsigned, err := warp.NewUnsignedMessage(networkID, chainID, []byte("pulse-only"))
-	if err != nil {
-		panic(err)
-	}
-	signers := warp.NewBitSet()
-	signers.Add(0)
-	var sig [bls.SignatureLen]byte
-	copy(sig[:], bytes.Repeat([]byte{0x77}, bls.SignatureLen))
-	bsig := warp.NewBitSetSignature(signers, sig)
-	msg, err := warp.NewMessage(unsigned, bsig)
-	if err != nil {
-		panic(err)
-	}
-	env := &warp.EnvelopeV2{
-		Message:          msg,
-		SourceKeyEraID:   3,
-		SourceGeneration: 5,
-		HashSuiteID:      warp.DefaultHashSuiteID,
-		PulsarPulse:      bytes.Repeat([]byte{0x99}, 32),
-	}
-	h, err := HorizonFromEnvelope(env)
-	if err != nil {
-		panic(err)
-	}
-	out, err := h.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return out
+	return horizonSeed(horizonEnv(
+		ids.ID{0xFA, 0xCE}, []byte("pulse-only"), 0x77, 3, 5,
+		bytes.Repeat([]byte{0x99}, 32), nil,
+	))
 }

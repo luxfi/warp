@@ -2,148 +2,127 @@
 // See the file LICENSE for licensing terms.
 
 // Package teleport defines the canonical wire payload carried inside a
-// Warp 2.0 UnsignedMessage for the Teleport bridge.
+// Warp SignedCore for the Teleport bridge.
 //
-// The Teleport bridge attaches all destination-side intent (token,
-// amount, recipient, vault/burn-and-mint flag, nonce, version) into a
-// single RLP-encoded blob. That blob becomes the [Payload] field of
-// the canonical [warp.UnsignedMessage]; the v1 message wire ID — and
-// therefore [warp.EnvelopeV2.ID] — is the sha256 of the RLP encoding
-// of [NetworkID, SourceChainID, payload].
+// The Teleport bridge packs all destination-side intent (version, token,
+// amount, recipient, vault/burn-and-mint flag, nonce, dest chain) into a
+// single FIXED 90-byte block. That block becomes the [Payload] field of
+// a [warp.SignedCore]; the message ID — D — is the keccak256 digest of
+// the canonical SignedCore (see [warp.SignedCore.ID]).
 //
-// The on-chain BridgeV2 contract recomputes this same hash from
-// (NetworkID, SourceChainID, TeleportPayload) and binds the envelope's
-// signed root to its local view of the transfer. Validators sign one
-// hash, the contract verifies the same hash — there is exactly one
-// canonical preimage.
+// Fixed teleport payload layout (90 bytes, big-endian, no length prefixes):
 //
-// Wire layout (RLP):
+//	off  size  field
+//	  0     1  Version      uint8   (== TeleportBindingVersion, 3)
+//	  1     8  DestChainID  uint64  big-endian
+//	  9    20  Token        address (20 bytes)
+//	 29    32  Amount       uint256 (FULL 32 bytes, no leading-zero strip)
+//	 61    20  Recipient    address (20 bytes)
+//	 81     1  VaultIsZero  bool    (0x00 / 0x01 only)
+//	 82     8  Nonce        uint64  big-endian
+//	      ----
+//	       90
 //
-//	UnsignedMessage = rlp([
-//	    NetworkID     uint32,
-//	    SourceChainID [32]byte,
-//	    Payload       []byte,        // = TeleportPayload.MarshalRLP()
-//	])
+// Amount is the FULL 32-byte big-endian uint256 — left-zero-padded, never
+// stripped — so Solidity rebuilds it with bytes32(amount) directly.
 //
-//	TeleportPayload = rlp([
-//	    Version      uint8,           // TeleportBindingVersion (3)
-//	    DestChainID  uint64,
-//	    Token        [20]byte,
-//	    Amount       *big.Int (uint256),
-//	    Recipient    [20]byte,
-//	    VaultIsZero  bool,            // true ⇔ burn-and-mint (no vault)
-//	    Nonce        uint64,
-//	])
+// VaultIsZero is the negation of the Solidity "vault" boolean: burn-and-mint
+// (no vault) is the true/0x01 wire form.
 //
-//	messageHash = sha256(UnsignedMessage)
+// HARD-FORK LOCKSTEP: ComputeMessageHash returns D, the SAME digest the
+// on-chain BridgeV2 MUST recompute (see lux/teleport, BridgeV2.sol). The
+// Solidity side is a SEPARATE coordinated deploy; it MUST rebuild the
+// canonical SignedCore preimage and keccak256 it identically per §4.2:
 //
-// VaultIsZero is the negation of the "vault" boolean on the Solidity
-// surface: the burn path sets vault=true to lock tokens in a vault on
-// the source chain (the destination releases from a vault), and
-// vault=false to burn-and-mint. We carry the negation so that the
-// no-vault-required case is the false (RLP empty-string) wire form;
-// this keeps the most common path encoding-stable across releases.
+//	core_c14n =
+//	    0x01                                 // zapKindSignedCore
+//	  ‖ uint32_be(networkID)
+//	  ‖ sourceChainID                        // 32 bytes
+//	  ‖ bytes32(0)                           // SourceNebulaRoot — zero for teleport
+//	  ‖ uint64_be(0)                         // SourceKeyEraID   — zero for teleport
+//	  ‖ uint64_be(0)                         // SourceGeneration — zero for teleport
+//	  ‖ uint32_be(11) ‖ "Pulsar-SHA3"        // HashSuiteID (DefaultHashSuiteID)
+//	  ‖ uint32_be(90) ‖ teleportPayload[90]  // Payload
+//	D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ core_c14n)
 //
-// See WARP2_BRIDGE.md §3 in lux/teleport for the contract-side
-// description and BridgeV2.sol for the matching Solidity decoder.
+// The previous sha256(rlp(...)) preimage and the abi.encode 7-tuple are
+// BOTH gone; there is exactly one preimage and one keccak256 digest on
+// both sides. A teleport SignedCore therefore uses zero PQ lineage and
+// the default hash suite — the off-chain relayer that signs the envelope
+// MUST construct the SignedCore with these same fields (it is the same
+// core ComputeMessageHash builds), so validators sign the same D the
+// contract verifies.
 package teleport
 
 import (
-	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/luxfi/geth/common"
-	"github.com/luxfi/geth/rlp"
 	"github.com/luxfi/ids"
+	"github.com/luxfi/warp"
 )
 
 // TeleportBindingVersion is the value carried in TeleportPayload.Version
 // for the pure post-quantum (v3) Teleport binding. v1 was the EIP-712
 // ECDSA oracle; v2 was the hybrid BLS Beam + optional ML-DSA cert set;
-// v3 is the ML-DSA-only binding. The on-chain BridgeV2 contract pins
-// the constant in TELEPORT_BINDING_VERSION; the value MUST match here.
+// v3 is the ML-DSA-capable binding under the ZAP codec. The on-chain
+// BridgeV2 contract pins the constant in TELEPORT_BINDING_VERSION; the
+// value MUST match here.
 const TeleportBindingVersion uint8 = 3
 
-// MaxAmountBytes is the maximum byte length of the RLP-encoded amount.
-// uint256 stripped of leading zeros is at most 32 bytes; we refuse
-// anything larger to bound decoder work and match the Solidity uint256.
+// PayloadSize is the fixed wire length of a Teleport payload block.
+const PayloadSize = 1 + 8 + common.AddressLength + 32 + common.AddressLength + 1 + 8 // 90
+
+// MaxAmountBytes is the maximum significant byte length of Amount. uint256
+// is at most 32 bytes; anything larger is refused.
 const MaxAmountBytes = 32
 
 // Errors specific to the Teleport payload codec.
 var (
 	// ErrInvalidPayload is returned when a payload fails structural
-	// validation (wrong version, amount overflow, addresses, etc.).
+	// validation (wrong version, amount overflow, length, vault byte).
 	ErrInvalidPayload = errors.New("invalid teleport payload")
 
-	// ErrAmountTooLarge is returned when the payload's Amount exceeds
-	// uint256.
+	// ErrAmountTooLarge is returned when Amount exceeds uint256.
 	ErrAmountTooLarge = errors.New("teleport payload amount exceeds uint256")
 
-	// ErrNegativeAmount is returned when the payload's Amount is
-	// negative. *big.Int is signed; on the Teleport surface only
-	// non-negative amounts are valid.
+	// ErrNegativeAmount is returned when Amount is negative. *big.Int is
+	// signed; on the Teleport surface only non-negative amounts are valid.
 	ErrNegativeAmount = errors.New("teleport payload amount is negative")
 )
 
-// TeleportPayload is the canonical Teleport binding carried in the
-// payload field of a Warp 2.0 UnsignedMessage. Encoded as a fixed
-// 7-element RLP list with the layout documented in the package doc.
+// TeleportPayload is the canonical Teleport binding carried in the payload
+// field of a Warp SignedCore. Encoded as the fixed 90-byte block above.
 type TeleportPayload struct {
 	// Version is the Teleport binding version. MUST equal
-	// TeleportBindingVersion under the v3 binding; older values are
-	// rejected.
+	// TeleportBindingVersion; older values are rejected.
 	Version uint8
 
-	// DestChainID is the destination-chain primary-network ID the
-	// claim must execute against. Must be non-zero on the wire.
+	// DestChainID is the destination-chain primary-network ID the claim
+	// must execute against. Must be non-zero on the wire.
 	DestChainID uint64
 
-	// Token is the 20-byte destination-chain token address that the
-	// claim will mint (or release from a vault).
+	// Token is the 20-byte destination-chain token address that the claim
+	// will mint (or release from a vault).
 	Token common.Address
 
 	// Amount is the transfer amount in token base units, bounded to
-	// uint256 (32 bytes). RLP encodes this as the canonical
-	// big-endian byte string with no leading zeros.
+	// uint256. Encoded as the FULL 32-byte big-endian value.
 	Amount *big.Int
 
-	// Recipient is the 20-byte destination-chain account that
-	// receives the mint or vault release.
+	// Recipient is the 20-byte destination-chain account that receives the
+	// mint or vault release.
 	Recipient common.Address
 
-	// VaultIsZero is true iff the source-side path was burn-and-mint
-	// (no vault). It is the negation of the Solidity "vault" boolean
-	// — see the package doc for the rationale.
+	// VaultIsZero is true iff the source-side path was burn-and-mint (no
+	// vault). It is the negation of the Solidity "vault" boolean.
 	VaultIsZero bool
 
-	// Nonce is the source-chain burn nonce. Together with
-	// (SourceChainID, DestChainID, Token, Amount, Recipient,
-	// VaultIsZero) it uniquely identifies a single transfer.
+	// Nonce is the source-chain burn nonce.
 	Nonce uint64
-}
-
-// rlpAmount returns the canonical big-endian byte string for Amount,
-// suitable for embedding in an RLP list element. RLP serialises an
-// integer as its big-endian byte string with leading zero bytes
-// stripped; zero is encoded as the empty byte string.
-//
-// This helper exists so the Solidity counterpart can mirror it
-// byte-for-byte: in Solidity we strip leading zero bytes of the
-// uint256 the same way before RLP-prefixing.
-func (p *TeleportPayload) rlpAmount() ([]byte, error) {
-	if p.Amount == nil {
-		return []byte{}, nil
-	}
-	if p.Amount.Sign() < 0 {
-		return nil, ErrNegativeAmount
-	}
-	b := p.Amount.Bytes() // big-endian, no leading zeros
-	if len(b) > MaxAmountBytes {
-		return nil, ErrAmountTooLarge
-	}
-	return b, nil
 }
 
 // Verify checks the structural invariants of the payload.
@@ -169,109 +148,85 @@ func (p *TeleportPayload) Verify() error {
 	return nil
 }
 
-// MarshalRLP returns the RLP encoding of the payload as a 7-element
-// list. This is the byte sequence that goes into the
-// UnsignedMessage.Payload field.
-//
-// Encoding the *big.Int via its canonical byte string (rather than
-// letting geth's RLP encode the *big.Int interface) gives us a stable
-// representation that matches what Solidity computes when it strips
-// leading zeros from the uint256.
-func (p *TeleportPayload) MarshalRLP() ([]byte, error) {
+// MarshalBinary returns the fixed 90-byte canonical encoding of the
+// payload. This is the byte sequence that goes into SignedCore.Payload.
+func (p *TeleportPayload) MarshalBinary() ([]byte, error) {
 	if err := p.Verify(); err != nil {
 		return nil, err
 	}
-	amount, err := p.rlpAmount()
-	if err != nil {
-		return nil, err
+	out := make([]byte, 0, PayloadSize)
+	out = append(out, p.Version)
+	var u64 [8]byte
+	binary.BigEndian.PutUint64(u64[:], p.DestChainID)
+	out = append(out, u64[:]...)
+	out = append(out, p.Token.Bytes()...) // 20
+	// FULL 32-byte big-endian amount — left-zero-padded, never stripped.
+	var amount [32]byte
+	p.Amount.FillBytes(amount[:]) // safe: Verify bounded Amount to <= 32 bytes
+	out = append(out, amount[:]...)
+	out = append(out, p.Recipient.Bytes()...) // 20
+	if p.VaultIsZero {
+		out = append(out, 0x01)
+	} else {
+		out = append(out, 0x00)
 	}
-	return rlp.EncodeToBytes([]interface{}{
-		p.Version,
-		p.DestChainID,
-		p.Token.Bytes(),
-		amount,
-		p.Recipient.Bytes(),
-		p.VaultIsZero,
-		p.Nonce,
-	})
+	binary.BigEndian.PutUint64(u64[:], p.Nonce)
+	out = append(out, u64[:]...)
+	return out, nil
 }
 
-// UnmarshalRLP decodes a payload from its canonical RLP form.
-func (p *TeleportPayload) UnmarshalRLP(b []byte) error {
-	var raw struct {
-		Version     uint8
-		DestChainID uint64
-		Token       []byte
-		Amount      []byte
-		Recipient   []byte
-		VaultIsZero bool
-		Nonce       uint64
+// UnmarshalBinary decodes a payload from its fixed 90-byte form, rejecting
+// any other length and a vault byte outside {0x00,0x01}.
+func (p *TeleportPayload) UnmarshalBinary(b []byte) error {
+	if len(b) != PayloadSize {
+		return fmt.Errorf("%w: payload len=%d (want %d)", ErrInvalidPayload, len(b), PayloadSize)
 	}
-	if err := rlp.DecodeBytes(b, &raw); err != nil {
-		return fmt.Errorf("%w: decode: %v", ErrInvalidPayload, err)
+	off := 0
+	p.Version = b[off]
+	off++
+	p.DestChainID = binary.BigEndian.Uint64(b[off : off+8])
+	off += 8
+	p.Token = common.BytesToAddress(b[off : off+common.AddressLength])
+	off += common.AddressLength
+	p.Amount = new(big.Int).SetBytes(b[off : off+32])
+	off += 32
+	p.Recipient = common.BytesToAddress(b[off : off+common.AddressLength])
+	off += common.AddressLength
+	switch b[off] {
+	case 0x00:
+		p.VaultIsZero = false
+	case 0x01:
+		p.VaultIsZero = true
+	default:
+		return fmt.Errorf("%w: vaultIsZero byte 0x%02x", ErrInvalidPayload, b[off])
 	}
-	if len(raw.Token) != common.AddressLength {
-		return fmt.Errorf("%w: token len=%d (want %d)", ErrInvalidPayload, len(raw.Token), common.AddressLength)
-	}
-	if len(raw.Recipient) != common.AddressLength {
-		return fmt.Errorf("%w: recipient len=%d (want %d)", ErrInvalidPayload, len(raw.Recipient), common.AddressLength)
-	}
-	if len(raw.Amount) > MaxAmountBytes {
-		return ErrAmountTooLarge
-	}
-	p.Version = raw.Version
-	p.DestChainID = raw.DestChainID
-	p.Token = common.BytesToAddress(raw.Token)
-	p.Amount = new(big.Int).SetBytes(raw.Amount)
-	p.Recipient = common.BytesToAddress(raw.Recipient)
-	p.VaultIsZero = raw.VaultIsZero
-	p.Nonce = raw.Nonce
+	off++
+	p.Nonce = binary.BigEndian.Uint64(b[off : off+8])
 	return p.Verify()
 }
 
-// ComputeMessageHash returns the canonical Teleport message hash that
-// validators sign and BridgeV2 verifies. It is identical to
-// EnvelopeV2.ID() when the envelope's UnsignedMessage carries the same
-// (networkID, sourceChainID, payload) tuple.
-//
-//	messageHash = sha256(rlp([networkID, sourceChainID, payload]))
-//
-// where `payload = TeleportPayload.MarshalRLP()`.
+// ComputeMessageHash returns D, the canonical Teleport message hash that
+// validators sign and BridgeV2 verifies. It is byte-equal to
+// warp.SignedCore.ID() for a core whose Payload is this payload's 90-byte
+// block, NetworkID/SourceChainID are these arguments, PQ lineage is zero,
+// and HashSuiteID is the default — i.e. exactly what NewSignedCore builds.
 func ComputeMessageHash(networkID uint32, sourceChainID ids.ID, payload *TeleportPayload) ([32]byte, error) {
 	if payload == nil {
 		return [32]byte{}, ErrInvalidPayload
 	}
-	body, err := payload.MarshalRLP()
+	body, err := payload.MarshalBinary()
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return computeMessageHashFromPayload(networkID, sourceChainID, body), nil
+	return ComputeMessageHashFromPayload(networkID, sourceChainID, body)
 }
 
-// ComputeMessageHashFromPayload returns the canonical Teleport message
-// hash given the already-encoded payload bytes. Use this when the
-// caller already has the RLP-encoded payload in hand (e.g. on the
-// signing path).
-func ComputeMessageHashFromPayload(networkID uint32, sourceChainID ids.ID, payload []byte) [32]byte {
-	return computeMessageHashFromPayload(networkID, sourceChainID, payload)
-}
-
-func computeMessageHashFromPayload(networkID uint32, sourceChainID ids.ID, payload []byte) [32]byte {
-	unsigned, _ := rlp.EncodeToBytes([]interface{}{
-		networkID,
-		sourceChainID[:],
-		payload,
-	})
-	return sha256.Sum256(unsigned)
-}
-
-// EncodeUnsignedMessage returns the RLP-encoded UnsignedMessage tuple
-// that is the preimage of the message hash. Useful for cross-language
-// fixtures.
-func EncodeUnsignedMessage(networkID uint32, sourceChainID ids.ID, payload []byte) ([]byte, error) {
-	return rlp.EncodeToBytes([]interface{}{
-		networkID,
-		sourceChainID[:],
-		payload,
-	})
+// ComputeMessageHashFromPayload returns D given an already-encoded 90-byte
+// payload. Use this on the signing path when the payload bytes are in hand.
+func ComputeMessageHashFromPayload(networkID uint32, sourceChainID ids.ID, payload []byte) ([32]byte, error) {
+	core, err := warp.NewSignedCore(networkID, sourceChainID, payload)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return [32]byte(core.ID()), nil
 }

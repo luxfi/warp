@@ -49,8 +49,8 @@ func DefaultWarpConfig(networkID uint32, chainID ids.ID) *WarpConfig {
 
 // WarpBackend is the backend interface for warp operations
 type WarpBackend interface {
-	GetMessage(index uint32) (*warp.Message, error)
-	AddMessage(unsignedMessage *warp.UnsignedMessage) error
+	GetMessage(index uint32) (*warp.WarpEnvelope, error)
+	AddMessage(core *warp.SignedCore) error
 	GetValidatorState() warp.ValidatorState
 }
 
@@ -81,7 +81,7 @@ func (w *WarpModule) GetVerifiedWarpMessage(
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
 
-	err = warp.VerifyMessage(
+	err = warp.VerifyEnvelope(
 		msg,
 		w.config.NetworkID,
 		w.backend.GetValidatorState(),
@@ -92,7 +92,11 @@ func (w *WarpModule) GetVerifiedWarpMessage(
 		return nil, fmt.Errorf("failed to verify message: %w", err)
 	}
 
-	return msg.Bytes(), nil
+	out, err := msg.Bytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode message: %w", err)
+	}
+	return out, nil
 }
 
 // SendWarpMessage sends a warp message
@@ -107,16 +111,16 @@ func (w *WarpModule) SendWarpMessage(
 		return nil, errors.New("cannot send warp message in read-only mode")
 	}
 
-	unsignedMsg, err := warp.NewUnsignedMessage(w.config.NetworkID, w.config.SourceChainID, payload)
+	core, err := warp.NewSignedCore(w.config.NetworkID, w.config.SourceChainID, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create unsigned message: %w", err)
+		return nil, fmt.Errorf("failed to create signed core: %w", err)
 	}
 
-	if err := w.backend.AddMessage(unsignedMsg); err != nil {
+	if err := w.backend.AddMessage(core); err != nil {
 		return nil, fmt.Errorf("failed to add message: %w", err)
 	}
 
-	msgID := unsignedMsg.ID()
+	msgID := core.ID()
 	return msgID[:], nil
 }
 

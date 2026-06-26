@@ -1,44 +1,122 @@
-// Copyright (C) 2019-2025, Lux Partners Limited. All rights reserved.
+// Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package warp
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/luxfi/ids"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUnsignedMessage(t *testing.T) {
+func TestSignedCore(t *testing.T) {
 	networkID := uint32(1)
 	sourceChainID := ids.ID{31: 1}
 	payload := []byte("test payload")
 
-	// Create unsigned message
-	msg, err := NewUnsignedMessage(networkID, sourceChainID, payload)
+	core, err := NewSignedCore(networkID, sourceChainID, payload)
 	require.NoError(t, err)
-	require.NotNil(t, msg)
+	require.NotNil(t, core)
 
-	// Verify fields
-	require.Equal(t, networkID, msg.NetworkID)
-	require.Equal(t, sourceChainID, msg.SourceChainID)
-	require.Equal(t, payload, msg.Payload)
+	require.Equal(t, networkID, core.NetworkID)
+	require.Equal(t, sourceChainID, core.SourceChainID)
+	require.Equal(t, payload, core.Payload)
+	// NewSignedCore resolves the default suite; lineage is zero.
+	require.Equal(t, DefaultHashSuiteID, core.HashSuiteID)
+	require.Equal(t, [32]byte{}, core.SourceNebulaRoot)
 
-	// Test serialization
-	bytes := msg.Bytes()
-	require.NotEmpty(t, bytes)
+	// Canonical c14n round-trips.
+	b := core.Bytes()
+	require.NotEmpty(t, b)
+	require.Equal(t, zapKindSignedCore, b[0])
 
-	// Test ID
-	id := msg.ID()
+	id := core.ID()
 	require.NotEqual(t, ids.Empty, id)
 
-	// Test parsing
-	parsed, err := ParseUnsignedMessage(bytes)
+	parsed, err := ParseSignedCore(b)
 	require.NoError(t, err)
-	require.Equal(t, msg.NetworkID, parsed.NetworkID)
-	require.Equal(t, msg.SourceChainID, parsed.SourceChainID)
-	require.Equal(t, msg.Payload, parsed.Payload)
+	require.Equal(t, core.NetworkID, parsed.NetworkID)
+	require.Equal(t, core.SourceChainID, parsed.SourceChainID)
+	require.Equal(t, core.Payload, parsed.Payload)
+	require.Equal(t, core.HashSuiteID, parsed.HashSuiteID)
+	// D recomputed from the decoded struct equals the original.
+	require.Equal(t, id, parsed.ID())
+}
+
+// TestSignedCoreIDIsLegacyKeccak pins D to legacy-keccak over the
+// domain-tagged c14n preimage — NOT sha256, NOT NIST SHA3.
+func TestSignedCoreIDIsLegacyKeccak(t *testing.T) {
+	core := &SignedCore{
+		NetworkID:     1,
+		SourceChainID: ids.ID{0xA1},
+		HashSuiteID:   DefaultHashSuiteID,
+		Payload:       []byte("keccak-check"),
+	}
+	want := keccak256([]byte(coreDST), core.Bytes())
+	require.Equal(t, ids.ID(want), core.ID())
+}
+
+// TestSignedCoreIDChangesWithEveryField proves D depends on every field
+// — including the folded PQ lineage that the Beam now authenticates.
+func TestSignedCoreIDChangesWithEveryField(t *testing.T) {
+	base := &SignedCore{
+		NetworkID:        1,
+		SourceChainID:    ids.ID{0xA1, 0xA2},
+		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
+		SourceKeyEraID:   7,
+		SourceGeneration: 11,
+		HashSuiteID:      DefaultHashSuiteID,
+		Payload:          []byte("base"),
+	}
+	baseID := base.ID()
+
+	mutate := func(f func(c *SignedCore)) ids.ID {
+		c := *base
+		f(&c)
+		return c.ID()
+	}
+
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.NetworkID = 2 }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceChainID = ids.ID{0xFF} }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceNebulaRoot = [32]byte{0x99} }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceKeyEraID = 8 }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceGeneration = 12 }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.HashSuiteID = "Pulsar-BLAKE3" }))
+	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.Payload = []byte("base2") }))
+}
+
+// TestSignedCoreNoSignTimeDefaulting proves the codec encodes HashSuiteID
+// verbatim: an empty-suite core and a "Pulsar-SHA3" core produce DIFFERENT
+// c14n bytes and DIFFERENT D. There is no defaulting inside the marshaler.
+func TestSignedCoreNoSignTimeDefaulting(t *testing.T) {
+	empty := &SignedCore{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
+	resolved := &SignedCore{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
+	require.NotEqual(t, empty.Bytes(), resolved.Bytes())
+	require.NotEqual(t, empty.ID(), resolved.ID())
+	// HashSuiteOrDefault is a READ helper only — it does not change bytes.
+	require.Equal(t, DefaultHashSuiteID, empty.HashSuiteOrDefault())
+}
+
+// TestParseSignedCoreRejectsTrailing proves decode rejects trailing bytes.
+func TestParseSignedCoreRejectsTrailing(t *testing.T) {
+	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("p"))
+	require.NoError(t, err)
+	b := core.Bytes()
+	_, err = ParseSignedCore(append(b, 0x00))
+	require.ErrorIs(t, err, errZapTrailing)
+}
+
+// TestParseSignedCoreRejectsBadKind proves the zap kind discriminator is
+// enforced.
+func TestParseSignedCoreRejectsBadKind(t *testing.T) {
+	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("p"))
+	require.NoError(t, err)
+	b := core.Bytes()
+	b[0] = 0x02 // not zapKindSignedCore
+	_, err = ParseSignedCore(b)
+	require.ErrorIs(t, err, ErrInvalidMessage)
 }
 
 func TestVerifyWeight(t *testing.T) {
@@ -50,40 +128,11 @@ func TestVerifyWeight(t *testing.T) {
 		quorumDen     uint64
 		expectedError bool
 	}{
-		{
-			name:          "valid 2/3 quorum",
-			signedWeight:  67,
-			totalWeight:   100,
-			quorumNum:     2,
-			quorumDen:     3,
-			expectedError: false,
-		},
-		{
-			name:          "exact quorum",
-			signedWeight:  2,
-			totalWeight:   3,
-			quorumNum:     2,
-			quorumDen:     3,
-			expectedError: false,
-		},
-		{
-			name:          "insufficient weight",
-			signedWeight:  1,
-			totalWeight:   3,
-			quorumNum:     2,
-			quorumDen:     3,
-			expectedError: true,
-		},
-		{
-			name:          "zero signed weight",
-			signedWeight:  0,
-			totalWeight:   100,
-			quorumNum:     2,
-			quorumDen:     3,
-			expectedError: true,
-		},
+		{"valid 2/3 quorum", 67, 100, 2, 3, false},
+		{"exact quorum", 2, 3, 2, 3, false},
+		{"insufficient weight", 1, 3, 2, 3, true},
+		{"zero signed weight", 0, 100, 2, 3, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := VerifyWeight(tt.signedWeight, tt.totalWeight, tt.quorumNum, tt.quorumDen)
@@ -94,4 +143,30 @@ func TestVerifyWeight(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLaneSigningBytesDistinct proves the per-lane tags are distinct and
+// all over the same D, so a signature in one lane cannot be replayed into
+// another (distinct domain prefixes).
+func TestLaneSigningBytesDistinct(t *testing.T) {
+	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("lanes"))
+	require.NoError(t, err)
+	d := core.ID()
+
+	beam := BeamSigningBytes(d)
+	pulse := PulseSigningBytes(d)
+	mldsa := MLDSASigningBytes(d)
+
+	// Each carries its own DST then the SAME D.
+	require.True(t, bytes.HasPrefix(beam, []byte(beamDST)))
+	require.True(t, bytes.HasPrefix(pulse, []byte(pulseDST)))
+	require.True(t, bytes.HasPrefix(mldsa, []byte(mldsaDST)))
+	require.True(t, bytes.HasSuffix(beam, d[:]))
+	require.True(t, bytes.HasSuffix(pulse, d[:]))
+	require.True(t, bytes.HasSuffix(mldsa, d[:]))
+
+	// Pairwise distinct.
+	require.NotEqual(t, beam, pulse)
+	require.NotEqual(t, beam, mldsa)
+	require.NotEqual(t, pulse, mldsa)
 }
