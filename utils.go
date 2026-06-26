@@ -4,7 +4,6 @@
 package warp
 
 import (
-	"crypto/sha256"
 	"errors"
 	"math"
 )
@@ -38,15 +37,4 @@ func AddUint64(a, b uint64) (uint64, error) {
 		return 0, errors.New("addition would overflow")
 	}
 	return a + b, nil
-}
-
-// ComputeHash256 computes SHA256 hash
-func ComputeHash256(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
-}
-
-// ComputeHash256Array computes SHA256 hash and returns as fixed-size array
-func ComputeHash256Array(data []byte) [32]byte {
-	return sha256.Sum256(data)
 }

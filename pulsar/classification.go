@@ -58,8 +58,8 @@ var ErrNotHorizonFinal = errors.New("warp pulsar: envelope is not Horizon-final"
 // is a classical compatibility / compression / privacy adapter (see
 // IsPQRootOfTrust below); it does not contribute PQ liveness on its
 // own.
-func IsPQFinal(env *warp.EnvelopeV2) bool {
-	if env == nil || env.Message == nil {
+func IsPQFinal(env *warp.WarpEnvelope) bool {
+	if env == nil {
 		return false
 	}
 	if !env.HasMLDSACertSet() {
@@ -76,8 +76,8 @@ func IsPQFinal(env *warp.EnvelopeV2) bool {
 // not. Use this in receivers that want to distinguish between
 // "envelope shape OK, signature failed" (returned by VerifyV2) and
 // "envelope shape inadmissible".
-func HorizonFinalErr(env *warp.EnvelopeV2) error {
-	if env == nil || env.Message == nil {
+func HorizonFinalErr(env *warp.WarpEnvelope) error {
+	if env == nil {
 		return ErrNotHorizonFinal
 	}
 	missing := make([]string, 0, 3)

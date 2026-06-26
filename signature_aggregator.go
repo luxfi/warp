@@ -52,19 +52,19 @@ type SignatureAggregator struct {
 // validator set corresponding to the signer bitset in the message.
 func (s *SignatureAggregator) AggregateSignatures(
 	ctx context.Context,
-	message *Message,
+	env *WarpEnvelope,
 	justification []byte,
 	validators []*Validator,
 	quorumNum uint64,
 	quorumDen uint64,
 ) (
-	_ *Message,
+	_ *WarpEnvelope,
 	aggregatedStake *big.Int,
 	totalStake *big.Int,
 	_ error,
 ) {
 	request := &SignatureRequest{
-		Message:       message.UnsignedMessage.Bytes(),
+		Message:       env.Core.Bytes(),
 		Justification: justification,
 	}
 
@@ -74,13 +74,9 @@ func (s *SignatureAggregator) AggregateSignatures(
 	}
 
 	nodeIDsToValidator := make(map[ids.NodeID]indexedValidator)
-	// TODO expose concrete type to avoid type casting
-	bitSetSignature, ok := message.Signature.(*BitSetSignature)
-	if !ok {
-		return nil, nil, nil, errors.New("invalid warp signature type")
-	}
+	beam := env.Beam
 
-	signerBitSet := set.BitsFromBytes(bitSetSignature.Signers)
+	signerBitSet := set.BitsFromBytes(beam.Signers)
 
 	nonSigners := make([]ids.NodeID, 0, len(validators))
 	aggregatedStakeWeight := new(big.Int)
@@ -108,8 +104,8 @@ func (s *SignatureAggregator) AggregateSignatures(
 
 	// Account for requested signatures + the signature that was provided
 	signatures := make([]*bls.Signature, 0, len(nonSigners)+1)
-	if bitSetSignature.Signature != [bls.SignatureLen]byte{} {
-		blsSignature, err := bls.SignatureFromBytes(bitSetSignature.Signature[:])
+	if beam.Signature != [bls.SignatureLen]byte{} {
+		blsSignature, err := bls.SignatureFromBytes(beam.Signature[:])
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to parse bls signature: %w", err)
 		}
@@ -118,7 +114,8 @@ func (s *SignatureAggregator) AggregateSignatures(
 
 	results := make(chan aggregatorResult)
 	handler := signatureResponseHandler{
-		message:             message,
+		env:                 env,
+		beamMsg:             BeamSigningBytes(env.Core.ID()),
 		nodeIDsToValidators: nodeIDsToValidator,
 		results:             results,
 	}
@@ -138,7 +135,7 @@ func (s *SignatureAggregator) AggregateSignatures(
 		select {
 		case <-ctx.Done():
 			// Try to return whatever progress we have if the context is canceled
-			msg, err := newAggregatedMessage(message, signerBitSet, signatures)
+			msg, err := newAggregatedMessage(env, signerBitSet, signatures)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -169,7 +166,7 @@ func (s *SignatureAggregator) AggregateSignatures(
 			aggregatedStakeWeight.Add(aggregatedStakeWeight, new(big.Int).SetUint64(result.Validator.Weight))
 
 			if aggregatedStakeWeight.Cmp(minThreshold) != -1 {
-				msg, err := newAggregatedMessage(message, signerBitSet, signatures)
+				msg, err := newAggregatedMessage(env, signerBitSet, signatures)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -179,7 +176,7 @@ func (s *SignatureAggregator) AggregateSignatures(
 		}
 	}
 
-	msg, err := newAggregatedMessage(message, signerBitSet, signatures)
+	msg, err := newAggregatedMessage(env, signerBitSet, signatures)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -188,12 +185,12 @@ func (s *SignatureAggregator) AggregateSignatures(
 }
 
 func newAggregatedMessage(
-	message *Message,
+	env *WarpEnvelope,
 	signerBitSet set.Bits,
 	signatures []*bls.Signature,
-) (*Message, error) {
+) (*WarpEnvelope, error) {
 	if len(signatures) == 0 {
-		return message, nil
+		return env, nil
 	}
 
 	aggregateSignature, err := bls.AggregateSignatures(signatures)
@@ -201,17 +198,16 @@ func newAggregatedMessage(
 		return nil, err
 	}
 
-	bitSetSignature := &BitSetSignature{
-		Signers:   signerBitSet.Bytes(),
-		Signature: [bls.SignatureLen]byte{},
-	}
-	copy(bitSetSignature.Signature[:], bls.SignatureToBytes(aggregateSignature))
+	beam := BitSetSignature{Signers: signerBitSet.Bytes()}
+	copy(beam.Signature[:], bls.SignatureToBytes(aggregateSignature))
 
-	return NewMessage(message.UnsignedMessage, bitSetSignature)
+	// Preserve the PQ lanes; only the Beam is re-aggregated.
+	return NewWarpEnvelope(&env.Core, beam, env.PulseSig, env.MLDSACertSet)
 }
 
 type signatureResponseHandler struct {
-	message             *Message
+	env                 *WarpEnvelope
+	beamMsg             []byte
 	nodeIDsToValidators map[ids.NodeID]indexedValidator
 	results             chan aggregatorResult
 }
@@ -240,7 +236,7 @@ func (r *signatureResponseHandler) HandleResponse(
 		return
 	}
 
-	if !bls.Verify(validator.PublicKey, signature, r.message.UnsignedMessage.Bytes()) {
+	if !bls.Verify(validator.PublicKey, signature, r.beamMsg) {
 		r.results <- aggregatorResult{NodeID: nodeID, Validator: validator, Err: errFailedVerification}
 		return
 	}
