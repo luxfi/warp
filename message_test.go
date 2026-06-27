@@ -24,7 +24,7 @@ func TestMessage(t *testing.T) {
 	require.Equal(t, sourceChainID, message.SourceChainID)
 	require.Equal(t, payload, message.Payload)
 	// NewMessage resolves the default suite; lineage is zero.
-	require.Equal(t, DefaultHashSuiteID, message.HashSuiteID)
+	require.Equal(t, MessageHashProfileTag, message.HashSuiteID)
 	require.Equal(t, [32]byte{}, message.SourceNebulaRoot)
 
 	// Canonical c14n round-trips.
@@ -51,7 +51,7 @@ func TestMessageIDIsLegacyKeccak(t *testing.T) {
 	message := &Message{
 		NetworkID:     1,
 		SourceChainID: ids.ID{0xA1},
-		HashSuiteID:   DefaultHashSuiteID,
+		HashSuiteID:   MessageHashProfileTag,
 		Payload:       []byte("keccak-check"),
 	}
 	want := keccak256([]byte(messageDST), message.Bytes())
@@ -67,7 +67,7 @@ func TestMessageIDChangesWithEveryField(t *testing.T) {
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
 		SourceKeyEraID:   7,
 		SourceGeneration: 11,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("base"),
 	}
 	baseID := base.ID()
@@ -92,11 +92,11 @@ func TestMessageIDChangesWithEveryField(t *testing.T) {
 // c14n bytes and DIFFERENT D. There is no defaulting inside the marshaler.
 func TestMessageNoSignTimeDefaulting(t *testing.T) {
 	empty := &Message{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
-	resolved := &Message{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
+	resolved := &Message{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: MessageHashProfileTag, Payload: []byte("x")}
 	require.NotEqual(t, empty.Bytes(), resolved.Bytes())
 	require.NotEqual(t, empty.ID(), resolved.ID())
 	// HashSuiteOrDefault is a READ helper only — it does not change bytes.
-	require.Equal(t, DefaultHashSuiteID, empty.HashSuiteOrDefault())
+	require.Equal(t, MessageHashProfileTag, empty.HashSuiteOrDefault())
 }
 
 // TestParseMessageRejectsTrailing proves decode rejects trailing bytes.
@@ -154,12 +154,12 @@ func TestLaneSigningBytesDistinct(t *testing.T) {
 	d := message.ID()
 
 	beam := BeamSigningBytes(d)
-	pulse := PulseSigningBytes(d)
+	pulse := CoronaSigningBytes(d)
 	mldsa := MLDSASigningBytes(d)
 
 	// Each carries its own DST then the SAME D.
 	require.True(t, bytes.HasPrefix(beam, []byte(beamDST)))
-	require.True(t, bytes.HasPrefix(pulse, []byte(pulseDST)))
+	require.True(t, bytes.HasPrefix(pulse, []byte(coronaDST)))
 	require.True(t, bytes.HasPrefix(mldsa, []byte(mldsaDST)))
 	require.True(t, bytes.HasSuffix(beam, d[:]))
 	require.True(t, bytes.HasSuffix(pulse, d[:]))

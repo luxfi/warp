@@ -22,7 +22,7 @@ func envelopeFixture(t *testing.T) *Envelope {
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
 		SourceKeyEraID:   7,
 		SourceGeneration: 11,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("envelope-test-payload"),
 	}
 
@@ -41,11 +41,11 @@ func envelopeFixture(t *testing.T) *Envelope {
 
 func TestEnvelopeRoundTrip(t *testing.T) {
 	env := envelopeFixture(t)
-	env.PulseSig = bytes.Repeat([]byte{0x42}, 64)
+	env.CoronaSig = bytes.Repeat([]byte{0x42}, 64)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xC3}, 192)
 
 	require.NoError(t, env.Verify())
-	require.True(t, env.HasPulse())
+	require.True(t, env.HasCorona())
 	require.True(t, env.HasMLDSACertSet())
 
 	wire, err := env.Bytes()
@@ -59,7 +59,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 	require.Equal(t, env.Message.SourceGeneration, parsed.Message.SourceGeneration)
 	require.Equal(t, env.Message.SourceNebulaRoot, parsed.Message.SourceNebulaRoot)
 	require.Equal(t, env.Message.HashSuiteID, parsed.Message.HashSuiteID)
-	require.Equal(t, env.PulseSig, parsed.PulseSig)
+	require.Equal(t, env.CoronaSig, parsed.CoronaSig)
 	require.Equal(t, env.MLDSACertSet, parsed.MLDSACertSet)
 	require.True(t, env.Beam.Equal(parsed.Beam))
 	require.Equal(t, env.ID(), parsed.ID())
@@ -74,7 +74,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 func TestEnvelopeEmptyOptionalLanes(t *testing.T) {
 	env := envelopeFixture(t)
 	require.NoError(t, env.Verify())
-	require.False(t, env.HasPulse())
+	require.False(t, env.HasCorona())
 	require.False(t, env.HasMLDSACertSet())
 
 	wire, err := env.Bytes()
@@ -82,7 +82,7 @@ func TestEnvelopeEmptyOptionalLanes(t *testing.T) {
 
 	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
-	require.Empty(t, parsed.PulseSig)
+	require.Empty(t, parsed.CoronaSig)
 	require.Empty(t, parsed.MLDSACertSet)
 	require.True(t, env.Beam.Equal(parsed.Beam))
 }
@@ -154,16 +154,16 @@ func TestEnvelopeEqualNilSafe(t *testing.T) {
 // Lane-verify plumbing.
 // ---------------------------------------------------------------------
 
-type stubPulseVerifier struct {
+type stubCoronaVerifier struct {
 	called bool
 	err    error
-	check  func(env *Envelope) error
+	check  func(subject []byte, ev CoronaEvidence) error
 }
 
-func (s *stubPulseVerifier) VerifyPulse(env *Envelope) error {
+func (s *stubCoronaVerifier) VerifyRingtailThreshold(subject []byte, ev CoronaEvidence) error {
 	s.called = true
 	if s.check != nil {
-		return s.check(env)
+		return s.check(subject, ev)
 	}
 	return s.err
 }
@@ -173,7 +173,7 @@ type stubCertSetVerifier struct {
 	err    error
 }
 
-func (s *stubCertSetVerifier) VerifyCertSet(env *Envelope) error {
+func (s *stubCertSetVerifier) VerifyCertSet(subject []byte, ev CertSetEvidence) error {
 	s.called = true
 	return s.err
 }
@@ -189,7 +189,7 @@ func (stubValidatorState) GetCurrentHeight() (uint64, error) { return 0, nil }
 
 func TestVerifyWithOptionsRequiresPulseWhenAbsent(t *testing.T) {
 	env := envelopeFixture(t)
-	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, RequirePulse: true})
+	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, RequireCorona: true})
 	require.Error(t, err)
 }
 
@@ -202,32 +202,32 @@ func TestVerifyWithOptionsRequiresCertSetWhenAbsent(t *testing.T) {
 func TestVerifyWithOptionsHashSuiteMismatch(t *testing.T) {
 	env := envelopeFixture(t)
 	env.Message.HashSuiteID = "Pulsar-SHA3-experimental"
-	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, HashSuiteID: DefaultHashSuiteID})
+	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, HashSuiteID: MessageHashProfileTag})
 	require.ErrorIs(t, err, ErrEnvelopeBadSuiteID)
 }
 
 func TestVerifyWithOptionsInvokesPulseVerifier(t *testing.T) {
 	env := envelopeFixture(t)
-	env.PulseSig = bytes.Repeat([]byte{0x99}, 32)
+	env.CoronaSig = bytes.Repeat([]byte{0x99}, 32)
 
-	verifier := &stubPulseVerifier{
-		check: func(e *Envelope) error {
-			if e.Message.SourceKeyEraID != 7 {
+	verifier := &stubCoronaVerifier{
+		check: func(subject []byte, ev CoronaEvidence) error {
+			if ev.KeyEraID != 7 {
 				return errors.New("unexpected key era")
 			}
 			return nil
 		},
 	}
-	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, Pulse: verifier, RequirePulse: true})
+	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, Corona: verifier, RequireCorona: true})
 	require.NoError(t, err)
 	require.True(t, verifier.called)
 }
 
 func TestVerifyWithOptionsPulseFailurePropagates(t *testing.T) {
 	env := envelopeFixture(t)
-	env.PulseSig = bytes.Repeat([]byte{0x99}, 32)
-	verifier := &stubPulseVerifier{err: errors.New("pulse rejected")}
-	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, Pulse: verifier, RequirePulse: true})
+	env.CoronaSig = bytes.Repeat([]byte{0x99}, 32)
+	verifier := &stubCoronaVerifier{err: errors.New("pulse rejected")}
+	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, Corona: verifier, RequireCorona: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "pulse rejected")
 }
@@ -243,9 +243,9 @@ func TestVerifyWithOptionsCertSetFailurePropagates(t *testing.T) {
 
 func TestVerifyPQLanesIndependentEntrypoint(t *testing.T) {
 	env := envelopeFixture(t)
-	env.PulseSig = bytes.Repeat([]byte{0xAA}, 16)
-	verifier := &stubPulseVerifier{}
-	err := VerifyPQLanes(env, VerifyOptions{Pulse: verifier, RequirePulse: true})
+	env.CoronaSig = bytes.Repeat([]byte{0xAA}, 16)
+	verifier := &stubCoronaVerifier{}
+	err := VerifyPQLanes(env, VerifyOptions{Corona: verifier, RequireCorona: true})
 	require.NoError(t, err)
 	require.True(t, verifier.called)
 }

@@ -98,7 +98,7 @@ func FuzzHorizonCertificate(f *testing.F) {
 		}
 		if !bytesEqual(h.Beam, h2.Beam) ||
 			!bytesEqual(h.MLDSACertSet, h2.MLDSACertSet) ||
-			!bytesEqual(h.Pulse, h2.Pulse) ||
+			!bytesEqual(h.CoronaRingtail, h2.CoronaRingtail) ||
 			!bytesEqual(h.UnsignedMessageBytes, h2.UnsignedMessageBytes) {
 			t.Fatalf("round-trip lane bytes mismatch")
 		}
@@ -150,7 +150,7 @@ func TestFuzzCorpus_HorizonReplay(t *testing.T) {
 	bad3 := h
 	bad3.Beam = nil
 	bad3.MLDSACertSet = nil
-	bad3.Pulse = nil
+	bad3.CoronaRingtail = nil
 	if err := bad3.PrismVerify(); err == nil {
 		t.Fatalf("PrismVerify accepted a cert with no lanes populated")
 	}
@@ -175,7 +175,7 @@ func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64,
 		SourceChainID:    chainID,
 		SourceKeyEraID:   eraID,
 		SourceGeneration: gen,
-		HashSuiteID:      warp.DefaultHashSuiteID,
+		HashSuiteID:      warp.MessageHashProfileTag,
 		Payload:          payload,
 	}
 	signers := warp.NewBitSet()

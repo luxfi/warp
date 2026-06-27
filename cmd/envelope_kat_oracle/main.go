@@ -4,7 +4,7 @@
 // envelope_kat_oracle — emits byte-equal KAT vectors for the Warp ZAP
 // envelope. Drives warp.Envelope through its canonical ZAP
 // serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ Message ‖ Beam ‖
-// PulseSig ‖ MLDSACertSet).
+// CoronaSig ‖ MLDSACertSet).
 //
 // Wire format (per entry):
 //
@@ -178,7 +178,7 @@ func main() {
 			sourceNebulaRoot: nebulaA,
 			sourceKeyEraID:   7,
 			sourceGeneration: 11,
-			hashSuiteID:      warp.DefaultHashSuiteID,
+			hashSuiteID:      warp.MessageHashProfileTag,
 			pulsarPulseByte:  0x42,
 			pulsarPulseLen:   64,
 			mldsaCertSetByte: 0xC3,
@@ -210,7 +210,7 @@ func main() {
 			sourceNebulaRoot: nebulaA,
 			sourceKeyEraID:   99,
 			sourceGeneration: 1,
-			hashSuiteID:      warp.DefaultHashSuiteID,
+			hashSuiteID:      warp.MessageHashProfileTag,
 			pulsarPulseByte:  0x33,
 			pulsarPulseLen:   96,
 			mldsaCertSetByte: 0,
@@ -226,7 +226,7 @@ func main() {
 			sourceNebulaRoot: nebulaZero,
 			sourceKeyEraID:   0,
 			sourceGeneration: 0,
-			hashSuiteID:      warp.DefaultHashSuiteID,
+			hashSuiteID:      warp.MessageHashProfileTag,
 			pulsarPulseByte:  0,
 			pulsarPulseLen:   0,
 			mldsaCertSetByte: 0xEE,

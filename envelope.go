@@ -30,35 +30,45 @@ var (
 	ErrEnvelopeBadSuiteID = errors.New("warp envelope hash-suite mismatch")
 )
 
-// Envelope is a complete signed Warp message:
+// Envelope is the Quasar finality envelope — a complete signed Warp message
+// composing one or more finality-evidence lanes:
 //
-//		wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Message ‖ Beam ‖ PulseSig ‖ MLDSACertSet
+//		wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Message ‖ Beam ‖ CoronaSig ‖ MLDSACertSet
 //
-//	  - Message         the signed subject (Message); folds PQ lineage.
-//	  - Beam         the BLS aggregate over BeamSigningBytes(D).
-//	  - PulseSig     optional Pulsar threshold signature bytes (u32(0) frame
-//	                 when absent), verified over PulseSigningBytes(D).
-//	  - MLDSACertSet optional ML-DSA cert-set bytes (or a Z-Chain Groth16
-//	                 rollup), verified over MLDSASigningBytes(D).
+//	  - Message      the signed subject (Message); folds PQ lineage.
+//	  - Beam         the BLS aggregate over BeamSigningBytes(D)        (EvidenceBeamBLS).
+//	  - CoronaSig    optional Corona Ringtail (Module-LWE) lattice threshold
+//	                 signature bytes (u32(0) frame when absent), verified over
+//	                 CoronaSigningBytes(D)                             (EvidenceCoronaRingtail).
+//	                 (Formerly mislabeled "PulseSig" — it is the corona lane,
+//	                 NOT threshold ML-DSA / Pulsar.)
+//	  - MLDSACertSet optional independent per-validator ML-DSA-65 cert-set
+//	                 bytes (or a Z-Chain Groth16 rollup), verified over
+//	                 MLDSASigningBytes(D)                              (EvidenceMLDSACertSet).
 //
-// All four lanes are always present on the wire; absence of a PQ lane is
-// the empty u32(0) frame, not an omitted field.
+// The Pulsar (threshold ML-DSA) lane has NO wire field: it is a reserved,
+// fail-closed evidence KIND (see evidence.go), not a carried lane.
+//
+// All wire fields are always present; absence of a PQ lane is the empty
+// u32(0) frame, not an omitted field.
 type Envelope struct {
 	Message      Message
 	Beam         BitSetSignature
-	PulseSig     []byte
+	CoronaSig    []byte
 	MLDSACertSet []byte
 }
 
-// NewEnvelope assembles and structurally validates an envelope.
-func NewEnvelope(message *Message, beam BitSetSignature, pulse, mldsaCertSet []byte) (*Envelope, error) {
+// NewEnvelope assembles and structurally validates an envelope. The
+// coronaSig argument is the Corona Ringtail lattice-threshold lane (formerly
+// "pulse").
+func NewEnvelope(message *Message, beam BitSetSignature, coronaSig, mldsaCertSet []byte) (*Envelope, error) {
 	if message == nil {
 		return nil, fmt.Errorf("%w: nil message", ErrInvalidMessage)
 	}
 	e := &Envelope{
 		Message:      *message,
 		Beam:         beam,
-		PulseSig:     pulse,
+		CoronaSig:    coronaSig,
 		MLDSACertSet: mldsaCertSet,
 	}
 	if err := e.Verify(); err != nil {
@@ -76,7 +86,7 @@ func (e *Envelope) Verify() error {
 	if err := e.Message.Verify(); err != nil {
 		return err
 	}
-	if len(e.PulseSig)+len(e.MLDSACertSet) > MaxEnvelopeSize {
+	if len(e.CoronaSig)+len(e.MLDSACertSet) > MaxEnvelopeSize {
 		return ErrEnvelopeTooLarge
 	}
 	return nil
@@ -91,12 +101,12 @@ func (e *Envelope) Bytes() ([]byte, error) {
 		return nil, err
 	}
 	message := e.Message.marshalZAP()
-	out := make([]byte, 0, len(wireMagic)+1+len(message)+4+len(e.Beam.Signers)+SignatureLen+4+len(e.PulseSig)+4+len(e.MLDSACertSet))
+	out := make([]byte, 0, len(wireMagic)+1+len(message)+4+len(e.Beam.Signers)+SignatureLen+4+len(e.CoronaSig)+4+len(e.MLDSACertSet))
 	out = append(out, wireMagic[:]...)
 	out = appendU8(out, kindEnvelope)
 	out = append(out, message...)
 	out = e.Beam.marshalInto(out)
-	out = appendVar(out, e.PulseSig)
+	out = appendVar(out, e.CoronaSig)
 	out = appendVar(out, e.MLDSACertSet)
 	if len(out) > MaxEnvelopeSize {
 		return nil, ErrEnvelopeTooLarge
@@ -134,8 +144,8 @@ func ParseEnvelope(b []byte) (*Envelope, error) {
 	if e.Beam, err = parseBeam(r); err != nil {
 		return nil, fmt.Errorf("failed to parse beam: %w", err)
 	}
-	if e.PulseSig, err = r.varbytes(); err != nil {
-		return nil, fmt.Errorf("failed to parse pulse: %w", err)
+	if e.CoronaSig, err = r.varbytes(); err != nil {
+		return nil, fmt.Errorf("failed to parse corona sig: %w", err)
 	}
 	if e.MLDSACertSet, err = r.varbytes(); err != nil {
 		return nil, fmt.Errorf("failed to parse mldsa cert set: %w", err)
@@ -165,8 +175,9 @@ func (e *Envelope) SourceChainIDHash() common.Hash {
 // HashSuite returns the envelope's resolved hash suite.
 func (e *Envelope) HashSuite() string { return e.Message.HashSuiteOrDefault() }
 
-// HasPulse reports whether the envelope carries a Pulsar pulse.
-func (e *Envelope) HasPulse() bool { return e != nil && len(e.PulseSig) > 0 }
+// HasCorona reports whether the envelope carries a Corona Ringtail
+// lattice-threshold signature.
+func (e *Envelope) HasCorona() bool { return e != nil && len(e.CoronaSig) > 0 }
 
 // HasMLDSACertSet reports whether the envelope carries an ML-DSA cert set.
 func (e *Envelope) HasMLDSACertSet() bool { return e != nil && len(e.MLDSACertSet) > 0 }
@@ -218,23 +229,14 @@ func VerifyEnvelope(
 	return e.Beam.verify(e.Message.ID(), vdrSet)
 }
 
-// PulseVerifier verifies an envelope's Pulsar Pulse lane. The
-// implementation lives in warp/pulsar (so this package does not import
-// the threshold kernel). It MUST recompute D from env.Message and verify the
-// Pulse over PulseSigningBytes(D), binding all of SourceChainID,
-// SourceNebulaRoot, SourceKeyEraID, SourceGeneration, HashSuiteID via D.
-type PulseVerifier interface {
-	VerifyPulse(env *Envelope) error
-}
-
-// MLDSACertSetVerifier verifies an envelope's ML-DSA cert-set lane over
-// MLDSASigningBytes(D).
-type MLDSACertSetVerifier interface {
-	VerifyCertSet(env *Envelope) error
-}
+// The subject-agnostic lane verifier interfaces (BeamVerifier, CoronaVerifier,
+// MLDSACertSetVerifier, P3QRollupVerifier) are defined in evidence.go. The
+// relay path below feeds them the envelope's subject D (e.Message.ID()) and the
+// typed lane evidence; the corona implementation lives in warp/pulsar so this
+// package does not import the corona kernel.
 
 // VerifyOptions bundles the verifications a receiver applies to an
-// envelope. A nil Pulse / CertSet skips that lane; Require* demands the
+// envelope. A nil Corona / CertSet skips that lane; Require* demands the
 // lane be present, a verifier be configured, and verification succeed.
 type VerifyOptions struct {
 	NetworkID      uint32
@@ -242,13 +244,14 @@ type VerifyOptions struct {
 	QuorumNum      uint64
 	QuorumDen      uint64
 
-	Pulse          PulseVerifier
+	Corona         CoronaVerifier
 	CertSet        MLDSACertSetVerifier
-	RequirePulse   bool
+	RequireCorona  bool
 	RequireCertSet bool
 
-	// HashSuiteID is the suite the receiver expects. Empty accepts
-	// whatever the envelope declares (after defaulting).
+	// HashSuiteID is the message-level c14n hash tag the receiver expects
+	// (the generic Message tag, NOT a lane suite). Empty accepts whatever
+	// the envelope declares (after defaulting to MessageHashProfileTag).
 	HashSuiteID string
 
 	// SkipBeam skips BLS Beam verification. Used by receivers that have
@@ -288,30 +291,51 @@ func VerifyPQLanes(e *Envelope, opts VerifyOptions) error {
 }
 
 func verifyPQLanes(e *Envelope, opts VerifyOptions) error {
+	// The warp cross-chain subject is D — recomputed from the message, framed
+	// per lane by the subject-agnostic verifiers (CoronaSigningBytes /
+	// MLDSASigningBytes inside the impl).
+	d := e.Message.ID()
+	subject := d[:]
+
 	// ML-DSA cert-set lane.
 	if e.HasMLDSACertSet() {
 		if opts.CertSet == nil {
 			if opts.RequireCertSet {
 				return fmt.Errorf("%w: ML-DSA cert set lane required but no verifier configured", ErrInvalidMessage)
 			}
-		} else if err := opts.CertSet.VerifyCertSet(e); err != nil {
-			return fmt.Errorf("ml-dsa cert set verify: %w", err)
+		} else {
+			ev := CertSetEvidence{
+				ChainID:   e.Message.SourceChainID,
+				EraHandle: e.Message.SourceGeneration,
+				CertSet:   e.MLDSACertSet,
+			}
+			if err := opts.CertSet.VerifyCertSet(subject, ev); err != nil {
+				return fmt.Errorf("ml-dsa cert set verify: %w", err)
+			}
 		}
 	} else if opts.RequireCertSet {
 		return fmt.Errorf("%w: ML-DSA cert set lane required but absent from envelope", ErrInvalidMessage)
 	}
 
-	// Pulsar Pulse lane.
-	if e.HasPulse() {
-		if opts.Pulse == nil {
-			if opts.RequirePulse {
-				return fmt.Errorf("%w: Pulsar Pulse lane required but no verifier configured", ErrInvalidMessage)
+	// Corona Ringtail lattice-threshold lane.
+	if e.HasCorona() {
+		if opts.Corona == nil {
+			if opts.RequireCorona {
+				return fmt.Errorf("%w: Corona Ringtail lane required but no verifier configured", ErrInvalidMessage)
 			}
-		} else if err := opts.Pulse.VerifyPulse(e); err != nil {
-			return fmt.Errorf("pulsar pulse verify: %w", err)
+		} else {
+			ev := CoronaEvidence{
+				ChainID:    e.Message.SourceChainID,
+				KeyEraID:   e.Message.SourceKeyEraID,
+				Generation: e.Message.SourceGeneration,
+				Sig:        e.CoronaSig,
+			}
+			if err := opts.Corona.VerifyRingtailThreshold(subject, ev); err != nil {
+				return fmt.Errorf("corona ringtail verify: %w", err)
+			}
 		}
-	} else if opts.RequirePulse {
-		return fmt.Errorf("%w: Pulsar Pulse lane required but absent from envelope", ErrInvalidMessage)
+	} else if opts.RequireCorona {
+		return fmt.Errorf("%w: Corona Ringtail lane required but absent from envelope", ErrInvalidMessage)
 	}
 
 	return nil
