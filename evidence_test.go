@@ -54,11 +54,18 @@ func (f *fakePulsarEraResolver) ResolvePulsarKeyEra(_ ids.ID, _ uint64, _ uint64
 type fakeP3QVerifier struct {
 	called bool
 	err    error
+	proven string // proof system the fake "verified"; empty → echoes root.ProvingSystem
 }
 
-func (f *fakeP3QVerifier) VerifyP3QRollup(_ []byte, _ P3QRoot, _ SignerSetAuthority) error {
+func (f *fakeP3QVerifier) VerifyP3QRollup(_ []byte, root P3QRoot, _ SignerSetAuthority) (string, error) {
 	f.called = true
-	return f.err
+	if f.err != nil {
+		return "", f.err
+	}
+	if f.proven != "" {
+		return f.proven, nil
+	}
+	return root.ProvingSystem, nil
 }
 
 type fakeSignerSetAuthority struct{}
@@ -103,7 +110,7 @@ func TestPulsarThresholdMLDSADoesNotDispatchToCorona(t *testing.T) {
 	}
 	// No PulsarEra resolver → fail closed; corona/cert-set verifiers present but
 	// must never be reached.
-	err := VerifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona, CertSet: certset})
+	err := verifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona, CertSet: certset})
 
 	require.ErrorIs(t, err, ErrNoVerifierForKind,
 		"Pulsar evidence must fail closed without a key-era resolver")
@@ -121,7 +128,7 @@ func TestPulsarThresholdMLDSADoesNotDispatchToCertSet(t *testing.T) {
 		Suite:  SuitePulsarThresholdMLDSA65,
 		Pulsar: &PulsarEvidence{SuiteID: SuitePulsarThresholdMLDSA65, Signature: []byte{0x01}},
 	}
-	err := VerifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{CertSet: certset})
+	err := verifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{CertSet: certset})
 
 	require.ErrorIs(t, err, ErrNoVerifierForKind)
 	require.False(t, certset.called, "Pulsar evidence dispatched to the cert-set verifier")
@@ -138,7 +145,7 @@ func TestCoronaRingtailDoesNotDispatchToPulsar(t *testing.T) {
 		Suite:  SuiteCoronaRingtailSHA3,
 		Corona: &CoronaEvidence{Sig: bytes.Repeat([]byte{0x42}, 64)},
 	}
-	err := VerifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona})
+	err := verifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona})
 
 	require.True(t, corona.called, "corona evidence did not reach the corona verifier")
 	require.ErrorIs(t, err, sentinel, "corona evidence must route to the corona verifier")
@@ -157,7 +164,7 @@ func TestMLDSACertSetDoesNotDispatchToPulsar(t *testing.T) {
 		Suite:   SuiteMLDSA65CertSetSHA3,
 		CertSet: &CertSetEvidence{CertSet: bytes.Repeat([]byte{0xC3}, 192)},
 	}
-	err := VerifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{CertSet: certset})
+	err := verifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{CertSet: certset})
 
 	require.True(t, certset.called, "cert-set evidence did not reach the cert-set verifier")
 	require.ErrorIs(t, err, sentinel)
@@ -243,7 +250,7 @@ func TestSuiteKindMismatchRejects(t *testing.T) {
 		Suite:  SuiteBeamBLS12381,
 		Corona: &CoronaEvidence{Sig: bytes.Repeat([]byte{0x42}, 64)},
 	}
-	err := VerifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona})
+	err := verifyFinalityEvidence(ev, make([]byte, 32), LaneVerifierSet{Corona: corona})
 	require.ErrorIs(t, err, ErrSuiteKindMismatch)
 	require.False(t, corona.called, "the suite guard must fire BEFORE the verifier is reached")
 
@@ -253,13 +260,13 @@ func TestSuiteKindMismatchRejects(t *testing.T) {
 		Suite:  SuiteCoronaRingtailSHA3,
 		Pulsar: &PulsarEvidence{},
 	}
-	errP := VerifyFinalityEvidence(evP, make([]byte, 32), LaneVerifierSet{})
+	errP := verifyFinalityEvidence(evP, make([]byte, 32), LaneVerifierSet{})
 	require.ErrorIs(t, errP, ErrSuiteKindMismatch)
 	require.NotErrorIs(t, errP, ErrNoVerifierForKind)
 
 	// An unknown kind fails closed too.
 	evU := FinalityEvidence{Kind: "bogus-kind", Suite: SuiteBeamBLS12381}
-	require.ErrorIs(t, VerifyFinalityEvidence(evU, make([]byte, 32), LaneVerifierSet{}), ErrUnknownFinalityEvidence)
+	require.ErrorIs(t, verifyFinalityEvidence(evU, make([]byte, 32), LaneVerifierSet{}), ErrUnknownFinalityEvidence)
 }
 
 // goldenQuasarTypedEvidenceWireSHA256 is the SHA-256 of the canonical wire
@@ -378,7 +385,7 @@ func TestPulsarVerifierAcceptsStandardMLDSAUnderGroupKey(t *testing.T) {
 
 	// And through the dispatcher, with the era supplied by a resolver.
 	fe := FinalityEvidence{Kind: EvidencePulsarThresholdMLDSA, Suite: SuitePulsarThresholdMLDSA65, Pulsar: &ev}
-	require.NoError(t, VerifyFinalityEvidence(fe, subject, LaneVerifierSet{
+	require.NoError(t, verifyFinalityEvidence(fe, subject, LaneVerifierSet{
 		PulsarEra: &fakePulsarEraResolver{era: era},
 	}))
 }

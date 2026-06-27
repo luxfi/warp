@@ -48,12 +48,13 @@ package warp
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/luxfi/ids"
 )
 
 // FinalityEvidenceKind names a finality-evidence lane. The KIND — never the
-// suite — selects the verifier in VerifyFinalityEvidence.
+// suite — selects the verifier in verifyFinalityEvidence.
 type FinalityEvidenceKind string
 
 const (
@@ -281,7 +282,14 @@ type MLDSACertSetVerifier interface {
 // FRI rollup at precompile 0x012205) lives ABOVE warp and is injected; the
 // warp verify path NEVER imports it.
 type P3QRollupVerifier interface {
-	VerifyP3QRollup(subject []byte, root P3QRoot, authority SignerSetAuthority) error
+	// VerifyP3QRollup verifies the succinct rollup proof/root over subject
+	// against the signer-set authority and MUST RETURN the proof system it
+	// ACTUALLY verified (e.g. "stark-rescue"). The dispatcher rejects the lane
+	// if the returned system differs from the evidence's claimed
+	// P3QRoot.ProvingSystem — so the strict-PQ gate (P3QStrictRootOK), which
+	// keys on that string, can never be fooled by a classical proof relabeled as
+	// post-quantum. A verifier that cannot determine the system MUST fail.
+	VerifyP3QRollup(subject []byte, root P3QRoot, authority SignerSetAuthority) (provenSystem string, err error)
 }
 
 // LaneVerifierSet bundles the lane verifiers + key resolvers a receiver
@@ -291,6 +299,17 @@ type P3QRollupVerifier interface {
 // for a weaker one. Only the Pulsar KEY source (PulsarEra) is injectable. A
 // nil verifier/resolver for a dispatched kind fails closed
 // (ErrNoVerifierForKind).
+//
+// SECURITY PRECONDITIONS — the trust this verify path ultimately reduces to.
+// They live OUTSIDE these files and MUST be guaranteed by the caller:
+//   - Resolver authenticity: VerifyPulsar / VerifyCoronaEra / the P3Q verifier
+//     trust the group key / signer set the injected resolver returns. Each
+//     resolver MUST be backed by the authenticated on-chain key lineage
+//     (Bootstrap/Reshare/Reanchor); a resolver returning an attacker's key
+//     forges that lane.
+//   - Per-lane key independence: STRICT_QUASAR's dual-PQ guarantee holds ONLY if
+//     the Pulsar (ML-DSA) and Corona (lattice) group keys are independently
+//     generated — no shared seed. A shared seed collapses dual-PQ to single-PQ.
 type LaneVerifierSet struct {
 	Beam      BeamVerifier
 	Corona    CoronaVerifier
@@ -301,7 +320,7 @@ type LaneVerifierSet struct {
 	SignerSet SignerSetAuthority
 }
 
-// VerifyFinalityEvidence is the ONE finality-evidence dispatcher. It routes
+// verifyFinalityEvidence is the ONE finality-evidence dispatcher. It routes
 // STRICTLY by ev.Kind, validates ev.Suite against that kind, requires the
 // matching lane payload, and fails closed. A SuiteID alone can never select a
 // verifier; subject is the opaque 32-byte digest (D or M) the lane is over.
@@ -316,7 +335,7 @@ type LaneVerifierSet struct {
 // This dispatcher verifies BYTES; it does NOT decide strict admissibility —
 // that is the policy layer (AcceptQuasarCert). Decomplected: verify(bytes) is
 // separate from admit(policy).
-func VerifyFinalityEvidence(ev FinalityEvidence, subject []byte, lanes LaneVerifierSet) error {
+func verifyFinalityEvidence(ev FinalityEvidence, subject []byte, lanes LaneVerifierSet) error {
 	switch ev.Kind {
 	case EvidenceBeamBLS:
 		if err := requireSuite(ev, SuiteBeamBLS12381); err != nil {
@@ -386,10 +405,21 @@ func VerifyFinalityEvidence(ev FinalityEvidence, subject []byte, lanes LaneVerif
 		if lanes.P3Q == nil {
 			return fmt.Errorf("%w: %s", ErrNoVerifierForKind, ev.Kind)
 		}
-		// NOTE: this verifies the rollup BYTES. Whether a P3Q root is an
-		// admissible STRICT-PQ finality root (its proof stack must be PQ) is a
-		// POLICY decision enforced in AcceptQuasarCert via P3QStrictRootOK.
-		return lanes.P3Q.VerifyP3QRollup(subject, *ev.P3Q, lanes.SignerSet)
+		// Verify the rollup bytes AND bind the proof system: the verifier returns
+		// the system it actually proved, and we reject if it differs from the
+		// claimed ProvingSystem. This authenticates the string the strict-PQ gate
+		// (P3QStrictRootOK) keys on, so a classical proof relabeled "stark-rescue"
+		// cannot slip through. Strict admissibility itself stays a policy decision
+		// (AcceptQuasarCert).
+		proven, err := lanes.P3Q.VerifyP3QRollup(subject, *ev.P3Q, lanes.SignerSet)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(strings.TrimSpace(proven), strings.TrimSpace(ev.P3Q.ProvingSystem)) {
+			return fmt.Errorf("%w: claimed %q, verifier proved %q",
+				ErrP3QProvingSystemMismatch, ev.P3Q.ProvingSystem, proven)
+		}
+		return nil
 
 	case EvidenceMLDSACertSet:
 		if err := requireSuite(ev, SuiteMLDSA65CertSetSHA3); err != nil {

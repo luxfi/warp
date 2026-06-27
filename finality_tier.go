@@ -10,7 +10,7 @@
 // failing closed otherwise. Decomplected:
 //
 //	RequiredKinds(tier)      — pure policy: which kinds, in what AND/OR shape.
-//	VerifyFinalityEvidence   — pure verification: does a lane's bytes check.
+//	verifyFinalityEvidence   — pure verification: does a lane's bytes check.
 //	AcceptQuasarCert         — composes the two + the strict-root guardrails.
 //
 // Tiers:
@@ -160,7 +160,7 @@ func WithAllowClassicalP3QRoot() AcceptOption {
 //
 // This is the composition the task names: tier + present []FinalityEvidence +
 // resolveKey (lanes.PulsarEra / lanes.SignerSet) + verify
-// (VerifyFinalityEvidence). The strict-root guardrail (a classical P3Q root is
+// (verifyFinalityEvidence). The strict-root guardrail (a classical P3Q root is
 // refused) is enforced before a P3Q lane is allowed to satisfy a required PQ
 // group, unless WithAllowClassicalP3QRoot is passed.
 func AcceptQuasarCert(tier FinalityTier, cert *QuasarCert, lanes LaneVerifierSet, opts ...AcceptOption) error {
@@ -233,7 +233,7 @@ func satisfyGroup(
 			}
 		}
 
-		if err := VerifyFinalityEvidence(ev, subject, lanes); err != nil {
+		if err := verifyFinalityEvidence(ev, subject, lanes); err != nil {
 			lastErr = err
 			continue
 		}
