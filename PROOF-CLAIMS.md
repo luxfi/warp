@@ -1,4 +1,4 @@
-# PROOF-CLAIMS — Warp 2.0 Envelope Soundness
+# PROOF-CLAIMS — Lux Warp Envelope Soundness
 
 > **What warp proves — and what it does NOT.**
 > Companion document to `SUBMISSION.md` (cover sheet),
@@ -11,10 +11,10 @@
 
 ## §1 The narrow claim
 
-The strongest precise statement supported by the warp v2.0
+The strongest precise statement supported by the warp
 implementation:
 
-> **Warp 2.0 envelope soundness (operational).** Under the trusted-
+> **Warp envelope soundness (operational).** Under the trusted-
 > computing base in `TRUSTED-COMPUTING-BASE.md` and the residual
 > assumptions enumerated in §3 below, every byte stream `b` for
 > which `warp.ParseEnvelope(b)` returns `env, nil` AND
@@ -22,10 +22,11 @@ implementation:
 > non-`classical` `mode` carries cryptographic evidence that:
 >
 > 1. The source-chain validator set (at the time of signing)
->    attested to the embedded `UnsignedMessage` bytes, AND
-> 2. The attestation binds to all six of: `SourceChainID`,
->    `SourceNebulaRoot`, `SourceKeyEraID`, `SourceGeneration`,
->    `HashSuiteID`, `UnsignedMessage.Bytes()`, AND
+>    attested to the digest `D` of the embedded `Message`, AND
+> 2. The attestation binds to every `Message` field — `NetworkID`,
+>    `SourceChainID`, `SourceNebulaRoot`, `SourceKeyEraID`,
+>    `SourceGeneration`, `HashSuiteID`, `Payload` — because `D` is
+>    computed over the full `Message` c14n, AND
 > 3. Under `mode == strict-pq`, the attestation is produced under
 >    a NIST PQ-standardized algorithm (FIPS 204 ML-DSA-65) or a
 >    Lux R-LWE threshold signature (Pulsar / Corona).
@@ -43,14 +44,14 @@ primitive analyses (FIPS 204, FIPS 205, LP-073, LP-075).
 | Aspect | Status |
 |---|---|
 | Wire format byte-stability across Go / Rust / TS | ✅ KAT manifest committed; cross-language ports gated on byte-equality |
-| RLP encode / decode round-trip | ✅ `TestEnvelopeV2RoundTrip` + fuzzer (`FuzzWarpEnvelopeV2` ≥ 100k execs/run) |
-| Cross-version dispatch (v1 ↔ v2) | ✅ `ParseEnvelope` accepts both; v1-lifted yields v2 with empty PQ lanes |
-| Domain-separation tag distinctness | ✅ `WARP-PULSAR-ENVELOPE-v1` ≠ `QUASAR-PULSAR-BUNDLE-v1` ≠ `lux-warp-cross-chain-v1` |
-| Transcript-binding completeness | ✅ All six fields go into `pulsar.BuildSigningBytes` |
+| ZAP encode / decode round-trip | ✅ `TestEnvelopeRoundTrip` + fuzzer (`FuzzEnvelope` ≥ 100k execs/run) |
+| Legacy-byte rejection (no cross-version path) | ✅ `TestParseEnvelopeRejectsLegacyRLP`; ZAP magic refuses RLP (`0xc0..0xff`) and the legacy `0x02` byte |
+| Domain-separation tag distinctness | ✅ `LUX-WARP-ZAP-{BEAM,PULSE,MLDSA}-v1` mutually distinct (`TestLaneSigningBytesDistinct`); distinct from `QUASAR-PULSAR-BUNDLE-v1` |
+| Transcript-binding completeness | ✅ All `Message` fields fold into `D` (`TestMessageTranscriptMutationsDistinct`, `TestPulseSigningBytesBindsAllTranscriptFields`) |
 | Posture gate's monotonicity | ✅ `pq.ValidateMode` returns the SAME error for all classical envelopes under strict-PQ (`pq.ErrClassicalAuthForbidden`) |
-| Registry's classical opt-in gate | ✅ `TestRegister_Classical_Refused` / `TestRegister_Classical_OptIn` |
-| Replay protection across versions | ✅ `TestE2E_CrossVersion_IDPreserved` |
-| Decoder panic-freedom | ✅ `FuzzWarpEnvelopeV2` + `FuzzSignatureSchemeLegParser` + `FuzzCorruptedMLDSACertSet` (≥ 100k execs/run) |
+| Registry's classical opt-in gate | ✅ `TestRegister_Classical_OptIn` / `TestNewPQNativeRegistry_RefusesClassical` |
+| Replay protection (ID = `D`) | ✅ `TestE2E_ID_PreservedAcrossWire`, `TestEnvelopeIDStable` |
+| Decoder panic-freedom | ✅ `FuzzEnvelope` + `FuzzEnvelopeRaw` + `FuzzZapReader` + `FuzzSignatureSchemeLegParser` + `FuzzCorruptedMLDSACertSet` (≥ 100k execs/run) |
 | BLS12-381 aggregate verify | ✅ Inherited from `luxfi/crypto/bls` (audited primitive) |
 | ML-DSA-65 single-party verify | ⚠ Inherited from `luxfi/crypto/mldsa` (Cloudflare CIRCL backend) |
 | Pulsar / Corona threshold verify | ⚠ Inherited from `luxfi/pulsar` / `luxfi/corona` (Lux primitives) |
@@ -72,7 +73,7 @@ inherits these assumptions; it does not prove them.
 
 **The defensible PQ-safety claim**:
 
-> Warp 2.0 binds NIST-standardized post-quantum signatures (FIPS 204
+> Lux Warp binds NIST-standardized post-quantum signatures (FIPS 204
 > ML-DSA-65) and Lux R-LWE threshold signatures to the same
 > transcript that the classical BLS aggregate signs. Under
 > `pq.ModeStrictPQ` the verifier REFUSES envelopes lacking PQ
@@ -161,17 +162,17 @@ deployments (e.g. `~/work/lux/operator`).
 
 ## §4 The honest one-paragraph version
 
-> Warp 2.0 is a transport-agnostic, wire-stable, PQ-native
+> Lux Warp is a transport-agnostic, wire-stable, PQ-native
 > cross-chain envelope format. Its contribution is (a) the
-> EnvelopeV2 binary layout with a leading 0x02 version byte and
-> RLP-framed PQ lanes, (b) the canonical PQ-native registry
-> (`signature.NewPQNativeRegistry`) which refuses classical
-> primitives without an explicit `LegacyClassicalEnabled` opt-in,
-> (c) the single-function posture gate (`pq.ValidateMode`) that
-> dispatches the chain's mode (classical / hybrid / strict-pq) to
-> the right verifier path, and (d) the domain-separation tags
-> `WARP-PULSAR-ENVELOPE-v1` and `lux-warp-cross-chain-v1` that
-> prevent cross-context signature replay. The underlying
+> `Envelope` ZAP canonical-TLV layout (`"LWZP"‖0x01` magic + `0x02`
+> kind byte) over a single keccak256 digest `D`, (b) the canonical
+> PQ-native registry (`signature.NewPQNativeRegistry`) which refuses
+> classical primitives without an explicit `LegacyClassicalEnabled`
+> opt-in, (c) the single-function posture gate (`pq.ValidateMode`)
+> that dispatches the chain's mode (classical / hybrid / strict-pq)
+> to the right verifier path, and (d) the per-lane domain-separation
+> tags `LUX-WARP-ZAP-{BEAM,PULSE,MLDSA}-v1` that prevent
+> cross-lane signature replay. The underlying
 > primitive hardness (BLS / ML-DSA / R-LWE) is inherited from
 > their respective audited modules; the bridge-quorum trust model
 > is the verifier's responsibility; the transport-layer integrity
@@ -182,9 +183,9 @@ deployments (e.g. `~/work/lux/operator`).
 ## §5 Refinement chain (what's connected to what)
 
 ```
-EnvelopeV2 wire bytes
-       parses to (RLP decoder, structural Verify)
-EnvelopeV2 in-memory struct
+Envelope wire bytes
+       parses to (ZAP decoder, structural Verify)
+Envelope in-memory struct
        routed by pq.ValidateMode(mode, env, verify)
 { Beam ∨ Pulse ∨ MLDSACertSet } lane
        verified by the lane's primitive verifier
@@ -212,7 +213,7 @@ NOT re-prove what it inherits.
    Expect: root warp package green; signature registry green.
 7. **Run** the fuzz harnesses for ≥ 60 s each:
    ```
-   GOWORK=off go test -fuzz=FuzzWarpEnvelopeV2 -fuzztime=60s ./
+   GOWORK=off go test -fuzz=FuzzEnvelope -fuzztime=60s ./
    GOWORK=off go test -fuzz=FuzzSignatureSchemeLegParser -fuzztime=60s ./
    GOWORK=off go test -fuzz=FuzzCorruptedMLDSACertSet -fuzztime=60s ./
    ```

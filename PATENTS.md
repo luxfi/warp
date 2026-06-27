@@ -1,4 +1,4 @@
-# PATENTS — Lux Warp 2.0 Cross-Chain Messaging
+# PATENTS — Lux Warp Cross-Chain Messaging
 
 > **Statement of Intellectual Property and Royalty-Free Patent Grant**
 > for the Lux Warp cross-chain messaging protocol.
@@ -7,7 +7,7 @@
 
 Lux Industries, Inc. ("Lux") grants a **worldwide, royalty-free,
 non-exclusive, irrevocable patent license** for any implementation
-of Lux Warp that conforms to the EnvelopeV2 wire format pinned in
+of Lux Warp that conforms to the `Envelope` wire format pinned in
 `SPECIFICATION.md` AND is either (a) licensed under
 BSD-3-Clause-Eco, BSD-3-Clause, Apache-2.0, or a compatible
 OSI-approved license, OR (b) is a port, validation, or
@@ -24,9 +24,9 @@ The full text of the grant is in **§3 Patent Grant** below.
 
 This document covers patent rights and patent posture for:
 
-- The **EnvelopeV2 wire format** specified in `SPECIFICATION.md`.
+- The **`Envelope` wire format** specified in `SPECIFICATION.md`.
 - The **posture-gate composition** (`pq.ValidateMode` over
-  `EnvelopeV2.HasPQEvidence`) pinned in `security_profile.go` and
+  `Envelope.HasPQEvidence`) pinned in `security_profile.go` and
   `PQ_PROFILES.md`.
 - The **reference implementation** in this repository.
 - The **KAT vectors** in `scripts/kat/envelope_kat.json` and the
@@ -52,16 +52,16 @@ It does NOT cover, and explicitly DISCLAIMS, the following prior art:
 
 ## §2 What Lux considers patentable (high level)
 
-Subject to attorney review, Lux considers the following Warp 2.0
+Subject to attorney review, Lux considers the following Lux Warp
 contributions to be candidates for patent protection:
 
 ### §2.1 PQ-native envelope with classical-opt-in posture gate
 
 The specific composition of:
 
-- A wire format (EnvelopeV2) that carries a classical Beam, an
+- A wire format (`Envelope`) that carries a classical Beam, an
   optional Pulse (R-LWE threshold), and an optional MLDSACertSet
-  (FIPS 204 per-validator attestations) over the same transcript;
+  (FIPS 204 per-validator attestations) over the same digest `D`;
 - A posture gate (`pq.ValidateMode`) that dispatches three named
   modes (classical / hybrid / strict-pq) to the appropriate
   verifier path through a SINGLE function call;
@@ -73,28 +73,35 @@ The specific composition of:
 
 ### §2.2 Transcript-binding domain separation
 
-The specific binding `"WARP-PULSAR-ENVELOPE-v1" || SourceChainID ||
-SourceNebulaRoot || SourceKeyEraID || SourceGeneration ||
-HashSuiteID || UnsignedMessage.Bytes()` that prevents replay
-across:
+The specific construction of the single digest
+`D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(Message))` — which
+folds the full source-chain lineage (`NetworkID`, `SourceChainID`,
+`SourceNebulaRoot`, `SourceKeyEraID`, `SourceGeneration`,
+`HashSuiteID`, `Payload`) into the signed subject — together with
+the per-lane domain-separation tags that each sign `tag ‖ D` and so
+prevent replay across:
 
-- Pulsar consensus-layer pulses (`"QUASAR-PULSAR-BUNDLE-v1"`);
-- Warp envelopes (this tag);
-- ML-DSA cert-set attestations (`"lux-warp-cross-chain-v1"`).
+- The classical Beam (`"LUX-WARP-ZAP-BEAM-v1"`);
+- The Pulsar / Corona Pulse (`"LUX-WARP-ZAP-PULSE-v1"`);
+- The ML-DSA cert set (`"LUX-WARP-ZAP-MLDSA-v1"`);
 
-Distinct context strings per domain are required by FIPS 204 §5.2
-context-string binding; the SPECIFIC concatenation here is what
-Lux considers novel.
+and which are all distinct from the consensus-layer Pulsar prefix
+(`"QUASAR-PULSAR-BUNDLE-v1"`). Distinct context strings per domain
+are required by FIPS 204 §5.2 context-string binding; the SPECIFIC
+single-digest-plus-per-lane-tag composition here is what Lux
+considers novel.
 
-### §2.3 Cross-version envelope dispatcher
+### §2.3 Canonical-TLV envelope with unambiguous wire framing
 
-The 0x02-prefixed wire framing that allows a single
-`ParseEnvelope` function to dispatch both Warp 1.x (legacy bare
-RLP message) and Warp 2.0 (versioned envelope) inputs, lifting
-v1 bytes into a v2 envelope shape with empty PQ lanes. The
-dispatcher's correctness depends on the fact that RLP lists
-NEVER start with 0x02 (RLP single-byte values < 0x80 ARE the
-value itself; lists start at 0xc0).
+The `Envelope` ZAP wire framing — a 5-byte `"LWZP"‖0x01` magic
+followed by a `0x02` kind byte and a total-order canonical TLV body
+— that yields a single canonical parser (`ParseEnvelope`) with no
+malleability lane: every byte is committed, optional lanes are the
+empty `u32(0)` frame rather than omitted fields, and decode rejects
+any non-canonical or trailing bytes. The framing is unambiguously
+distinguishable from — and explicitly rejects — legacy RLP bytes
+(lead `0xc0..0xff`) and the legacy `0x02`-prefixed envelope, because
+the ZAP lead byte `'L'` (`0x4c`) is below RLP's `0xc0` list floor.
 
 ## §3 Patent Grant
 
@@ -106,7 +113,7 @@ value itself; lists start at 0xc0).
 > otherwise transfer the Lux Warp Protocol, IF AND ONLY IF the
 > implementation EITHER:**
 >
-> 1. **Conforms** to the EnvelopeV2 wire format pinned in
+> 1. **Conforms** to the `Envelope` wire format pinned in
 >    `SPECIFICATION.md` AND is licensed under BSD-3-Clause-Eco,
 >    BSD-3-Clause, Apache-2.0, MIT, or another OSI-approved
 >    license that grants the same rights to its recipients; **OR**

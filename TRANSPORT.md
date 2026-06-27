@@ -1,12 +1,12 @@
 # TRANSPORT — Warp Envelope Carriage Over the Wire
 
-> How Warp 2.0 signed envelopes are transported between chains.
+> How Warp signed envelopes are transported between chains.
 
 ## Warp produces transport-agnostic signed envelopes
 
 Warp's contribution is the **envelope wire format** plus the
 **posture gate**. Warp does NOT define its own network protocol.
-A signed `EnvelopeV2` is a byte string consumed by an external
+A signed `Envelope` is a byte string consumed by an external
 transporter that delivers the bytes to the destination chain's
 verifier.
 
@@ -14,10 +14,10 @@ verifier.
 +-------------------+      +--------------+      +---------------------+
 |  Source-chain     |      |  Transport   |      |  Destination-chain  |
 |  signer-aggregator|----->|  carrier     |----->|  envelope verifier  |
-|  (warp.Sign)      |      |  (verbatim)  |      |  (warp.VerifyV2)    |
+| (warp.SignMessage)|      |  (verbatim)  |      |(warp.VerifyWithOpts)|
 +-------------------+      +--------------+      +---------------------+
        produces                  carries                 consumes
-   EnvelopeV2 bytes         the same bytes,         EnvelopeV2 bytes
+    Envelope bytes          the same bytes,          Envelope bytes
                             no transformation
 ```
 
@@ -72,8 +72,8 @@ ZAP message
   | - Size                 |
   +------------------------+
   | ZAP payload            |
-  | - Warp EnvelopeV2 bytes|
-  |   (starting with 0x02) |
+  | - Warp Envelope bytes  |
+  |   (starting "LWZP")    |
   +------------------------+
 ```
 
@@ -107,8 +107,8 @@ them verbatim. Examples that work:
 Examples that do NOT work without rework:
 
 - **JSON-encoded re-serialization** of the envelope's fields. JSON
-  is not byte-stable; re-serialising loses the canonical RLP
-  byte stream and breaks `EnvelopeV2.ID()` consistency.
+  is not byte-stable; re-serialising loses the canonical ZAP
+  byte stream and breaks `Envelope.ID()` consistency.
 - **Field-level transformation** (e.g. truncating the
   `SourceNebulaRoot` for "efficiency"). Any field change breaks
   the Pulse and ML-DSA transcript bindings.
@@ -131,7 +131,7 @@ lives in two places:
 
 2. **`github.com/luxfi/signature-aggregator`** — the service
    that collects per-validator signatures and emits the final
-   `EnvelopeV2`. The service uses ZAP for its API surface;
+   `Envelope`. The service uses ZAP for its API surface;
    clients call the service over ZAP and receive completed
    envelopes.
 
@@ -144,16 +144,17 @@ envelopes, not just systems that speak ZAP.
 Because warp envelopes are transport-agnostic:
 
 - **Confidentiality is the transporter's responsibility.** Warp
-  envelopes are NOT encrypted; their contents (UnsignedMessage
+  envelopes are NOT encrypted; their contents (the `Message`
   payload) are public-by-construction. Operators who need
   confidential cross-chain messages use Warp Private (LP-021v2
   forthcoming) — FHE ciphertext as the payload, with the same
   envelope format.
 
 - **Replay protection is content-addressed.** Destination chains
-  dedup by `EnvelopeV2.ID()` (= `Message.ID()` = SHA-256 of the
-  unsigned message). A replay attack at the transport layer
-  delivers bytes the destination already has; dedup discards them.
+  dedup by `Envelope.ID()` (= `Message.ID()` = `D`, the
+  legacy-Keccak256 digest of the `Message` c14n). A replay attack at
+  the transport layer delivers bytes the destination already has;
+  dedup discards them.
 
 - **Transport-layer authenticity is independent.** A compromised
   transporter cannot forge a warp envelope (the source-chain's

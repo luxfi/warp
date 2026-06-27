@@ -1,10 +1,10 @@
-# TRUSTED-COMPUTING-BASE — Warp 2.0 TCB Inventory
+# TRUSTED-COMPUTING-BASE — Lux Warp TCB Inventory
 
 > **What you must trust below the warp implementation.**
 > Companion document to `SUBMISSION.md`, `PROOF-CLAIMS.md`, and
 > `CRYPTOGRAPHER-SIGN-OFF.md`.
 
-The Warp 2.0 envelope soundness claim (`PROOF-CLAIMS.md` §1)
+The Warp envelope soundness claim (`PROOF-CLAIMS.md` §1)
 rests on three layered trust bases:
 
 1. **Cryptographic primitives** — separately audited modules.
@@ -23,16 +23,17 @@ unsound regardless of how well-implemented the envelope verifier is.
 | SLH-DSA single-party | `github.com/luxfi/crypto/slhdsa` (Cloudflare CIRCL backend) | NIST FIPS 205 spec text; CIRCL implementation correctness; hash-function security | NIST FIPS 205 + CIRCL audit |
 | Pulsar threshold (R-LWE) | `github.com/luxfi/pulsar` | Pulsar Class N1 byte-equality theorem; R-LWE / Ring-SIS hardness; jasmin-ct constant-time | `~/work/lux/pulsar/CRYPTOGRAPHER-SIGN-OFF.md` |
 | Corona threshold (R-LWE) | `github.com/luxfi/corona` | Corona implementation correctness; R-LWE hardness; dudect constant-time | `~/work/lux/corona/CRYPTOGRAPHER-SIGN-OFF.md` |
-| SHA-256 (envelope IDs) | `crypto/sha256` (Go stdlib) | Go stdlib SHA-256 correctness; standard SHA-256 second-preimage resistance | NIST FIPS 180-4 |
-| SHA3-256 / Keccak (hash suite) | `crypto/sha3` (Go x/crypto) | Go x/crypto SHA-3 correctness; standard Keccak preimage resistance | NIST FIPS 202 |
+| legacy-Keccak256 (digest `D` / envelope IDs) | `golang.org/x/crypto/sha3` (`NewLegacyKeccak256`) | Keccak256 correctness; second-preimage resistance; byte-match with the EVM `keccak256` opcode | NIST FIPS 202 (Keccak) |
+| Pulsar hash suite (`"Pulsar-SHA3"`) | `crypto/sha3` (Go x/crypto), inside `luxfi/pulsar` / `luxfi/corona` | Go x/crypto SHA-3 correctness; standard Keccak preimage resistance | NIST FIPS 202 |
 
 ## §2 Implementation TCB
 
 | Layer | What you trust | Reproducibility |
 |---|---|---|
 | **Go toolchain** | Go 1.26.4 compiler + runtime; `crypto/rand` randomness quality | Version pinned in `go.mod` (`go 1.26.4`) |
-| **`luxfi/geth/rlp`** | RLP encoder / decoder correctness; bounded recursion; refuses oversized inputs | go-ethereum upstream RLP; reviewed |
-| **`luxfi/codec`** | Codec versioning + length-prefix correctness for v1 Message wire format | Reviewed; KAT-locked |
+| **`warp/zap.go`** (in-package) | ZAP canonical-TLV codec: fixed-width BE ints, `u32`-framed varbytes, trim-canonical bitset, trailing-byte rejection | This module; KAT-locked; fuzz-tested (`FuzzZapReader`) |
+| **`golang.org/x/crypto/sha3`** | `NewLegacyKeccak256` for the digest `D` | Go x/crypto; pinned by FIPS 202 |
+| **`luxfi/geth/common`** | `common.Hash` 32-byte helper | go-ethereum upstream; reviewed |
 | **`luxfi/ids`** | 32-byte ID type + SHAKE-256 derivation | Reviewed; pinned by FIPS 202 |
 | **`luxfi/log`** | Structured-log emission (no secret material) | Reviewed; warp emits only public envelope metadata |
 | **`luxfi/pq`** | The single posture gate `pq.ValidateMode` + `pq.Mode` enum | This module; the entire gate is 16 lines (`gate.go`) |
@@ -59,7 +60,7 @@ validator-set snapshot, mode) → (nil | error).
 | **Validator key custody** | Operator's HSM / KMS for BLS / ML-DSA / threshold-share material | Not warp's responsibility; operator runbook in `DEPLOYMENT-RUNBOOK.md` |
 | **Source-chain validator set integrity** | Source chain's consensus protocol + slashing rules | Inherited from `luxfi/consensus`; out of scope for warp |
 | **Destination-chain validator-set registry** | Destination chain's record of source-chain GroupKey lineage | Implemented as a contract; `pulsar.GroupKeyResolver` interface |
-| **Time / timestamp source** | Source chain's wall-clock for replay-window decisions | Out of scope; warp's replay protection is content-addressed (`UnsignedMessage.ID()`) |
+| **Time / timestamp source** | Source chain's wall-clock for replay-window decisions | Out of scope; warp's replay protection is content-addressed (`Message.ID()` = `D`) |
 | **Network transport** | ZAP (or other transporter) integrity / authenticity guarantees | See `TRANSPORT.md`; ZAP carries warp envelopes verbatim |
 
 ## §5 Out-of-scope (NOT in the warp TCB)
@@ -81,25 +82,28 @@ minimizing:
    verification is a pure function of input bytes.
 
 2. **No mutable global state** in the warp root package —
-   `EnvelopeV2` is a value type; the registry is constructed per
+   `Envelope` is a value type; the registry is constructed per
    caller; the posture gate is a stateless function.
 
 3. **Single sentinel error** for the strict-PQ refusal
    (`pq.ErrClassicalAuthForbidden`) — audit pipelines grep ONE
    identifier across every refusal site.
 
-4. **Domain-separation tags pinned in source** — three constants
-   (`"WARP-PULSAR-ENVELOPE-v1"`, `"lux-warp-cross-chain-v1"`,
-   `"QUASAR-PULSAR-BUNDLE-v1"`) live in three named-and-tested
-   places; the tags are wire-stable across versions.
+4. **Domain-separation tags pinned in source** — the per-lane DST
+   constants (`"LUX-WARP-ZAP-CORE-v1"`, `"LUX-WARP-ZAP-BEAM-v1"`,
+   `"LUX-WARP-ZAP-PULSE-v1"`, `"LUX-WARP-ZAP-MLDSA-v1"`) live in
+   `codec.go` and are tested (`TestLaneSigningBytesDistinct`); they
+   are distinct from the consensus-side `"QUASAR-PULSAR-BUNDLE-v1"`.
 
-5. **Fuzz-tested decoders** — `FuzzWarpEnvelopeV2`,
-   `FuzzSignatureSchemeLegParser`, `FuzzCorruptedMLDSACertSet`,
-   and `FuzzBLSAggregateCert` exercise the byte-input surface.
+5. **Fuzz-tested decoders** — `FuzzEnvelope`, `FuzzEnvelopeRaw`,
+   `FuzzZapReader`, `FuzzSignatureSchemeLegParser`,
+   `FuzzCorruptedMLDSACertSet`, and `FuzzBeamCodec` exercise the
+   byte-input surface.
 
-6. **No reflection-driven serialization** — RLP framing is
-   explicit (`EncodeRLP` / `DecodeRLP` methods) so the field
-   count and order are wire-stable across Go reflection changes.
+6. **No reflection-driven serialization** — ZAP framing is
+   explicit (the `append*` / `zapReader` primitives in `zap.go`) so
+   the field count and order are wire-stable; there is no reflection
+   path and no struct-tag dependence.
 
 ## §7 What an auditor mapping the warp TCB should do
 

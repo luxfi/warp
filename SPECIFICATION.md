@@ -1,8 +1,16 @@
-# Warp Message Format Specification
+# Warp ZAP Message Format Specification
 
-This document is the normative wire-format spec for Warp 1.x and
-Warp 2.0. The Go canonical at this commit is the byte oracle; ports
-to other languages MUST produce byte-equal serialisation.
+This document is the normative wire-format spec for Lux Warp. The Go
+canonical at this commit is the byte oracle; ports to other languages
+MUST produce byte-equal serialisation.
+
+There is exactly ONE codec (the ZAP canonical-TLV profile), exactly
+ONE signing digest (`D`), and exactly ONE envelope (`Envelope`). No
+RLP, no codec version, no `v1`/`v2` split, no cross-version
+dispatcher. ZAP replaces the legacy RLP `UnsignedMessage` / `Message`
+/ `EnvelopeV2` layering of the Avalanche Subnet Warp Messaging
+lineage (see "Legacy" below); the legacy bytes are rejected, not
+parsed.
 
 **Posture default**: PQ-native. The reference signature registry
 (`signature.NewPQNativeRegistry`) is the canonical entrypoint
@@ -11,224 +19,292 @@ and refuses classical primitives without an explicit
 for the policy and `PQ_PROFILES.md` for the chain-level posture
 taxonomy.
 
-## Table of versions
+## The two types
 
-| Version | Envelope | Lanes | Status |
+| Type | Role | Constructor / parser | Canonical bytes |
 |---|---|---|---|
-| 1.x | bare RLP `Message` | Beam (BLS aggregate) | shipping |
-| 2.0 | `0x02` + RLP `EnvelopeV2` | Beam + ML-DSA cert set + Pulse | shipping (Tier A) |
-| Private | `0x02` + envelope w/ FHE payload | FHE ciphertext + Pulse | production-research |
+| `Message` | the signed subject — the value whose digest `D` validators sign | `NewMessage` / `ParseMessage` | `Message.Bytes()` (= `zap_c14n(Message)`) |
+| `Envelope` | the complete signed wire object — a `Message` plus its three signature lanes | `NewEnvelope` / `ParseEnvelope` | `Envelope.Bytes()` |
+
+`Message` folds the former `UnsignedMessage` body (NetworkID,
+SourceChainID, Payload) together with the Pulsar PQ lineage
+(SourceNebulaRoot, SourceKeyEraID, SourceGeneration, HashSuiteID)
+that the legacy design carried only on the envelope. Folding the
+lineage into the signed subject means EVERY lane — the classical BLS
+Beam included — authenticates it via `D`. Under the legacy split the
+Beam signed only the unsigned body and the lineage was
+Beam-unauthenticated.
+
+## The ZAP canonical profile
+
+ZAP is a total-order canonical TLV codec: a given struct value has
+exactly one byte encoding, and decode rejects any byte stream that is
+not in canonical form. That property is what makes the encoding safe
+to use as a signing domain — every byte is committed and there is no
+malleability lane (no pointers, padding, flags, varints, or maps).
+
+Canonicality rules (enforced by `zap.go`):
+
+1. Integers are fixed-width big-endian (`u8`/`u16`/`u32`/`u64`). No varints.
+2. Every variable-length field is framed with a `u32` big-endian length
+   prefix followed by exactly that many bytes.
+3. Fixed-width arrays (`[20]`/`[32]`/`[96]`) are written raw, with no length.
+4. Every field is always present. An absent optional lane is the
+   `u32(0)` empty frame, never an omitted field.
+5. Booleans are exactly `0x00` or `0x01`; any other byte is rejected.
+6. The Signers bitset is trim-canonical: no trailing zero byte. A
+   bitset whose final byte is zero is non-canonical (two encodings for
+   one set) — trimmed on encode, rejected on decode.
+7. Decode rejects trailing bytes: the cursor MUST land exactly on the
+   end of the buffer (`offset == len`).
+8. The envelope wire stream begins with the 5-byte magic
+   `"LWZP"‖0x01`. Legacy RLP bytes (lead `0xc0..0xff`) and the legacy
+   `0x02` envelope byte are rejected at the magic check; ZAP bytes are
+   rejected by an RLP decoder (`'L'` = `0x4c` is below RLP's `0xc0`
+   list floor).
 
 ## Common types
 
-### UnsignedMessage
+### Message
+
+The `Message` canonical encoding (`Message.Bytes()` == `zap_c14n`):
 
 ```
-UnsignedMessage = [
-    NetworkID      uint32,
-    SourceChainID  ids.ID (32 bytes),
-    Payload        bytes
-]
+Message c14n =
+    Kind             u8  (0x01)            // ZAP message kind
+    NetworkID        u32 big-endian
+    SourceChainID    [32] raw
+    SourceNebulaRoot [32] raw
+    SourceKeyEraID   u64 big-endian
+    SourceGeneration u64 big-endian
+    HashSuiteID      u32-len ‖ utf8
+    Payload          u32-len ‖ bytes
 ```
 
-`MaxMessageSize` is 256 KiB — the marshalled `UnsignedMessage` MUST
-fit in this bound. `UnsignedMessage.ID()` is `SHA-256(Marshal(self))`
-truncated to 32 bytes; this ID is the destination-chain replay-
-protection key, identical across Warp 1.x and Warp 2.0 wrappings of
-the same message.
+`MaxMessageSize` is 256 KiB — the marshalled `Message` MUST fit in
+this bound. There is NO sign-time defaulting inside the codec: a
+`Message`'s `HashSuiteID` MUST be resolved to a concrete value
+(`DefaultHashSuiteID` = `"Pulsar-SHA3"`) before it is marshaled or
+signed. `Message.Bytes()` is total-order canonical, so re-marshaling
+a decoded `Message` reproduces the exact bytes.
 
-### BitSetSignature
+### The digest D
 
-```
-BitSetSignature = [
-    Signers     Bits (variable-length packed bitmap),
-    Signature   [96]byte (BLS12-381 aggregate)
-]
-```
-
-`Bits` is a packed little-endian bitmap with no length prefix
-(receivers infer length from the RLP framing).
-
-## Warp 1.x envelope
+`D` is the single signed digest (the "Prism" transcript): the
+`Message` ID, the destination-chain replay-protection key, and the
+on-chain `messageHash`, all at once.
 
 ```
-Message (Warp 1.x) = RLP[
-    UnsignedMessage,
-    SignatureType uint8 (always 0 for BitSetSignature),
-    BitSetSignature
-]
+D = keccak256( "LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(Message) )
 ```
 
-`Message.Bytes()` is the canonical wire form. Verification (per
-`VerifyMessage`):
+`Message.ID()` returns `D`. `Envelope.ID()` returns the SAME `D`
+(recomputed from the embedded `Message`, never sliced out of the
+wire). The domain tag `"LUX-WARP-ZAP-CORE-v1"` is a FROZEN wire
+constant: the type is named `Message`, but the v1 domain tag retains
+the word `CORE`.
 
-1. Marshal-roundtrip the unsigned portion; reject if size >
-   `MaxMessageSize`.
-2. Resolve `(SourceChainID, currentHeight)` to a canonical validator
-   set + total weight.
-3. Compute signed weight from `Signers` over the canonical set.
-4. Reject unless `signedWeight / totalWeight >= QuorumNum / QuorumDen`.
-5. Aggregate the public keys of the bit-set signers, verify the BLS
-   aggregate against `Message.UnsignedMessage.Bytes()`.
+`keccak256` is Ethereum's keccak256 —
+`golang.org/x/crypto/sha3.NewLegacyKeccak256` (Keccak padding
+`0x01`), NOT NIST SHA3-256 (pad `0x06`) and NOT `crypto/sha256`. The
+on-chain `keccak256` opcode computes exactly this, so `D` matches
+byte-for-byte between Go and Solidity.
 
-## Warp 2.0 envelope
+Because `D` is computed over the full `Message` c14n — including
+SourceNebulaRoot, SourceKeyEraID, SourceGeneration, and the
+length-prefixed HashSuiteID — every transcript field is bound into
+`D`, and therefore into every lane that signs `D`. A suite-renaming
+attack cannot collide with a suffix-bytes attack: `HashSuiteID` is
+length-prefixed, not merely concatenated.
 
-```
-v2 wire = 0x02 || RLP[
-    Message,                          // v1 Beam carrier (unchanged)
-    SourceNebulaRoot   [32]byte,
-    SourceKeyEraID     uint64,
-    SourceGeneration   uint64,
-    HashSuiteID        string,
-    PulsarPulse        bytes (optional; zero-length when absent),
-    MLDSACertSet       bytes (optional; zero-length when absent)
-]
-```
+### Per-lane signing bytes
 
-The leading `0x02` byte is the version discriminator. RLP lists in
-the wild start at `0xc0` or higher, so a single-byte test is
-unambiguous. Senders MUST emit `0x02` before the RLP body; receivers
-MUST reject any version byte they do not recognise.
-
-`HashSuiteID` defaults to `"Pulsar-SHA3"` when empty. The empty value
-on the wire is the canonical indicator of the default suite — senders
-MAY omit it, receivers MUST treat it as the default.
-
-Optional lanes (`PulsarPulse`, `MLDSACertSet`) are zero-length byte
-slices when absent. The field count in the RLP list is fixed at 7;
-forward compatibility is achieved through the version byte and a
-future `0x03` envelope, not through trailing-field tolerance.
-
-### Transcript binding (Pulse)
-
-The Pulsar Pulse signs the byte stream produced by
-`pulsar.BuildSigningBytes`:
+Each lane signs the SAME `D` under its OWN domain-separation tag, so
+a signature in one lane can never be replayed into another (BLS
+objects vs lattice objects are already non-interchangeable; the
+distinct tags close the door regardless):
 
 ```
-signing_bytes =
-    "WARP-PULSAR-ENVELOPE-v1"            ||
-    SourceChainID            (32 bytes)  ||
-    SourceNebulaRoot         (32 bytes)  ||
-    SourceKeyEraID           (8 bytes BE) ||
-    SourceGeneration         (8 bytes BE) ||
-    uint32-BE(len(HashSuiteID))          ||
-    HashSuiteID                          ||
-    uint32-BE(len(UnsignedMessage_bytes)) ||
-    UnsignedMessage_bytes
+BeamSigningBytes(D)  = "LUX-WARP-ZAP-BEAM-v1"  ‖ D
+PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1" ‖ D
+MLDSASigningBytes(D) = "LUX-WARP-ZAP-MLDSA-v1" ‖ D
 ```
 
-`UnsignedMessage_bytes` is `env.Message.UnsignedMessage.Bytes()` — the
-unsigned portion only, NOT the BLS signature. The Beam is verified
-independently and does not contaminate the PQ transcript.
+A validator signs e.g. `BeamSigningBytes(D)`; the verifier recomputes
+`D` from the `Message` and checks the signature over the same bytes.
 
-The `WARP-PULSAR-ENVELOPE-v1` prefix is distinct from any Pulsar
-consensus-side prefix (`QUASAR-PULSAR-BUNDLE-v1`, etc., see LP-073
-§"Domain-separated message prefixes"). Re-using a prefix across
-domains would let a Pulse over a Quasar bundle root be replayed as a
-Pulse over a Warp envelope — explicitly rejected.
-
-### MLDSACertSet context binding
-
-When the source chain produces the `MLDSACertSet` lane, every
-per-validator ML-DSA-65 (FIPS 204) signature MUST be produced
-under the canonical context string:
+### BitSetSignature (the Beam lane)
 
 ```
-ctx = "lux-warp-cross-chain-v1"
+BitSetSignature =
+    Signers     u32-len ‖ trim-canonical bitset bytes
+    Signature   [96] raw (BLS12-381 aggregate)
 ```
 
-This corresponds to `signature.SignContextWarpV1` in the Go
-reference. The context binding follows FIPS 204 §5.2: the
-signer's `Sign(sk, M, ctx)` call uses `ctx` as the context-string
-argument, not as part of the message `M`. A signature produced
-under any other context (including an empty context) is REFUSED
-by the destination's verifier as a domain-separation violation.
+The bitset selects, by canonical validator index, the public keys
+that aggregate to `Signature`. The Beam verifies over
+`BeamSigningBytes(D)`, so it authenticates the entire `Message`
+(including the PQ lineage), not just the message body.
 
-The same rule applies to SLH-DSA (FIPS 205) signatures per
-FIPS 205 §10.2.
-
-This tag is DISTINCT from the Pulse lane's `SigningPrefix`
-(`"WARP-PULSAR-ENVELOPE-v1"`) and from the Pulsar consensus-side
-prefix (`"QUASAR-PULSAR-BUNDLE-v1"`). The three tags partition the
-signature domain into:
-
-- ML-DSA-65 cross-chain envelope attestations (this tag).
-- Pulsar R-LWE threshold pulses (WARP-PULSAR-ENVELOPE-v1).
-- Pulsar consensus-bundle pulses (QUASAR-PULSAR-BUNDLE-v1).
-
-A signature on any of these contexts cannot replay as a
-signature on either of the other two.
-
-### PulsarPulse byte format
-
-The `PulsarPulse` field carries the concatenation of three length-
-prefixed lattice-signature components:
+## Envelope wire format
 
 ```
-PulsarPulse =
-    uint32 LE(len(C_bytes))         || C_bytes
-    uint32 LE(len(Z_bytes))         || Z_bytes
-    uint32 LE(len(Delta_bytes))     || Delta_bytes
+Envelope wire =
+    Magic         "LWZP" ‖ 0x01        (5 bytes)
+    Kind          u8 (0x02)            // ZAP envelope kind
+    Message       <Message c14n>       // begins with its own 0x01 kind byte
+    Beam          <BitSetSignature>
+    PulseSig      u32-len ‖ bytes      // empty u32(0) frame when absent
+    MLDSACertSet  u32-len ‖ bytes      // empty u32(0) frame when absent
 ```
 
-where `C_bytes`, `Z_bytes`, `Delta_bytes` are the lattigo `WriteTo`
+All four lanes are ALWAYS present on the wire. Absence of a PQ lane
+is the empty `u32(0)` frame, not an omitted field — the field count
+is fixed. `Envelope.Bytes()` is the canonical wire form; the total
+size MUST stay within `MaxEnvelopeSize` (4 × 256 KiB, leaving room
+for the Pulse and the ML-DSA cert set alongside the message and
+Beam).
+
+`ParseEnvelope` rejects: a bad/absent magic, the wrong kind byte, a
+non-canonical (trailing-zero) Signers bitset, a malformed `Message`,
+and any trailing bytes.
+
+### Beam lane (classical, always present)
+
+BLS12-381 aggregate over `BeamSigningBytes(D)`. Verification (per
+`VerifyEnvelope`):
+
+1. Structural `Verify()`; reject if the message or envelope exceeds
+   its size bound.
+2. Reject unless `Envelope.Message.NetworkID == networkID`.
+3. Resolve `Message.SourceChainID` to a canonical validator set +
+   total weight.
+4. Compute signed weight from `Signers` over the canonical set.
+5. Reject unless `signedWeight / totalWeight >= QuorumNum / QuorumDen`.
+6. Aggregate the public keys of the bit-set signers, verify the BLS
+   aggregate against `BeamSigningBytes(Message.ID())`.
+
+### Pulse lane (Pulsar / Corona R-LWE threshold, optional)
+
+The `PulseSig` field carries a Corona/Pulsar threshold signature,
+serialised as three length-prefixed lattice-signature components:
+
+```
+PulseSig =
+    uint32 LE(len(C_bytes))     ‖ C_bytes
+    uint32 LE(len(Z_bytes))     ‖ Z_bytes
+    uint32 LE(len(Delta_bytes)) ‖ Delta_bytes
+```
+
+where `C_bytes`, `Z_bytes`, `Delta_bytes` are the lattice `WriteTo`
 streams of the kernel `Signature`'s `C` (`ring.Poly`), `Z`
 (`structs.Vector[ring.Poly]`), and `Delta`
-(`structs.Vector[ring.Poly]`) fields — see LP-073 §5 for the lattice
-serialisation. The 12 bytes of length prefixes are the only delta
-versus a raw concatenation.
+(`structs.Vector[ring.Poly]`) fields — see LP-073 §5. The 12 bytes
+of LE length prefixes inside `PulseSig` are the only delta versus a
+raw concatenation; they are little-endian to keep the Pulse interior
+uniform with the lattice `WriteTo` streams.
 
-### Verification order (Warp 2.0)
+The Pulse is verified over `PulseSigningBytes(D)` by
+`pulsar.KernelVerifier`, which implements the root package's
+`PulseVerifier` interface. The verifier:
 
-`VerifyV2` checks lanes in order:
+1. Confirms the envelope carries a non-empty Pulse.
+2. Resolves the source-chain GroupKey + HashSuite for
+   `(SourceChainID, SourceKeyEraID, SourceGeneration)` via a
+   `pulsar.GroupKeyResolver` — a destination-chain contract that
+   records the source's GroupKey lineage as it evolves through
+   Bootstrap, Reshare, and Reanchor events (LP-073
+   §"Key-Era Lifecycle").
+3. Confirms the resolver-supplied suite matches the envelope's
+   resolved `HashSuiteID`.
+4. Recomputes `D` from the `Message` and verifies the threshold
+   signature over `PulseSigningBytes(D)`.
 
-1. `EnvelopeV2.Verify()` — embedded v1 message present + well-formed,
-   optional-lane bytes within `MaxEnvelopeV2Size`.
-2. Hash-suite consistency (when caller pins `HashSuiteID` in opts).
-3. Beam: same v1 verification path as Warp 1.x.
-4. ML-DSA cert set: `MLDSACertSetVerifier.VerifyCertSet`, when
-   configured.
-5. Pulsar Pulse: `PulseVerifier.VerifyPulse`, when configured.
+Because `D` already folds in SourceNebulaRoot, SourceKeyEraID,
+SourceGeneration, HashSuiteID, SourceChainID, NetworkID, and Payload,
+verifying the Pulse over `PulseSigningBytes(D)` binds the Pulse to
+every one of them — no separate transcript-binding step is required.
 
-Required-but-absent lanes return an error. A lane present without a
-configured verifier is accepted (the caller chose to ignore that
-lane).
+### MLDSACertSet lane (ML-DSA-65 attestations, optional)
 
-## Compatibility
+The `MLDSACertSet` field carries N independent per-validator ML-DSA-65
+(FIPS 204) attestations (or a Z-Chain Groth16 rollup over them). Each
+attestation is produced over `MLDSASigningBytes(D)` and verified by a
+caller-supplied `MLDSACertSetVerifier`.
 
-| Sender → Receiver | Behaviour |
-|---|---|
-| v1 → v1 | Standard Warp 1.x. |
-| v1 → v2 | `ParseEnvelope` decodes; lifts to `EnvelopeV2` with PQ lanes empty. |
-| v2 → v1 | v1 receiver rejects (leading `0x02` is not RLP). Senders MUST emit Warp 1.x bytes for v1-only verifiers. |
-| v2 → v2 | Standard Warp 2.0. |
+FIPS 204 has no native aggregation primitive: the cert set is N
+independent attestations and the wire-byte cost scales linearly with
+N. The signature registry additionally binds the FIPS 204 §5.2
+context string `SignContextWarpV1 = "lux-warp-cross-chain-v1"` into
+each per-validator ML-DSA-65 / SLH-DSA signature at the scheme layer.
+The same FIPS 205 §10.2 rule applies to SLH-DSA.
 
-Replay protection is uniform: `EnvelopeV2.ID() == Message.ID()` for
-the same `UnsignedMessage`. Destination-chain dedup tables work
-across versions.
+### Verification order
+
+`VerifyWithOptions` checks lanes in order:
+
+1. `Envelope.Verify()` — message well-formed; optional-lane bytes
+   within `MaxEnvelopeSize`.
+2. Hash-suite consistency (when the caller pins `HashSuiteID` in opts).
+3. Beam: `VerifyEnvelope` (unless `SkipBeam`).
+4. ML-DSA cert set: `MLDSACertSetVerifier.VerifyCertSet`, when configured.
+5. Pulse: `PulseVerifier.VerifyPulse`, when configured.
+
+`Require*` options demand a lane be present, a verifier be configured,
+and verification succeed. A lane present without a configured verifier
+is accepted (the caller chose to ignore that lane). `VerifyPQLanes`
+runs only the PQ-lane checks (skipping the Beam), for receivers that
+have already verified the Beam separately.
+
+## Legacy
+
+ZAP replaces the legacy RLP `UnsignedMessage` / `Message` /
+`EnvelopeV2` layering inherited from the Avalanche Subnet Warp
+Messaging lineage. There is NO backward compatibility and NO
+cross-version dispatch:
+
+- Legacy RLP bytes (a bare RLP list, lead `0xc0..0xff`) are rejected
+  at the ZAP magic check.
+- The legacy `0x02`-prefixed `EnvelopeV2` byte is rejected at the
+  same check.
+- Conversely, ZAP bytes (lead `'L'` = `0x4c`) are rejected by an RLP
+  decoder, since `0x4c` is below RLP's `0xc0` list floor.
+
+A sender targeting a legacy-only verifier MUST speak the legacy
+protocol on a legacy channel; the ZAP wire is forward-only.
 
 ## Encoding
 
-Both envelopes use the existing RLP codec (`Codec`,
-`github.com/luxfi/geth/rlp`). All multi-byte ints are big-endian
-inside RLP; lattigo `WriteTo` streams (Pulse interior) are
-little-endian per LP-073 §5. The 12-byte length prefixes inside
-`PulsarPulse` are little-endian to keep the Pulse interior uniform.
+The codec is the in-package ZAP profile (`zap.go`); the root `warp`
+package imports no RLP and no external serialization framework. All
+multi-byte integers in the ZAP framing are big-endian. The lattice
+`WriteTo` streams inside `PulseSig`, and the 12-byte length prefixes
+that frame them, are little-endian per LP-073 §5.
 
 ## Constants
 
 | Name | Value | Purpose |
 |---|---|---|
-| `MaxMessageSize` | 256 KiB | Per-`UnsignedMessage` bound |
-| `MaxEnvelopeV2Size` | 4 × 256 KiB | Per-envelope bound (room for Pulse + cert set) |
-| `EnvelopeVersion1` | 0x01 | Documentary (no on-wire byte for Warp 1.x) |
-| `EnvelopeVersion2` | 0x02 | Leading byte for Warp 2.0 |
-| `DefaultHashSuiteID` | `"Pulsar-SHA3"` | Default when `HashSuiteID` is empty |
-| `SigningPrefix` | `"WARP-PULSAR-ENVELOPE-v1"` | Pulse domain-separation tag |
+| `wireMagic` | `"LWZP" ‖ 0x01` | 5-byte envelope wire prefix (Lux Warp Zap Protocol, format v1) |
+| message kind | `0x01` | First byte of a `Message` c14n stream |
+| envelope kind | `0x02` | Envelope kind byte (follows the magic) |
+| `MaxMessageSize` | 256 KiB | Per-`Message` canonical-encoding bound |
+| `MaxEnvelopeSize` | 4 × 256 KiB | Per-`Envelope` wire bound (room for Pulse + cert set) |
+| `DefaultHashSuiteID` | `"Pulsar-SHA3"` | `HashSuiteID` resolution target (no sign-time defaulting) |
+| `messageDST` | `"LUX-WARP-ZAP-CORE-v1"` | Digest `D` domain tag (FROZEN) |
+| `beamDST` | `"LUX-WARP-ZAP-BEAM-v1"` | Beam lane domain tag |
+| `pulseDST` | `"LUX-WARP-ZAP-PULSE-v1"` | Pulse lane domain tag |
+| `mldsaDST` | `"LUX-WARP-ZAP-MLDSA-v1"` | ML-DSA cert-set lane domain tag |
 
 ## Reference implementation
 
-* Go (canonical): `github.com/luxfi/warp` (this module).
+* Go (canonical): `github.com/luxfi/warp` (this module). Wire codec
+  in `zap.go`; domain constants + `D` construction in `codec.go`;
+  `Message` in `message.go`; `Envelope` in `envelope.go`; Beam in
+  `signature.go`; Pulse wiring in `pulsar/`.
+* KAT oracle: `cmd/envelope_kat_oracle/` regenerates
+  `scripts/kat/envelope_kat.json`; the wire-stability test
+  `TestE2E_KAT_PQEnvelope_WireBytesStable` refuses any drift.
 * Rust port: planned at `lux_warp` after the Go canonical's KAT
   manifest is pinned.
 * TypeScript port: `@luxfi/warp` for browser / SDK consumers; Beam
@@ -236,8 +312,8 @@ little-endian per LP-073 §5. The 12-byte length prefixes inside
 
 ## References
 
-* LP-021 — Warp 1.x classical messaging.
-* LP-021v2 — Warp 2.0 hybrid envelope (this spec).
+* LP-021 — Warp classical Beam-only cross-chain messaging (legacy lineage).
+* LP-021v2 — Warp hybrid envelope (this spec).
 * LP-073 — Pulsar lattice threshold kernel.
 * LP-075 — BLS aggregate (Beam).
 * LP-105 §"Warp evolution" — vocabulary and lane composition.
