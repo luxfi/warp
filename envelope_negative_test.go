@@ -1,9 +1,9 @@
 // Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// envelope_negative_test.go — transcript-binding tests over the SignedCore
+// envelope_negative_test.go — transcript-binding tests over the Core
 // fields the digest D commits to. Under the ZAP fork the signed subject is
-// D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(SignedCore)); folding the
+// D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(Core)); folding the
 // PQ lineage into the core means every lane (BLS Beam included) binds it.
 // For each transcript field we mutate the core and assert:
 //
@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func negCoreFixture(t *testing.T) *SignedCore {
+func negCoreFixture(t *testing.T) *Core {
 	t.Helper()
-	return &SignedCore{
+	return &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE},
@@ -35,12 +35,12 @@ func negCoreFixture(t *testing.T) *SignedCore {
 
 // honestVerifier models a real lane verifier under an unchanged key: it
 // accepts iff the candidate core's D equals the baseline's.
-func honestVerifier(baseline *SignedCore) func(c *SignedCore) bool {
+func honestVerifier(baseline *Core) func(c *Core) bool {
 	d := baseline.ID()
-	return func(c *SignedCore) bool { return c.ID() == d }
+	return func(c *Core) bool { return c.ID() == d }
 }
 
-func negMutateField(t *testing.T, base *SignedCore, field string) *SignedCore {
+func negMutateField(t *testing.T, base *Core, field string) *Core {
 	t.Helper()
 	c := *base
 	switch field {

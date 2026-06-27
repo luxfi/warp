@@ -64,7 +64,7 @@ func makeValidators(t *testing.T, n int) ([]*Validator, []*bls.SecretKey, Valida
 // Beam domain, VerifyEnvelope accepts.
 func TestBeamEndToEndVerify(t *testing.T) {
 	vdrs, sks, vs := makeValidators(t, 4)
-	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("beam-e2e"))
+	core, err := NewCore(1, ids.ID{0xA1}, []byte("beam-e2e"))
 	require.NoError(t, err)
 
 	env, err := SignMessage(core, []*bls.SecretKey{sks[0], sks[2]}, vdrs)
@@ -76,7 +76,7 @@ func TestBeamEndToEndVerify(t *testing.T) {
 	// Wire round-trip preserves verifiability.
 	wire, err := env.Bytes()
 	require.NoError(t, err)
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	require.NoError(t, VerifyEnvelope(parsed, 1, vs, 1, 2))
 }
@@ -88,7 +88,7 @@ func TestBeamEndToEndVerify(t *testing.T) {
 // rejected at the magic) is in envelope_test.go.
 func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 	vdrs, sks, vs := makeValidators(t, 4)
-	core, err := NewSignedCore(1, ids.ID{0xB2}, []byte("legacy-domain"))
+	core, err := NewCore(1, ids.ID{0xB2}, []byte("legacy-domain"))
 	require.NoError(t, err)
 
 	// Forge over the OLD domain (the bare unsigned-message bytes).
@@ -105,7 +105,7 @@ func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 	signers.Add(2)
 	var sigb [bls.SignatureLen]byte
 	copy(sigb[:], bls.SignatureToBytes(agg))
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, vdrs)
 
@@ -117,9 +117,9 @@ func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 // wrapped around this core.
 func TestBeamRejectsForeignDigest(t *testing.T) {
 	_, sks, vs := makeValidators(t, 4)
-	core, err := NewSignedCore(1, ids.ID{0xC3}, []byte("real"))
+	core, err := NewCore(1, ids.ID{0xC3}, []byte("real"))
 	require.NoError(t, err)
-	other, err := NewSignedCore(1, ids.ID{0xC3}, []byte("other"))
+	other, err := NewCore(1, ids.ID{0xC3}, []byte("other"))
 	require.NoError(t, err)
 
 	bm := BeamSigningBytes(other.ID())
@@ -135,7 +135,7 @@ func TestBeamRejectsForeignDigest(t *testing.T) {
 	signers.Add(1)
 	var sigb [bls.SignatureLen]byte
 	copy(sigb[:], bls.SignatureToBytes(agg))
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
 	require.NoError(t, err)
 
 	require.ErrorIs(t, VerifyEnvelope(env, 1, vs, 1, 2), ErrInvalidSignature)

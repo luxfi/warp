@@ -57,10 +57,10 @@ func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*corona.
 	return sig, gk
 }
 
-// envFixture builds a WarpEnvelope with the given Pulsar lineage.
-func envFixture(t *testing.T, eraID, generation uint64) *warp.WarpEnvelope {
+// envFixture builds a Envelope with the given Pulsar lineage.
+func envFixture(t *testing.T, eraID, generation uint64) *warp.Envelope {
 	t.Helper()
-	core := &warp.SignedCore{
+	core := &warp.Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xC1, 0xC2, 0xC3, 0xC4},
 		SourceKeyEraID:   eraID,
@@ -73,7 +73,7 @@ func envFixture(t *testing.T, eraID, generation uint64) *warp.WarpEnvelope {
 	signers.Add(2)
 	var sigBytes [bls.SignatureLen]byte
 	copy(sigBytes[:], bytes.Repeat([]byte{0xAB}, bls.SignatureLen))
-	env, err := warp.NewWarpEnvelope(core, warp.NewBitSetSignature(signers, sigBytes), nil, nil)
+	env, err := warp.NewEnvelope(core, warp.NewBitSetSignature(signers, sigBytes), nil, nil)
 	require.NoError(t, err)
 	return env
 }
@@ -165,16 +165,16 @@ func TestPulseSigningBytesBindsAllTranscriptFields(t *testing.T) {
 	env.Core.SourceNebulaRoot = [32]byte{0x01, 0x02}
 	base := warp.PulseSigningBytes(env.Core.ID())
 
-	mutate := func(f func(c *warp.SignedCore)) []byte {
+	mutate := func(f func(c *warp.Core)) []byte {
 		c := env.Core
 		f(&c)
 		return warp.PulseSigningBytes(c.ID())
 	}
-	require.NotEqual(t, base, mutate(func(c *warp.SignedCore) { c.SourceKeyEraID = 8 }))
-	require.NotEqual(t, base, mutate(func(c *warp.SignedCore) { c.SourceGeneration = 12 }))
-	require.NotEqual(t, base, mutate(func(c *warp.SignedCore) { c.SourceNebulaRoot = [32]byte{0x99} }))
-	require.NotEqual(t, base, mutate(func(c *warp.SignedCore) { c.HashSuiteID = "Pulsar-SHA3-other" }))
-	require.NotEqual(t, base, mutate(func(c *warp.SignedCore) { c.Payload = append([]byte("X"), c.Payload...) }))
+	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceKeyEraID = 8 }))
+	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceGeneration = 12 }))
+	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceNebulaRoot = [32]byte{0x99} }))
+	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.HashSuiteID = "Pulsar-SHA3-other" }))
+	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.Payload = append([]byte("X"), c.Payload...) }))
 }
 
 // TestPulseSigningBytesPrefix proves the Pulse subject carries the

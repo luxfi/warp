@@ -15,23 +15,23 @@ import (
 // TLV mechanism in zap.go. There is exactly ONE codec (ZAP) and exactly
 // ONE signing digest (D). No RLP, no codec version, no type registry.
 
-// Kind discriminators. zapKindSignedCore is the first byte of a SignedCore
-// c14n stream; kindWarpEnvelope is the envelope kind byte that follows the
-// wire magic. They are distinct so a SignedCore can never be mistaken for
+// Kind discriminators. zapKindCore is the first byte of a Core
+// c14n stream; kindEnvelope is the envelope kind byte that follows the
+// wire magic. They are distinct so a Core can never be mistaken for
 // a full envelope and vice-versa.
 const (
-	zapKindSignedCore byte = 0x01
-	kindWarpEnvelope  byte = 0x02
+	zapKindCore  byte = 0x01
+	kindEnvelope byte = 0x02
 )
 
-// Size limits. MaxMessageSize bounds a SignedCore's canonical encoding;
+// Size limits. MaxMessageSize bounds a Core's canonical encoding;
 // MaxEnvelopeSize bounds the full envelope (core + Beam + the two PQ
 // lanes). Both are hard ceilings checked at the decode boundary.
 const (
-	// MaxMessageSize is the maximum canonical SignedCore size.
+	// MaxMessageSize is the maximum canonical Core size.
 	MaxMessageSize = 256 * KiB
 
-	// MaxEnvelopeSize is the maximum WarpEnvelope wire size. Bounded at
+	// MaxEnvelopeSize is the maximum Envelope wire size. Bounded at
 	// 4×MaxMessageSize to leave room for the Pulse (~33 KB) and the
 	// ML-DSA cert set alongside the core and Beam.
 	MaxEnvelopeSize = 4 * MaxMessageSize
@@ -45,7 +45,7 @@ var (
 	ErrInsufficientWeight = errors.New("insufficient weight")
 )
 
-// Domain-separation tags. D = keccak256(coreDST ‖ zap_c14n(SignedCore))
+// Domain-separation tags. D = keccak256(coreDST ‖ zap_c14n(Core))
 // is the single signed digest (the "Prism" transcript): message ID,
 // replay key, and on-chain messageHash all at once. Each lane signs the
 // SAME D under its OWN tag, so a signature in one lane can never be
@@ -73,7 +73,7 @@ func keccak256(parts ...[]byte) [32]byte {
 }
 
 // BeamSigningBytes returns the exact bytes the BLS Beam lane signs and
-// verifies: beamDST ‖ D. The Beam now authenticates the full SignedCore
+// verifies: beamDST ‖ D. The Beam now authenticates the full Core
 // (including PQ lineage) rather than only the unsigned message body.
 func BeamSigningBytes(d ids.ID) []byte { return append([]byte(beamDST), d[:]...) }
 

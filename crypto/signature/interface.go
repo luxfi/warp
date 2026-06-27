@@ -13,7 +13,7 @@
 //   - Registry  — the runtime container (Get / SetPreferred / Schemes)
 //   - Config    — the operator-facing posture knob (PQ-only vs PQ+legacy)
 //   - SignContext — the FIPS 204 §5.2 / FIPS 205 §10.2 context-string
-//                   tag bound into every ML-DSA / SLH-DSA signature
+//     tag bound into every ML-DSA / SLH-DSA signature
 //
 // Profile gating (strict-PQ vs hybrid vs classical) lives in
 // github.com/luxfi/pq and applies a SINGLE function across every

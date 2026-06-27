@@ -58,7 +58,7 @@ var ErrNotHorizonFinal = errors.New("warp pulsar: envelope is not Horizon-final"
 // is a classical compatibility / compression / privacy adapter (see
 // IsPQRootOfTrust below); it does not contribute PQ liveness on its
 // own.
-func IsPQFinal(env *warp.WarpEnvelope) bool {
+func IsPQFinal(env *warp.Envelope) bool {
 	if env == nil {
 		return false
 	}
@@ -76,7 +76,7 @@ func IsPQFinal(env *warp.WarpEnvelope) bool {
 // not. Use this in receivers that want to distinguish between
 // "envelope shape OK, signature failed" (returned by VerifyV2) and
 // "envelope shape inadmissible".
-func HorizonFinalErr(env *warp.WarpEnvelope) error {
+func HorizonFinalErr(env *warp.Envelope) error {
 	if env == nil {
 		return ErrNotHorizonFinal
 	}
@@ -101,18 +101,18 @@ func HorizonFinalErr(env *warp.WarpEnvelope) error {
 // proofs/definitions/finality-definitions.tex Definition
 // ref:proof-lane):
 //
-//   "groth16", "groth16-bls12-381", "snark-pairing"
-//     → false. Pairing-based; broken under Shor's algorithm.
+//	"groth16", "groth16-bls12-381", "snark-pairing"
+//	  → false. Pairing-based; broken under Shor's algorithm.
 //
-//   "stark-rescue", "stark-poseidon", "lattice-zk"
-//     → true. Hash- or lattice-based; PQ-friendly assumptions.
+//	"stark-rescue", "stark-poseidon", "lattice-zk"
+//	  → true. Hash- or lattice-based; PQ-friendly assumptions.
 //
-//   "none" or empty string
-//     → true. No wrapper means the underlying signature itself is the
-//     evidence; if that signature is Pulsar / ML-DSA, the PQ
-//     root-of-trust lives in the signature directly.
+//	"none" or empty string
+//	  → true. No wrapper means the underlying signature itself is the
+//	  evidence; if that signature is Pulsar / ML-DSA, the PQ
+//	  root-of-trust lives in the signature directly.
 //
-//   anything else → false (conservative).
+//	anything else → false (conservative).
 //
 // The function is case-insensitive on the system name.
 func IsPQRootOfTrust(provingSystem string) bool {

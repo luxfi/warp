@@ -12,14 +12,14 @@ import (
 	"github.com/luxfi/ids"
 )
 
-// envelope.go — the ONE Warp envelope. WarpEnvelope is the single signed
+// envelope.go — the ONE Warp envelope. Envelope is the single signed
 // message type: there is no UnsignedMessage / Message split, no V1 / V2
 // envelope versions, and no cross-version dispatcher. A receiver has
-// exactly one parser (ParseWarpEnvelope) and one digest (D).
+// exactly one parser (ParseEnvelope) and one digest (D).
 
 // Envelope-shape errors.
 var (
-	// ErrEnvelopeEmpty is returned when ParseWarpEnvelope is given no bytes.
+	// ErrEnvelopeEmpty is returned when ParseEnvelope is given no bytes.
 	ErrEnvelopeEmpty = errors.New("warp envelope is empty")
 
 	// ErrEnvelopeTooLarge is returned when an envelope exceeds MaxEnvelopeSize.
@@ -30,32 +30,32 @@ var (
 	ErrEnvelopeBadSuiteID = errors.New("warp envelope hash-suite mismatch")
 )
 
-// WarpEnvelope is a complete signed Warp message:
+// Envelope is a complete signed Warp message:
 //
-//	wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Core ‖ Beam ‖ PulseSig ‖ MLDSACertSet
+//		wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Core ‖ Beam ‖ PulseSig ‖ MLDSACertSet
 //
-//   - Core         the signed subject (SignedCore); folds PQ lineage.
-//   - Beam         the BLS aggregate over BeamSigningBytes(D).
-//   - PulseSig     optional Pulsar threshold signature bytes (u32(0) frame
-//                  when absent), verified over PulseSigningBytes(D).
-//   - MLDSACertSet optional ML-DSA cert-set bytes (or a Z-Chain Groth16
-//                  rollup), verified over MLDSASigningBytes(D).
+//	  - Core         the signed subject (Core); folds PQ lineage.
+//	  - Beam         the BLS aggregate over BeamSigningBytes(D).
+//	  - PulseSig     optional Pulsar threshold signature bytes (u32(0) frame
+//	                 when absent), verified over PulseSigningBytes(D).
+//	  - MLDSACertSet optional ML-DSA cert-set bytes (or a Z-Chain Groth16
+//	                 rollup), verified over MLDSASigningBytes(D).
 //
 // All four lanes are always present on the wire; absence of a PQ lane is
 // the empty u32(0) frame, not an omitted field.
-type WarpEnvelope struct {
-	Core         SignedCore
+type Envelope struct {
+	Core         Core
 	Beam         BitSetSignature
 	PulseSig     []byte
 	MLDSACertSet []byte
 }
 
-// NewWarpEnvelope assembles and structurally validates an envelope.
-func NewWarpEnvelope(core *SignedCore, beam BitSetSignature, pulse, mldsaCertSet []byte) (*WarpEnvelope, error) {
+// NewEnvelope assembles and structurally validates an envelope.
+func NewEnvelope(core *Core, beam BitSetSignature, pulse, mldsaCertSet []byte) (*Envelope, error) {
 	if core == nil {
 		return nil, fmt.Errorf("%w: nil core", ErrInvalidMessage)
 	}
-	e := &WarpEnvelope{
+	e := &Envelope{
 		Core:         *core,
 		Beam:         beam,
 		PulseSig:     pulse,
@@ -69,7 +69,7 @@ func NewWarpEnvelope(core *SignedCore, beam BitSetSignature, pulse, mldsaCertSet
 
 // Verify checks structural invariants: the core must be well-formed and
 // the total PQ-lane bytes must stay under MaxEnvelopeSize.
-func (e *WarpEnvelope) Verify() error {
+func (e *Envelope) Verify() error {
 	if e == nil {
 		return ErrInvalidMessage
 	}
@@ -83,7 +83,7 @@ func (e *WarpEnvelope) Verify() error {
 }
 
 // Bytes returns the canonical wire encoding of the envelope.
-func (e *WarpEnvelope) Bytes() ([]byte, error) {
+func (e *Envelope) Bytes() ([]byte, error) {
 	if e == nil {
 		return nil, ErrInvalidMessage
 	}
@@ -93,7 +93,7 @@ func (e *WarpEnvelope) Bytes() ([]byte, error) {
 	core := e.Core.marshalZAP()
 	out := make([]byte, 0, len(wireMagic)+1+len(core)+4+len(e.Beam.Signers)+SignatureLen+4+len(e.PulseSig)+4+len(e.MLDSACertSet))
 	out = append(out, wireMagic[:]...)
-	out = appendU8(out, kindWarpEnvelope)
+	out = appendU8(out, kindEnvelope)
 	out = append(out, core...)
 	out = e.Beam.marshalInto(out)
 	out = appendVar(out, e.PulseSig)
@@ -104,10 +104,10 @@ func (e *WarpEnvelope) Bytes() ([]byte, error) {
 	return out, nil
 }
 
-// ParseWarpEnvelope decodes an envelope from its canonical wire bytes. It
+// ParseEnvelope decodes an envelope from its canonical wire bytes. It
 // rejects: a bad/absent magic, the wrong kind byte, a non-canonical
 // Signers bitset, a malformed core, and any trailing bytes.
-func ParseWarpEnvelope(b []byte) (*WarpEnvelope, error) {
+func ParseEnvelope(b []byte) (*Envelope, error) {
 	if len(b) == 0 {
 		return nil, ErrEnvelopeEmpty
 	}
@@ -123,12 +123,12 @@ func ParseWarpEnvelope(b []byte) (*WarpEnvelope, error) {
 	if err != nil {
 		return nil, err
 	}
-	if kind != kindWarpEnvelope {
+	if kind != kindEnvelope {
 		return nil, fmt.Errorf("%w: envelope kind 0x%02x", ErrInvalidMessage, kind)
 	}
 
-	e := &WarpEnvelope{}
-	if e.Core, err = parseSignedCore(r); err != nil {
+	e := &Envelope{}
+	if e.Core, err = parseCore(r); err != nil {
 		return nil, fmt.Errorf("failed to parse signed core: %w", err)
 	}
 	if e.Beam, err = parseBeam(r); err != nil {
@@ -152,28 +152,28 @@ func ParseWarpEnvelope(b []byte) (*WarpEnvelope, error) {
 // ID returns D, the Warp message ID (recomputed from Core, not sliced
 // from the wire). v1/v2 distinctions are gone: there is one ID per
 // message and it is the replay key.
-func (e *WarpEnvelope) ID() ids.ID { return e.Core.ID() }
+func (e *Envelope) ID() ids.ID { return e.Core.ID() }
 
 // GetSourceChainID returns the source chain ID.
-func (e *WarpEnvelope) GetSourceChainID() ids.ID { return e.Core.SourceChainID }
+func (e *Envelope) GetSourceChainID() ids.ID { return e.Core.SourceChainID }
 
 // SourceChainIDHash returns the source chain ID as a common.Hash.
-func (e *WarpEnvelope) SourceChainIDHash() common.Hash {
+func (e *Envelope) SourceChainIDHash() common.Hash {
 	return common.BytesToHash(e.Core.SourceChainID[:])
 }
 
 // HashSuite returns the envelope's resolved hash suite.
-func (e *WarpEnvelope) HashSuite() string { return e.Core.HashSuiteOrDefault() }
+func (e *Envelope) HashSuite() string { return e.Core.HashSuiteOrDefault() }
 
 // HasPulse reports whether the envelope carries a Pulsar pulse.
-func (e *WarpEnvelope) HasPulse() bool { return e != nil && len(e.PulseSig) > 0 }
+func (e *Envelope) HasPulse() bool { return e != nil && len(e.PulseSig) > 0 }
 
 // HasMLDSACertSet reports whether the envelope carries an ML-DSA cert set.
-func (e *WarpEnvelope) HasMLDSACertSet() bool { return e != nil && len(e.MLDSACertSet) > 0 }
+func (e *Envelope) HasMLDSACertSet() bool { return e != nil && len(e.MLDSACertSet) > 0 }
 
 // Equal reports whether two envelopes are byte-equal under canonical
 // serialization.
-func (e *WarpEnvelope) Equal(other *WarpEnvelope) bool {
+func (e *Envelope) Equal(other *Envelope) bool {
 	if e == nil || other == nil {
 		return e == other
 	}
@@ -190,7 +190,7 @@ func (e *WarpEnvelope) Equal(other *WarpEnvelope) bool {
 // classical-path verification: network-ID match, quorum weight, and BLS
 // aggregate over BeamSigningBytes(D).
 func VerifyEnvelope(
-	e *WarpEnvelope,
+	e *Envelope,
 	networkID uint32,
 	validatorState ValidatorState,
 	quorumNum uint64,
@@ -224,13 +224,13 @@ func VerifyEnvelope(
 // Pulse over PulseSigningBytes(D), binding all of SourceChainID,
 // SourceNebulaRoot, SourceKeyEraID, SourceGeneration, HashSuiteID via D.
 type PulseVerifier interface {
-	VerifyPulse(env *WarpEnvelope) error
+	VerifyPulse(env *Envelope) error
 }
 
 // MLDSACertSetVerifier verifies an envelope's ML-DSA cert-set lane over
 // MLDSASigningBytes(D).
 type MLDSACertSetVerifier interface {
-	VerifyCertSet(env *WarpEnvelope) error
+	VerifyCertSet(env *Envelope) error
 }
 
 // VerifyOptions bundles the verifications a receiver applies to an
@@ -260,7 +260,7 @@ type VerifyOptions struct {
 // VerifyWithOptions verifies an envelope under opts: structural
 // invariants, hash-suite consistency, the Beam lane (unless SkipBeam),
 // then the ML-DSA and Pulse lanes.
-func VerifyWithOptions(e *WarpEnvelope, opts VerifyOptions) error {
+func VerifyWithOptions(e *Envelope, opts VerifyOptions) error {
 	if err := e.Verify(); err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func VerifyWithOptions(e *WarpEnvelope, opts VerifyOptions) error {
 
 // VerifyPQLanes runs only the PQ-lane verifications (skipping the Beam),
 // for receivers that have already verified the Beam separately.
-func VerifyPQLanes(e *WarpEnvelope, opts VerifyOptions) error {
+func VerifyPQLanes(e *Envelope, opts VerifyOptions) error {
 	if err := e.Verify(); err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func VerifyPQLanes(e *WarpEnvelope, opts VerifyOptions) error {
 	return verifyPQLanes(e, opts)
 }
 
-func verifyPQLanes(e *WarpEnvelope, opts VerifyOptions) error {
+func verifyPQLanes(e *Envelope, opts VerifyOptions) error {
 	// ML-DSA cert-set lane.
 	if e.HasMLDSACertSet() {
 		if opts.CertSet == nil {

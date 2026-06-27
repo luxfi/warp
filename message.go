@@ -9,13 +9,13 @@ import (
 	"github.com/luxfi/ids"
 )
 
-// DefaultHashSuiteID is the canonical Pulsar hash profile. A SignedCore's
+// DefaultHashSuiteID is the canonical Pulsar hash profile. A Core's
 // HashSuiteID MUST be resolved to a concrete value before it is marshaled
 // or signed — there is NO sign-time defaulting inside the codec. This
 // constant is the resolution target callers use at construction time.
 const DefaultHashSuiteID = "Pulsar-SHA3"
 
-// SignedCore is the single signed subject of a Warp message. It folds the
+// Core is the single signed subject of a Warp message. It folds the
 // former UnsignedMessage (NetworkID, SourceChainID, Payload) together with
 // the Pulsar PQ lineage (SourceNebulaRoot, SourceKeyEraID, SourceGeneration,
 // HashSuiteID) that previously lived only on the v2 envelope. Folding the
@@ -25,7 +25,7 @@ const DefaultHashSuiteID = "Pulsar-SHA3"
 //
 // Canonical c14n layout (== Bytes(), the lane subject hashed into D):
 //
-//	zapKindSignedCore  u8 (0x01)
+//	zapKindCore  u8 (0x01)
 //	NetworkID          u32 big-endian
 //	SourceChainID      [32] raw
 //	SourceNebulaRoot   [32] raw
@@ -35,7 +35,7 @@ const DefaultHashSuiteID = "Pulsar-SHA3"
 //	Payload            u32-len ‖ bytes
 //
 // The digest is D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ Bytes()).
-type SignedCore struct {
+type Core struct {
 	NetworkID        uint32
 	SourceChainID    ids.ID
 	SourceNebulaRoot [32]byte
@@ -45,12 +45,12 @@ type SignedCore struct {
 	Payload          []byte
 }
 
-// NewSignedCore builds a SignedCore for a locally-originated message:
+// NewCore builds a Core for a locally-originated message:
 // zero PQ lineage and HashSuiteID resolved to DefaultHashSuiteID. Callers
 // that bind a specific Pulsar lineage construct the struct directly with
 // the resolved fields.
-func NewSignedCore(networkID uint32, sourceChainID ids.ID, payload []byte) (*SignedCore, error) {
-	c := &SignedCore{
+func NewCore(networkID uint32, sourceChainID ids.ID, payload []byte) (*Core, error) {
+	c := &Core{
 		NetworkID:     networkID,
 		SourceChainID: sourceChainID,
 		HashSuiteID:   DefaultHashSuiteID,
@@ -66,7 +66,7 @@ func NewSignedCore(networkID uint32, sourceChainID ids.ID, payload []byte) (*Sig
 // DefaultHashSuiteID for the zero value. This is a READ helper for
 // downstream policy checks; it does NOT influence marshaling — Bytes()
 // always encodes the field verbatim.
-func (c *SignedCore) HashSuiteOrDefault() string {
+func (c *Core) HashSuiteOrDefault() string {
 	if c == nil || c.HashSuiteID == "" {
 		return DefaultHashSuiteID
 	}
@@ -76,9 +76,9 @@ func (c *SignedCore) HashSuiteOrDefault() string {
 // marshalZAP returns the canonical c14n bytes of the core. This is the
 // lane subject and the digest preimage; it is total-order canonical, so
 // re-marshaling a decoded core reproduces the exact bytes.
-func (c *SignedCore) marshalZAP() []byte {
+func (c *Core) marshalZAP() []byte {
 	out := make([]byte, 0, 1+4+32+32+8+8+4+len(c.HashSuiteID)+4+len(c.Payload))
-	out = appendU8(out, zapKindSignedCore)
+	out = appendU8(out, zapKindCore)
 	out = appendU32(out, c.NetworkID)
 	out = appendFixed(out, c.SourceChainID[:])
 	out = appendFixed(out, c.SourceNebulaRoot[:])
@@ -91,7 +91,7 @@ func (c *SignedCore) marshalZAP() []byte {
 
 // Verify checks the structural invariants: the canonical encoding must
 // not exceed MaxMessageSize.
-func (c *SignedCore) Verify() error {
+func (c *Core) Verify() error {
 	if n := len(c.marshalZAP()); n > MaxMessageSize {
 		return fmt.Errorf("%w: signed core size %d exceeds maximum %d", ErrInvalidMessage, n, MaxMessageSize)
 	}
@@ -99,24 +99,24 @@ func (c *SignedCore) Verify() error {
 }
 
 // Bytes returns the canonical c14n encoding of the core (== zap_c14n).
-func (c *SignedCore) Bytes() []byte { return c.marshalZAP() }
+func (c *Core) Bytes() []byte { return c.marshalZAP() }
 
 // ID returns D, the Warp message ID: keccak256(coreDST ‖ Bytes()). It is
 // the replay key and the on-chain messageHash. D is recomputed from the
 // struct, never sliced out of a wire envelope.
-func (c *SignedCore) ID() ids.ID {
+func (c *Core) ID() ids.ID {
 	return ids.ID(keccak256([]byte(coreDST), c.marshalZAP()))
 }
 
-// parseSignedCore decodes a SignedCore from the cursor. It validates the
+// parseCore decodes a Core from the cursor. It validates the
 // kind byte but leaves trailing-byte / size checks to the caller.
-func parseSignedCore(r *zapReader) (SignedCore, error) {
-	var c SignedCore
+func parseCore(r *zapReader) (Core, error) {
+	var c Core
 	kind, err := r.u8()
 	if err != nil {
 		return c, err
 	}
-	if kind != zapKindSignedCore {
+	if kind != zapKindCore {
 		return c, fmt.Errorf("%w: signed-core kind 0x%02x", ErrInvalidMessage, kind)
 	}
 	if c.NetworkID, err = r.u32(); err != nil {
@@ -145,11 +145,11 @@ func parseSignedCore(r *zapReader) (SignedCore, error) {
 	return c, nil
 }
 
-// ParseSignedCore decodes a standalone SignedCore from its canonical
+// ParseCore decodes a standalone Core from its canonical
 // c14n bytes, rejecting trailing bytes and over-size payloads.
-func ParseSignedCore(b []byte) (*SignedCore, error) {
+func ParseCore(b []byte) (*Core, error) {
 	r := newZapReader(b)
-	c, err := parseSignedCore(r)
+	c, err := parseCore(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse signed core: %w", err)
 	}

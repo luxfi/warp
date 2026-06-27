@@ -10,7 +10,7 @@
 // The Solidity test reads the JSON and asserts that its on-chain
 // _computeMessageHash matches `messageHash` (= D), and that its on-chain
 // teleport-payload packing matches `payload` (the fixed 90-byte block)
-// and the canonical SignedCore preimage matches `coreC14n`. Drift between
+// and the canonical Core preimage matches `coreC14n`. Drift between
 // the Go encoder and the Solidity encoder is a CI failure.
 package main
 
@@ -42,7 +42,7 @@ type Fixture struct {
 
 	// Outputs (Go-computed; Solidity must match byte-for-byte).
 	Payload     string `json:"payload"`     // hex of the fixed 90-byte TeleportPayload block
-	CoreC14n    string `json:"coreC14n"`    // hex of zap_c14n(SignedCore) — the digest preimage
+	CoreC14n    string `json:"coreC14n"`    // hex of zap_c14n(Core) — the digest preimage
 	MessageHash string `json:"messageHash"` // hex of D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ coreC14n)
 }
 
@@ -77,7 +77,7 @@ func emit(name string, networkID uint32, sourceChainID, token, recipient string,
 	if err != nil {
 		return Fixture{}, err
 	}
-	core, err := warp.NewSignedCore(networkID, src, payload)
+	core, err := warp.NewCore(networkID, src, payload)
 	if err != nil {
 		return Fixture{}, err
 	}

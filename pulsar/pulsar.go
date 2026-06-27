@@ -16,7 +16,7 @@
 // Architecture:
 //
 //	warp                      (root pkg; no Pulsar import)
-//	  ├── WarpEnvelope        (the single envelope type)
+//	  ├── Envelope        (the single envelope type)
 //	  ├── PulseVerifier       (interface)
 //	  └── VerifyWithOptions / VerifyPQLanes
 //
@@ -106,7 +106,7 @@ func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
 //  2. Resolve the source-chain GroupKey for (KeyEraID, Generation).
 //  3. Confirm the resolver-supplied suiteID matches the envelope's
 //     resolved HashSuiteID.
-//  4. Recompute D from the envelope's SignedCore and build the Pulse
+//  4. Recompute D from the envelope's Core and build the Pulse
 //     signing bytes warp.PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1"‖D.
 //  5. Deserialize the envelope's PulseSig into a corona.Signature.
 //  6. Call corona.Verify(gk, signingBytes, sig).
@@ -114,7 +114,7 @@ func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
 // D folds in SourceNebulaRoot / SourceKeyEraID / SourceGeneration /
 // HashSuiteID / SourceChainID / NetworkID / Payload, so verifying the
 // Pulse over PulseSigningBytes(D) binds the Pulse to every one of them.
-func (v *KernelVerifier) VerifyPulse(env *warp.WarpEnvelope) error {
+func (v *KernelVerifier) VerifyPulse(env *warp.Envelope) error {
 	if env == nil || !env.HasPulse() {
 		return ErrPulseAbsent
 	}
@@ -414,7 +414,6 @@ func readLenPrefixed(src []byte) (frame []byte, rest []byte, err error) {
 	return src[4 : 4+n], src[4+n:], nil
 }
 
-
 // HorizonCertificate is the LP-105 §"HorizonCertificate" three-lane
 // certificate constructed from a verified Warp 2.0 envelope. It is
 // the artifact a destination chain admits as "Horizon-final" once
@@ -460,7 +459,7 @@ type HorizonCertificate struct {
 // HorizonFromEnvelope lifts a Warp 2.0 envelope into a HorizonCertificate.
 // The envelope MUST already have been verified via VerifyV2 — this
 // helper does no signature checks.
-func HorizonFromEnvelope(env *warp.WarpEnvelope) (*HorizonCertificate, error) {
+func HorizonFromEnvelope(env *warp.Envelope) (*HorizonCertificate, error) {
 	if env == nil {
 		return nil, errors.New("warp pulsar: nil envelope")
 	}

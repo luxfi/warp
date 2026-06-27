@@ -11,31 +11,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSignedCore(t *testing.T) {
+func TestCore(t *testing.T) {
 	networkID := uint32(1)
 	sourceChainID := ids.ID{31: 1}
 	payload := []byte("test payload")
 
-	core, err := NewSignedCore(networkID, sourceChainID, payload)
+	core, err := NewCore(networkID, sourceChainID, payload)
 	require.NoError(t, err)
 	require.NotNil(t, core)
 
 	require.Equal(t, networkID, core.NetworkID)
 	require.Equal(t, sourceChainID, core.SourceChainID)
 	require.Equal(t, payload, core.Payload)
-	// NewSignedCore resolves the default suite; lineage is zero.
+	// NewCore resolves the default suite; lineage is zero.
 	require.Equal(t, DefaultHashSuiteID, core.HashSuiteID)
 	require.Equal(t, [32]byte{}, core.SourceNebulaRoot)
 
 	// Canonical c14n round-trips.
 	b := core.Bytes()
 	require.NotEmpty(t, b)
-	require.Equal(t, zapKindSignedCore, b[0])
+	require.Equal(t, zapKindCore, b[0])
 
 	id := core.ID()
 	require.NotEqual(t, ids.Empty, id)
 
-	parsed, err := ParseSignedCore(b)
+	parsed, err := ParseCore(b)
 	require.NoError(t, err)
 	require.Equal(t, core.NetworkID, parsed.NetworkID)
 	require.Equal(t, core.SourceChainID, parsed.SourceChainID)
@@ -45,10 +45,10 @@ func TestSignedCore(t *testing.T) {
 	require.Equal(t, id, parsed.ID())
 }
 
-// TestSignedCoreIDIsLegacyKeccak pins D to legacy-keccak over the
+// TestCoreIDIsLegacyKeccak pins D to legacy-keccak over the
 // domain-tagged c14n preimage — NOT sha256, NOT NIST SHA3.
-func TestSignedCoreIDIsLegacyKeccak(t *testing.T) {
-	core := &SignedCore{
+func TestCoreIDIsLegacyKeccak(t *testing.T) {
+	core := &Core{
 		NetworkID:     1,
 		SourceChainID: ids.ID{0xA1},
 		HashSuiteID:   DefaultHashSuiteID,
@@ -58,10 +58,10 @@ func TestSignedCoreIDIsLegacyKeccak(t *testing.T) {
 	require.Equal(t, ids.ID(want), core.ID())
 }
 
-// TestSignedCoreIDChangesWithEveryField proves D depends on every field
+// TestCoreIDChangesWithEveryField proves D depends on every field
 // — including the folded PQ lineage that the Beam now authenticates.
-func TestSignedCoreIDChangesWithEveryField(t *testing.T) {
-	base := &SignedCore{
+func TestCoreIDChangesWithEveryField(t *testing.T) {
+	base := &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
@@ -72,50 +72,50 @@ func TestSignedCoreIDChangesWithEveryField(t *testing.T) {
 	}
 	baseID := base.ID()
 
-	mutate := func(f func(c *SignedCore)) ids.ID {
+	mutate := func(f func(c *Core)) ids.ID {
 		c := *base
 		f(&c)
 		return c.ID()
 	}
 
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.NetworkID = 2 }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceChainID = ids.ID{0xFF} }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceNebulaRoot = [32]byte{0x99} }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceKeyEraID = 8 }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.SourceGeneration = 12 }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.HashSuiteID = "Pulsar-BLAKE3" }))
-	require.NotEqual(t, baseID, mutate(func(c *SignedCore) { c.Payload = []byte("base2") }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.NetworkID = 2 }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceChainID = ids.ID{0xFF} }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceNebulaRoot = [32]byte{0x99} }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceKeyEraID = 8 }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceGeneration = 12 }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.HashSuiteID = "Pulsar-BLAKE3" }))
+	require.NotEqual(t, baseID, mutate(func(c *Core) { c.Payload = []byte("base2") }))
 }
 
-// TestSignedCoreNoSignTimeDefaulting proves the codec encodes HashSuiteID
+// TestCoreNoSignTimeDefaulting proves the codec encodes HashSuiteID
 // verbatim: an empty-suite core and a "Pulsar-SHA3" core produce DIFFERENT
 // c14n bytes and DIFFERENT D. There is no defaulting inside the marshaler.
-func TestSignedCoreNoSignTimeDefaulting(t *testing.T) {
-	empty := &SignedCore{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
-	resolved := &SignedCore{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
+func TestCoreNoSignTimeDefaulting(t *testing.T) {
+	empty := &Core{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
+	resolved := &Core{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
 	require.NotEqual(t, empty.Bytes(), resolved.Bytes())
 	require.NotEqual(t, empty.ID(), resolved.ID())
 	// HashSuiteOrDefault is a READ helper only — it does not change bytes.
 	require.Equal(t, DefaultHashSuiteID, empty.HashSuiteOrDefault())
 }
 
-// TestParseSignedCoreRejectsTrailing proves decode rejects trailing bytes.
-func TestParseSignedCoreRejectsTrailing(t *testing.T) {
-	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("p"))
+// TestParseCoreRejectsTrailing proves decode rejects trailing bytes.
+func TestParseCoreRejectsTrailing(t *testing.T) {
+	core, err := NewCore(1, ids.ID{0xA1}, []byte("p"))
 	require.NoError(t, err)
 	b := core.Bytes()
-	_, err = ParseSignedCore(append(b, 0x00))
+	_, err = ParseCore(append(b, 0x00))
 	require.ErrorIs(t, err, errZapTrailing)
 }
 
-// TestParseSignedCoreRejectsBadKind proves the zap kind discriminator is
+// TestParseCoreRejectsBadKind proves the zap kind discriminator is
 // enforced.
-func TestParseSignedCoreRejectsBadKind(t *testing.T) {
-	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("p"))
+func TestParseCoreRejectsBadKind(t *testing.T) {
+	core, err := NewCore(1, ids.ID{0xA1}, []byte("p"))
 	require.NoError(t, err)
 	b := core.Bytes()
-	b[0] = 0x02 // not zapKindSignedCore
-	_, err = ParseSignedCore(b)
+	b[0] = 0x02 // not zapKindCore
+	_, err = ParseCore(b)
 	require.ErrorIs(t, err, ErrInvalidMessage)
 }
 
@@ -149,7 +149,7 @@ func TestVerifyWeight(t *testing.T) {
 // all over the same D, so a signature in one lane cannot be replayed into
 // another (distinct domain prefixes).
 func TestLaneSigningBytesDistinct(t *testing.T) {
-	core, err := NewSignedCore(1, ids.ID{0xA1}, []byte("lanes"))
+	core, err := NewCore(1, ids.ID{0xA1}, []byte("lanes"))
 	require.NoError(t, err)
 	d := core.ID()
 

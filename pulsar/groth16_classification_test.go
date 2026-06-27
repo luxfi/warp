@@ -6,23 +6,23 @@
 //
 // Three pin-downs:
 //
-//   A. A Groth16 wrapper alone is NOT Horizon-final. An envelope
-//      carrying a Groth16 proof of ML-DSA cert-set verification but no
-//      Pulse must be classified as not-PQ-final.
-//   B. A Groth16 wrapping ML-DSA is classical-succinct: the
-//      IsPQRootOfTrust predicate returns false for "groth16" and
-//      true for STARK / lattice-based wrappers.
-//   C. The lexicon (LP-105) and the canonical Pulsar paper (LP-073)
-//      contain the exact phrases "not post-quantum" and "classical
-//      succinct proof of post-quantum signature verification" near
-//      the Groth16 mention.
+//	A. A Groth16 wrapper alone is NOT Horizon-final. An envelope
+//	   carrying a Groth16 proof of ML-DSA cert-set verification but no
+//	   Pulse must be classified as not-PQ-final.
+//	B. A Groth16 wrapping ML-DSA is classical-succinct: the
+//	   IsPQRootOfTrust predicate returns false for "groth16" and
+//	   true for STARK / lattice-based wrappers.
+//	C. The lexicon (LP-105) and the canonical Pulsar paper (LP-073)
+//	   contain the exact phrases "not post-quantum" and "classical
+//	   succinct proof of post-quantum signature verification" near
+//	   the Groth16 mention.
 //
 // Citations (canonical proof bucket):
 //
-//   proofs/definitions/finality-definitions.tex
-//     Remark ref:groth16-not-pq
-//   proofs/quasar/horizon-soundness.tex
-//     Remark ref:groth16-wrapper
+//	proofs/definitions/finality-definitions.tex
+//	  Remark ref:groth16-not-pq
+//	proofs/quasar/horizon-soundness.tex
+//	  Remark ref:groth16-wrapper
 package pulsar
 
 import (

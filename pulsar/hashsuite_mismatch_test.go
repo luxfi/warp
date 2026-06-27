@@ -3,12 +3,12 @@
 
 // Package pulsar — HashSuite-mismatch tests for Warp envelope verification.
 //
-//	1. A Pulse signed under Pulsar-SHA3 verifies under Pulsar-SHA3.
-//	2. The same envelope, verified while the receiver expects Pulsar-BLAKE3,
-//	   is rejected with ErrEnvelopeBadSuiteID.
-//	3. A mutated HashSuiteID (tampered after signing, Pulse byte-identical)
-//	   MUST reject — D folds HashSuiteID, so the Pulse over the original D
-//	   no longer verifies under the mutated D.
+//  1. A Pulse signed under Pulsar-SHA3 verifies under Pulsar-SHA3.
+//  2. The same envelope, verified while the receiver expects Pulsar-BLAKE3,
+//     is rejected with ErrEnvelopeBadSuiteID.
+//  3. A mutated HashSuiteID (tampered after signing, Pulse byte-identical)
+//     MUST reject — D folds HashSuiteID, so the Pulse over the original D
+//     no longer verifies under the mutated D.
 package pulsar
 
 import (
@@ -72,13 +72,13 @@ func TestVerifyRejectsMutatedHashSuiteIDPostSign(t *testing.T) {
 	// so the Pulse bytes are unchanged but the declared profile is swapped.
 	wire, err := env.Bytes()
 	require.NoError(t, err)
-	parsed, err := warp.ParseWarpEnvelope(wire)
+	parsed, err := warp.ParseEnvelope(wire)
 	require.NoError(t, err)
 
 	parsed.Core.HashSuiteID = "Pulsar-BLAKE3"
 	mutatedWire, err := parsed.Bytes()
 	require.NoError(t, err)
-	mutated, err := warp.ParseWarpEnvelope(mutatedWire)
+	mutated, err := warp.ParseEnvelope(mutatedWire)
 	require.NoError(t, err)
 
 	// Receiver AND resolver both expect "Pulsar-BLAKE3", so the string

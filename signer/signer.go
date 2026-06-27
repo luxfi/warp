@@ -14,8 +14,8 @@ import (
 
 // Signer is an interface for signing warp messages
 type Signer interface {
-	// Sign signs a SignedCore over the Beam domain (BeamSigningBytes(D)).
-	Sign(core *warp.SignedCore) (*bls.Signature, error)
+	// Sign signs a Core over the Beam domain (BeamSigningBytes(D)).
+	Sign(core *warp.Core) (*bls.Signature, error)
 
 	// GetPublicKey returns the public key
 	GetPublicKey() *bls.PublicKey
@@ -36,7 +36,7 @@ func NewLocalSigner(sk *bls.SecretKey) *LocalSigner {
 }
 
 // Sign signs a message over the Beam domain.
-func (s *LocalSigner) Sign(core *warp.SignedCore) (*bls.Signature, error) {
+func (s *LocalSigner) Sign(core *warp.Core) (*bls.Signature, error) {
 	return warp.Sign(warp.BeamSigningBytes(core.ID()), s.sk)
 }
 
@@ -48,7 +48,7 @@ func (s *LocalSigner) GetPublicKey() *bls.PublicKey {
 // Backend is an interface for signing backends
 type Backend interface {
 	// Sign signs a message with multiple signers
-	Sign(ctx context.Context, core *warp.SignedCore, signerIndices []int) (*warp.WarpEnvelope, error)
+	Sign(ctx context.Context, core *warp.Core, signerIndices []int) (*warp.Envelope, error)
 
 	// GetValidators returns the current validator set
 	GetValidators(ctx context.Context) ([]*warp.Validator, error)
@@ -86,8 +86,8 @@ func (b *SignerBackend) AddSigner(index int, signer Signer) error {
 
 // Sign signs a message with multiple signers
 func (b *SignerBackend) Sign(
-	ctx context.Context, core *warp.SignedCore, signerIndices []int,
-) (*warp.WarpEnvelope, error) {
+	ctx context.Context, core *warp.Core, signerIndices []int,
+) (*warp.Envelope, error) {
 	if len(signerIndices) == 0 {
 		return nil, errors.New("no signers specified")
 	}
@@ -153,7 +153,7 @@ func NewRemoteSigner(client SignerClient) (*RemoteSigner, error) {
 }
 
 // Sign signs a message over the Beam domain via the remote signer.
-func (s *RemoteSigner) Sign(core *warp.SignedCore) (*bls.Signature, error) {
+func (s *RemoteSigner) Sign(core *warp.Core) (*bls.Signature, error) {
 	sigBytes, err := s.client.Sign(context.Background(), warp.BeamSigningBytes(core.ID()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign remotely: %w", err)

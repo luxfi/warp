@@ -3,7 +3,7 @@
 
 // security_profile.go — strict-PQ adapter for the Warp envelope.
 //
-// A WarpEnvelope ships three signature lanes side-by-side:
+// A Envelope ships three signature lanes side-by-side:
 //
 //   1. Classical BLS Beam over BLS12-381 (pairing-based,
 //      Shor-vulnerable, the fast common-case verification path).
@@ -11,7 +11,7 @@
 //   3. ML-DSA cert set — FIPS 204 ML-DSA-65 attestations from the
 //      signing validators (optional today, REQUIRED under strict-PQ).
 //
-// This file plugs WarpEnvelope into the canonical pq.Mode gate:
+// This file plugs Envelope into the canonical pq.Mode gate:
 //
 //   profile, err := pq.ModeFromString(chainCfg.WarpProfile)
 //   if err := pq.ValidateMode(profile, env, verifyFn); err != nil {
@@ -37,23 +37,23 @@ import "github.com/luxfi/pq"
 // fallback. Repointing this from HasMLDSACertSet to HasPulse is load-bearing:
 // without it, strict-PQ wrongly mandated the non-scaling cert-set and refused a
 // Pulse-only (the common, scalable) envelope.
-func (e *WarpEnvelope) HasPQEvidence() bool {
+func (e *Envelope) HasPQEvidence() bool {
 	return e.HasPulse() || e.HasMLDSACertSet()
 }
 
 // VerificationLane reports which lane(s) the verifier MUST
 // validate for a given mode + envelope. Bitwise mask:
 //
-//   • LaneClassical: BLS Beam.
-//   • LanePQ:        the PQ lane(s) — Pulse (Corona threshold) primary,
-//                    ML-DSA cert-set fallback.
+//   - LaneClassical: BLS Beam.
+//   - LanePQ:        the PQ lane(s) — Pulse (Corona threshold) primary,
+//     ML-DSA cert-set fallback.
 //
 // Routing rules:
 //
-//   classical                    → LaneClassical
-//   hybrid + PQ evidence present → LanePQ
-//   hybrid + no PQ evidence      → LaneClassical (stale-PQ warning)
-//   strict-pq                    → LanePQ (gate refuses without PQ evidence)
+//	classical                    → LaneClassical
+//	hybrid + PQ evidence present → LanePQ
+//	hybrid + no PQ evidence      → LaneClassical (stale-PQ warning)
+//	strict-pq                    → LanePQ (gate refuses without PQ evidence)
 type VerificationLane int
 
 const (

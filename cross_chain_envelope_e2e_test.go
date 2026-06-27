@@ -2,7 +2,7 @@
 // See the file LICENSE for licensing terms.
 
 // cross_chain_envelope_e2e_test.go drives the PQ posture and mode-gate
-// composition for the single ZAP WarpEnvelope:
+// composition for the single ZAP Envelope:
 //
 //  1. The default registry (signature.NewPQNativeRegistry) cannot install
 //     a classical signer without the LegacyClassicalEnabled opt-in.
@@ -29,11 +29,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// e2eFixture builds a canonical WarpEnvelope: a SignedCore with payload
+// e2eFixture builds a canonical Envelope: a Core with payload
 // "warp-e2e" plus deterministic Beam, and optional Pulse / MLDSACertSet.
-func e2eFixture(t *testing.T, withPulse, withCert bool) *WarpEnvelope {
+func e2eFixture(t *testing.T, withPulse, withCert bool) *Envelope {
 	t.Helper()
-	core := &SignedCore{
+	core := &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -59,7 +59,7 @@ func e2eFixture(t *testing.T, withPulse, withCert bool) *WarpEnvelope {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
 
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
 	require.NoError(t, err)
 	return env
 }
@@ -117,7 +117,7 @@ func TestE2E_ClassicalEnvelope_WireRefusedUnderStrictPQ(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, bytes.HasPrefix(wire, wireMagic[:]))
 
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	require.False(t, parsed.HasPQEvidence())
 	require.ErrorIs(t, pq.ValidateMode(pq.ModeStrictPQ, parsed, nil), pq.ErrClassicalAuthForbidden)
@@ -154,7 +154,7 @@ func TestE2E_ID_PreservedAcrossWire(t *testing.T) {
 	id := env.ID()
 	wire, err := env.Bytes()
 	require.NoError(t, err)
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	require.Equal(t, id, parsed.ID(), "D must survive wire round-trip")
 }
@@ -168,12 +168,12 @@ func TestE2E_KAT_PQEnvelope_WireBytesStable(t *testing.T) {
 	require.NoError(t, err)
 
 	require.True(t, bytes.HasPrefix(wire, wireMagic[:]))
-	require.Equal(t, kindWarpEnvelope, wire[len(wireMagic)])
+	require.Equal(t, kindEnvelope, wire[len(wireMagic)])
 
 	h := sha256.Sum256(wire)
 	require.Len(t, hex.EncodeToString(h[:]), 64)
 
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	re, err := parsed.Bytes()
 	require.NoError(t, err)

@@ -52,13 +52,13 @@ type SignatureAggregator struct {
 // validator set corresponding to the signer bitset in the message.
 func (s *SignatureAggregator) AggregateSignatures(
 	ctx context.Context,
-	env *WarpEnvelope,
+	env *Envelope,
 	justification []byte,
 	validators []*Validator,
 	quorumNum uint64,
 	quorumDen uint64,
 ) (
-	_ *WarpEnvelope,
+	_ *Envelope,
 	aggregatedStake *big.Int,
 	totalStake *big.Int,
 	_ error,
@@ -185,10 +185,10 @@ func (s *SignatureAggregator) AggregateSignatures(
 }
 
 func newAggregatedMessage(
-	env *WarpEnvelope,
+	env *Envelope,
 	signerBitSet set.Bits,
 	signatures []*bls.Signature,
-) (*WarpEnvelope, error) {
+) (*Envelope, error) {
 	if len(signatures) == 0 {
 		return env, nil
 	}
@@ -202,11 +202,11 @@ func newAggregatedMessage(
 	copy(beam.Signature[:], bls.SignatureToBytes(aggregateSignature))
 
 	// Preserve the PQ lanes; only the Beam is re-aggregated.
-	return NewWarpEnvelope(&env.Core, beam, env.PulseSig, env.MLDSACertSet)
+	return NewEnvelope(&env.Core, beam, env.PulseSig, env.MLDSACertSet)
 }
 
 type signatureResponseHandler struct {
-	env                 *WarpEnvelope
+	env                 *Envelope
 	beamMsg             []byte
 	nodeIDsToValidators map[ids.NodeID]indexedValidator
 	results             chan aggregatorResult

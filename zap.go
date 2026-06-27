@@ -42,7 +42,7 @@ import (
 // HorizonCertificate codec (pulsar.go appendBELenPrefixed /
 // readBELenPrefixed); here it is the single envelope codec.
 
-// wireMagic is the 5-byte prefix on every WarpEnvelope wire stream:
+// wireMagic is the 5-byte prefix on every Envelope wire stream:
 // "LWZP" (Lux Warp Zap Protocol) followed by the format version 0x01.
 var wireMagic = [5]byte{'L', 'W', 'Z', 'P', 0x01}
 
