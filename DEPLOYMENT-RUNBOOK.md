@@ -47,8 +47,8 @@ See `LEGACY-CLASSICAL.md` for the policy.
 
 A source-chain validator can produce up to three lanes per envelope:
 
-- **Beam** (BLS aggregate) — always produced (the v1 Message lives
-  inside the EnvelopeV2 carrier even on strict-PQ chains; the
+- **Beam** (BLS aggregate) — always produced (the Message lives
+  inside the Envelope carrier even on strict-PQ chains; the
   bytes are "echo only" under strict-PQ).
 - **Pulse** (Pulsar / Corona R-LWE threshold) — produced when the
   source chain runs the Pulsar consensus protocol.
@@ -170,8 +170,8 @@ Before a chain goes live on a strict-PQ profile:
       (NOT `NewRegistry()` with classical schemes wired in).
 - [ ] Validator's key-management service can produce ML-DSA-65
       signatures over the warp envelope transcript.
-- [ ] Signature-aggregator service emits EnvelopeV2 bytes that
-      pass `warp.ParseEnvelopeV2` + `pq.ValidateMode(strict-pq, env, verify)`.
+- [ ] Signature-aggregator service emits Envelope bytes that
+      pass `warp.ParseEnvelope` + `pq.ValidateMode(strict-pq, env, verify)`.
 - [ ] KAT regression test passes on the destination chain's
       verifier (run `cmd/envelope_kat_oracle/` and check the
       destination's parser agrees byte-for-byte).
@@ -210,7 +210,7 @@ Fix: align the `hashSuiteID` field in both chains' configs.
 
 ### 5.4 `ErrEnvelopeTooLarge` at parse
 
-Cause: envelope exceeds `MaxEnvelopeV2Size` (4 × 256 KiB = 1 MiB).
+Cause: envelope exceeds `MaxEnvelopeSize` (4 × 256 KiB = 1 MiB).
 
 Fix: the source chain is producing an envelope with an unusually
 large Pulse or MLDSACertSet. Investigate the validator set size
@@ -219,10 +219,11 @@ Consider Z-Chain Groth16 rollup (LP-307) to compress
 verification cost (note: the rollup primitive is itself
 classical — see `pulsar/classification.go`).
 
-### 5.5 `ErrUnknownEnvelopeVersion` at parse
+### 5.5 `warp zap: bad wire magic` at parse
 
-Cause: incoming bytes have a leading byte that is neither 0x02
-(EnvelopeV2) nor an RLP-list prefix.
+Cause: incoming bytes do not begin with the ZAP wire magic
+`"LWZP"‖0x01` — e.g. legacy RLP bytes (lead `0xc0..0xff`) or the
+legacy `0x02` envelope byte, neither of which is a ZAP envelope.
 
 Fix: investigate the transport layer. The bytes have been
 corrupted in transit or the source produced a non-standard
