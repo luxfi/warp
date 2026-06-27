@@ -1,7 +1,7 @@
 # Warp Security Profiles — Classical, Hybrid, Strict-PQ
 
 A Liquid / Lux / Zoo chain pins one of three Warp security profiles
-at genesis. The profile decides which lane(s) of an EnvelopeV2 the
+at genesis. The profile decides which lane(s) of an Envelope the
 verifier MUST validate, and which lanes are best-effort or
 forbidden.
 
