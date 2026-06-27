@@ -38,16 +38,18 @@ algorithmic or implementation defects.
 
 ### Module surface
 
-- `~/work/lux/warp/envelope.go` (500 lines) — EnvelopeV2 type +
-  `ParseEnvelope` / `ParseEnvelopeV2` dispatcher + `VerifyV2` +
+- `~/work/lux/warp/envelope.go` — `Envelope` type + `ParseEnvelope`
+  + `VerifyEnvelope` / `VerifyWithOptions` / `VerifyPQLanes` +
   `verifyPQLanes`.
-- `~/work/lux/warp/security_profile.go` (74 lines) — adapter that
-  implements `pq.PQEvidencer` via `EnvelopeV2.HasMLDSACertSet`
+- `~/work/lux/warp/zap.go` + `codec.go` — the ZAP canonical-TLV
+  codec, the digest `D`, and the per-lane DST tags.
+- `~/work/lux/warp/security_profile.go` — adapter that
+  implements `pq.PQEvidencer` via `Envelope.HasPQEvidence`
   and the `LanesForMode` router. **One concept, one file.**
 - `~/work/lux/warp/crypto/signature/interface.go` (409 lines) —
   signature-scheme registry. PQ-native by construction; classical
   opt-in via `Config.LegacyClassicalEnabled`.
-- `~/work/lux/warp/message.go` (UnsignedMessage / Message / ID).
+- `~/work/lux/warp/message.go` (`Message` / digest `D` / ID).
 - `~/work/lux/warp/signature.go` (BitSetSignature / BLS aggregate).
 - `~/work/lux/warp/pulsar/pulsar.go` (transcript binding +
   KernelVerifier — Pulse lane).
@@ -113,25 +115,28 @@ algorithmic or implementation defects.
       installs even without opt-in — canonical migration path);
       (d) `SetPreferred` re-applies the classical-opt-in gate.
 - [x] **Domain-separation tag distinctness.**
-      Verified in source:
-      `SigningPrefix = "WARP-PULSAR-ENVELOPE-v1"`
-      (`pulsar/pulsar.go:61`),
-      `SignContextWarpV1 = "lux-warp-cross-chain-v1"`
-      (`crypto/signature/interface.go`), and the consensus-side
+      Verified in source: the per-lane DST tags
+      `"LUX-WARP-ZAP-{CORE,BEAM,PULSE,MLDSA}-v1"` (`codec.go`) are
+      mutually distinct (`TestLaneSigningBytesDistinct`); the
+      scheme-layer `SignContextWarpV1 = "lux-warp-cross-chain-v1"`
+      (`crypto/signature/interface.go`) and the consensus-side
       Pulsar tag `"QUASAR-PULSAR-BUNDLE-v1"` (in `luxfi/pulsar`)
-      are three distinct strings. A signature on any one cannot
-      verify on either of the other two (FIPS 204 §5.2 context
-      binding).
+      are distinct from them and from each other. A signature in
+      one lane cannot verify in another (FIPS 204 §5.2 context
+      binding plus per-lane DSTs).
 - [x] **Transcript binding completeness.**
-      `pulsar.BuildSigningBytes` includes all six binding inputs:
-      `SigningPrefix || SourceChainID || SourceNebulaRoot ||
-      SourceKeyEraID || SourceGeneration || HashSuiteID ||
-      UnsignedMessage_bytes` (with length prefixes for the
-      variable-length fields).
-- [x] **Replay protection across versions.**
-      `TestE2E_CrossVersion_IDPreserved` confirms
-      `EnvelopeV2.ID() == Message.ID()` so destination-chain dedup
-      tables work across v1 ↔ v2.
+      The digest `D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖
+      zap_c14n(Message))` is computed over the full `Message` c14n —
+      `NetworkID || SourceChainID || SourceNebulaRoot ||
+      SourceKeyEraID || SourceGeneration || HashSuiteID || Payload`
+      (variable-length fields length-prefixed) — so every lane that
+      signs `DST ‖ D` binds all of them
+      (`TestMessageTranscriptMutationsDistinct`,
+      `TestPulseSigningBytesBindsAllTranscriptFields`).
+- [x] **Replay protection.**
+      `TestE2E_ID_PreservedAcrossWire` and `TestEnvelopeIDStable`
+      confirm `Envelope.ID() == Message.ID() == D` so
+      destination-chain dedup tables are uniform.
 - [x] **Fuzz harnesses run clean.**
       `FuzzSignatureSchemeLegParser` runs at ~22k execs/sec for 6 s
       (134 k execs) with zero panics. `FuzzCorruptedMLDSACertSet`
@@ -155,20 +160,25 @@ algorithmic or implementation defects.
 
 ### F-1 — Domain separation is correct and tested
 
-The three context strings (`WARP-PULSAR-ENVELOPE-v1`,
-`lux-warp-cross-chain-v1`, `QUASAR-PULSAR-BUNDLE-v1`) are
-distinct, pinned in source as constants, and the distinctness is
-asserted by the `TestSignContextWarpV1_Stable` regression guard.
+The per-lane DST tags (`LUX-WARP-ZAP-{CORE,BEAM,PULSE,MLDSA}-v1`)
+are pinned as constants in `codec.go` and their distinctness is
+asserted by `TestLaneSigningBytesDistinct`; the scheme-layer
+context `SignContextWarpV1 = "lux-warp-cross-chain-v1"` is pinned by
+`TestSignContextWarpV1_Stable` and is distinct from the
+consensus-side `QUASAR-PULSAR-BUNDLE-v1`. Each lane signs `DST ‖ D`,
+so a signature in one lane cannot verify in another.
 
 No finding. **CLEAN.**
 
 ### F-2 — Transcript binding is complete
 
-`pulsar.BuildSigningBytes` binds all six fields that an attacker
-might want to mutate while keeping the BLS Beam intact. In
-particular, `HashSuiteID` is length-prefixed (not just
-concatenated) so a suite-renaming attack cannot collide with a
-suffix-bytes attack.
+The digest `D` is computed over the full `Message` c14n, so it
+binds every field an attacker might want to mutate while keeping the
+BLS Beam intact — and because the Beam now signs `BeamSigningBytes(D)`
+it authenticates the PQ lineage too (under the legacy split the Beam
+signed only the message body). In particular, `HashSuiteID` is
+length-prefixed (not just concatenated) so a suite-renaming attack
+cannot collide with a suffix-bytes attack.
 
 No finding. **CLEAN.**
 
@@ -177,7 +187,7 @@ No finding. **CLEAN.**
 The strict-PQ refusal path lives in exactly one place:
 `pq.ValidateMode` (`github.com/luxfi/pq/gate.go`, 16 lines). Warp
 provides exactly one `PQEvidencer` implementation
-(`EnvelopeV2.HasPQEvidence`). Audit pipelines grep ONE identifier
+(`Envelope.HasPQEvidence`). Audit pipelines grep ONE identifier
 (`ErrClassicalAuthForbidden`) and find every refusal site in the
 warp codebase.
 
@@ -249,7 +259,8 @@ func hashBytes(data []byte) [32]byte {
 
 This is XOR, NOT a cryptographic hash, used only for the
 demonstration `decode` command. It is NOT used in the production
-path (production uses `UnsignedMessage.ID()` which is SHA-256).
+path (production uses `Message.ID()` = `D`, the legacy-Keccak256
+digest).
 
 **Finding**: rename `hashBytes` to `xorFold` or delete the function
 to avoid confusing future readers. Tracked as Gate-4 below.

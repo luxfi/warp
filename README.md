@@ -39,33 +39,39 @@ See `LEGACY-CLASSICAL.md` for the policy and deprecation timeline.
 - [`luxfi/pq`](https://github.com/luxfi/pq) — canonical `pq.Mode` and posture gate (`pq.ValidateMode`).
 - [`luxfi/zap`](https://github.com/luxfi/zap) — inter-node transport for warp envelopes (see `TRANSPORT.md`).
 
-## Versions
+## Lanes
 
-| Version | Lanes | Status | Source |
+There is exactly ONE envelope (`Envelope`) carrying a `Message` plus
+three signature lanes over a common digest `D`:
+
+| Lane | Primitive | Required | Source |
 |---|---|---|---|
-| **Warp 1.x** | Beam (BLS aggregate) | shipping | `message.go`, `signature.go` |
-| **Warp 2.0** | Beam + ML-DSA cert set + Pulse (Pulsar threshold) | shipping | `envelope.go`, `pulsar/` |
-| **Warp Private** | FHE ciphertext + Pulse | production-research | LP-021v2 (forthcoming) |
+| **Beam** | BLS12-381 aggregate + signer bitmap (LP-075) | always | `signature.go` |
+| **Pulse** | Pulsar / Corona R-LWE threshold signature | optional (PQ) | `pulsar/` |
+| **MLDSACertSet** | per-validator ML-DSA-65 attestations (FIPS 204) | optional (PQ) | `envelope.go` + caller verifier |
 
-Warp 1.x is the byte-equal fast classical path: a single BLS12-381
-aggregate plus a signer bitmap (LP-075). Warp 2.0 is the Prism-bound
-hybrid envelope — it carries the Warp 1.x message intact alongside
-the Pulsar threshold pulse and the per-validator ML-DSA attestation
-set, all bound to a common source-chain transcript (LP-105
-§"Warp evolution"). Warp Private adds Z-Chain FHE ciphertext semantics
-on top.
+The Beam is the fast classical path. The two PQ lanes (Pulse,
+MLDSACertSet) are the Prism-bound hybrid evidence — all three lanes
+sign the SAME digest `D`, each under its own domain-separation tag,
+so the lineage folded into `Message` is authenticated by every lane
+(LP-105 §"Warp evolution"). **Warp Private** carries a Z-Chain FHE
+ciphertext as the `Message.Payload` in the same envelope format
+(production-research; LP-021v2 forthcoming).
 
 ## Architecture
 
 ```
 github.com/luxfi/warp
-├── message.go         UnsignedMessage, Message — Warp 1.x core types
-├── signature.go       BitSetSignature, BLS signing functions
+├── message.go         Message — the signed subject (folds the PQ lineage)
+├── codec.go           ZAP domain constants + digest D construction
+├── zap.go             ZAP canonical-TLV wire codec (the ONE codec)
+├── signature.go       BitSetSignature (Beam), BLS signing functions
 ├── validator.go       Validator, CanonicalValidatorSet, ValidatorState
-├── envelope.go        EnvelopeV2 — Warp 2.0 envelope + dispatcher
+├── envelope.go        Envelope — the single signed wire object + verifiers
+├── security_profile.go  HasPQEvidence, LanesForMode (posture router)
 ├── verifier.go        Verifier interface
 ├── handler.go         P2P Handler interface
-├── pulsar/            Warp 2.0 Pulse path (KernelVerifier, BuildSigningBytes)
+├── pulsar/            Pulse path (KernelVerifier over PulseSigningBytes(D))
 ├── payload/           Payload types (AddressedCall, Hash, ...)
 ├── backend/           Backend, MemoryBackend, ChainBackend
 ├── signer/            Signer interface (LocalSigner, RemoteSigner)
@@ -73,7 +79,7 @@ github.com/luxfi/warp
 ├── relayer/           Message relaying
 ├── precompile/        EVM precompile integration
 ├── docs/              Fumadocs documentation site
-└── cmd/               CLI tools
+└── cmd/               CLI tools + KAT oracle
 ```
 
 The `pulsar/` subpackage is split out so the root `warp` package does
@@ -81,49 +87,44 @@ not import the Pulsar kernel directly — the dispatch surface is the
 small `PulseVerifier` interface; the concrete kernel-driven verifier
 lives in `pulsar/`.
 
-## Wire format dispatch
+## Wire format
 
 ```
-            +-----------------------+
-incoming -> | first byte == 0x02?   |
-            +-----------------------+
-                 |yes        |no
-                 v           v
-         ParseEnvelopeV2   ParseMessage  (Warp 1.x bare RLP message)
-                 |           |
-                 v           v
-            EnvelopeV2 (PQ lanes populated when present)
+            +-----------------------------+
+incoming -> | magic == "LWZP"‖0x01 ?      |
+            +-----------------------------+
+                 |yes              |no
+                 v                 v
+            ParseEnvelope      reject (legacy RLP / unknown)
+                 |
+                 v
+            Envelope (Beam always present; PQ lanes when carried)
 ```
 
-Use `warp.ParseEnvelope(b)` for receivers that want forward compatibility
-across both versions; it returns a v2 envelope in both cases (with PQ
-lanes empty on v1 inputs).
+There is one parser (`ParseEnvelope`) and one digest (`D`). Legacy
+RLP bytes (lead `0xc0..0xff`) and the legacy `0x02` `EnvelopeV2` byte
+are rejected at the magic check — see `SPECIFICATION.md` §"Legacy".
 
-## Compatibility properties
+## Properties
 
-* **Forward (v2 receiver, v1 bytes)**: `ParseEnvelope` decodes a v1
-  message into an `EnvelopeV2` with only the Beam lane populated. PQ
-  fields are zero-valued; `HasPulse()` and `HasMLDSACertSet()` return
-  false.
-* **Backward (v1 receiver, v2 bytes)**: a v1 receiver calling
-  `ParseMessage` directly on v2 wire bytes rejects them — the leading
-  `0x02` is not a valid RLP-list prefix. This is the correct refusal:
-  a v1 verifier cannot validate v2 transcript binding. Senders that
-  must reach v1-only verifiers emit Warp 1.x bytes on the v1 channel;
-  the same `UnsignedMessage` may be embedded in a v2 envelope on the
-  v2 channel without re-signing the Beam.
-* **Embedding stability**: `EnvelopeV2.ID()` returns the same hash as
-  the embedded `Message.ID()`, so destination-chain replay protection
-  is uniform across versions.
+* **Single envelope**: `ParseEnvelope` returns an `Envelope` with the
+  Beam lane populated; the PQ fields are the empty `u32(0)` frame when
+  absent, and `HasPulse()` / `HasMLDSACertSet()` report their presence.
+* **ID stability**: `Envelope.ID()` returns the same `D` as the
+  embedded `Message.ID()` (recomputed from the struct, never sliced
+  from the wire), so destination-chain replay protection is uniform.
+* **No backward compatibility**: ZAP is forward-only; a legacy-only
+  verifier cannot parse a ZAP envelope and vice-versa.
 
-## Verifying a Warp 2.0 envelope
+## Verifying an envelope
 
-The standard verification chain (`warp.VerifyV2`) checks lanes in
-order:
+The standard verification chain (`warp.VerifyWithOptions`) checks
+lanes in order:
 
-1. Structural envelope invariants.
+1. Structural envelope invariants (`Envelope.Verify`).
 2. Hash-suite consistency (when caller pins `HashSuiteID`).
-3. Beam lane: BLS aggregate vs the source-chain validator set + quorum.
+3. Beam lane (`VerifyEnvelope`): BLS aggregate over
+   `BeamSigningBytes(D)` vs the source-chain validator set + quorum.
 4. ML-DSA cert set lane (when configured / required).
 5. Pulsar Pulse lane (when configured / required).
 
@@ -133,35 +134,21 @@ without re-running BLS aggregate verification.
 
 ## Pulse path (`warp/pulsar`)
 
-The Pulse component binds to the source-chain Pulsar lineage. The
-canonical signing bytes are produced by `pulsar.BuildSigningBytes`:
+The Pulse binds to the source-chain Pulsar lineage. The Pulse subject
+is `warp.PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1" ‖ D`. Because
+`D` is computed over the full `Message` c14n — NetworkID,
+SourceChainID, SourceNebulaRoot, SourceKeyEraID, SourceGeneration,
+HashSuiteID, Payload — verifying the Pulse over `PulseSigningBytes(D)`
+binds it to every one of those fields; no separate transcript-binding
+step is required.
 
-```
-WARP-PULSAR-ENVELOPE-v1 ||
-    source_chain_id      || (32 bytes)
-    source_nebula_root   || (32 bytes)
-    source_key_era_id    || (8 bytes BE)
-    source_generation    || (8 bytes BE)
-    hash_suite_id_len    || hash_suite_id
-    unsigned_message_len || unsigned_message_bytes
-```
+`pulsar.KernelVerifier` resolves the source-chain GroupKey + HashSuite
+for `(SourceChainID, SourceKeyEraID, SourceGeneration)` via the
+`pulsar.GroupKeyResolver` interface — a destination-chain contract
+that records the source's GroupKey lineage as it evolves through
+Bootstrap, Reshare, and Reanchor events (LP-073 §"Key-Era Lifecycle").
 
-The destination chain implements the `pulsar.GroupKeyResolver`
-interface against its source-chain key registry — a contract that
-records the source's GroupKey lineage as it evolves through Bootstrap,
-Reshare, and Reanchor events (LP-073 §"Key-Era Lifecycle").
-
-## Usage (Warp 1.x)
-
-```go
-import "github.com/luxfi/warp"
-
-unsigned, _ := warp.NewUnsignedMessage(networkID, sourceChainID, payload)
-msg, _ := warp.SignMessage(unsigned, signers, validators)
-err := warp.VerifyMessage(msg, networkID, validatorState, 2, 3)
-```
-
-## Usage (Warp 2.0)
+## Usage
 
 ```go
 import (
@@ -169,20 +156,14 @@ import (
     warppulsar "github.com/luxfi/warp/pulsar"
 )
 
-env := &warp.EnvelopeV2{
-    Message:          v1Msg,                  // signed Warp 1.x message
-    SourceNebulaRoot: nebulaRoot,
-    SourceKeyEraID:   eraID,
-    SourceGeneration: generation,
-    HashSuiteID:      warp.DefaultHashSuiteID,
-    PulsarPulse:      pulseBytes,             // optional
-    MLDSACertSet:     certSetBytes,           // optional
-}
+// Build + sign the Beam:
+msg, _ := warp.NewMessage(networkID, sourceChainID, payload)
+env, _ := warp.SignMessage(msg, signers, validators)
 wire, _ := env.Bytes()
 
 // Receiver:
 parsed, _ := warp.ParseEnvelope(wire)
-err := warp.VerifyV2(parsed, warp.VerifyV2Options{
+err := warp.VerifyWithOptions(parsed, warp.VerifyOptions{
     NetworkID:      networkID,
     ValidatorState: validatorState,
     QuorumNum:      2,
@@ -192,11 +173,16 @@ err := warp.VerifyV2(parsed, warp.VerifyV2Options{
 })
 ```
 
+Callers that bind a specific Pulsar lineage construct the `Message`
+struct directly with the resolved `SourceNebulaRoot`,
+`SourceKeyEraID`, `SourceGeneration`, and `HashSuiteID`, then assemble
+the envelope with `warp.NewEnvelope(msg, beam, pulseBytes, certSetBytes)`.
+
 ## References
 
-* LP-021 — Warp 1.x classical Beam-only cross-chain messaging.
-* LP-021v2 — Warp 2.0 hybrid envelope (this implementation; spec doc
-  forthcoming, vocabulary stub in LP-105 §"Warp evolution").
+* LP-021 — Warp classical Beam-only cross-chain messaging (legacy lineage).
+* LP-021v2 — Warp hybrid envelope (this implementation; wire format in
+  `SPECIFICATION.md`, vocabulary in LP-105 §"Warp evolution").
 * LP-073 — Pulsar lattice threshold kernel.
 * LP-075 — BLS aggregate (Beam).
 * LP-105 — Lux Stack Lexicon (Beam, Pulse, Prism, Horizon, etc.).

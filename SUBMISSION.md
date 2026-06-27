@@ -1,6 +1,6 @@
 # Warp Cross-Chain Messaging — Submission Cover Sheet
 
-This document is the Tier A cover sheet for Lux Warp 2.0, the
+This document is the Tier A cover sheet for Lux Warp, the
 cross-chain messaging protocol for the Lux Network. It is written
 for cryptographic reviewers and auditors and points at every
 artifact a reviewer needs.
@@ -30,12 +30,12 @@ own audited modules; warp is the wire envelope + posture gate.
 
 | Field | Value |
 |---|---|
-| Protocol name | **Warp 2.0** |
+| Protocol name | **Lux Warp** (PQ-native generation) |
 | Owning organisation | Lux Industries, Inc. |
-| Wire format | EnvelopeV2 — RLP-framed with leading 0x02 version byte |
-| Beam lane | BLS12-381 aggregate (Warp 1.x byte-equivalent) |
-| Pulse lane | Pulsar / Corona R-LWE threshold signature |
-| MLDSACertSet lane | FIPS 204 ML-DSA-65 per-validator attestations |
+| Wire format | `Envelope` — ZAP canonical-TLV, `"LWZP"‖0x01` magic + `0x02` kind byte |
+| Beam lane | BLS12-381 aggregate over `BeamSigningBytes(D)` |
+| Pulse lane | Pulsar / Corona R-LWE threshold signature over `PulseSigningBytes(D)` |
+| MLDSACertSet lane | FIPS 204 ML-DSA-65 per-validator attestations over `MLDSASigningBytes(D)` |
 | Default posture | **PQ-native** (`signature.NewPQNativeRegistry`) — ML-DSA-65 preferred, classical opt-in only |
 | Repository | <https://github.com/luxfi/warp> |
 | Module path | `github.com/luxfi/warp` |
@@ -49,14 +49,14 @@ own audited modules; warp is the wire envelope + posture gate.
 
 ## Headline claim
 
-> Every Warp 2.0 envelope produced under the canonical PQ-native
+> Every Warp envelope produced under the canonical PQ-native
 > posture binds the source-chain's MLDSACertSet (FIPS 204
-> ML-DSA-65 per-validator attestations) and / or PulsarPulse
-> (R-LWE threshold signature) to the same UnsignedMessage that
-> the classical BLS Beam attests to. Under strict-PQ mode
-> (`pq.ModeStrictPQ`) the envelope verifier REFUSES any envelope
-> lacking PQ evidence with the canonical sentinel
-> `pq.ErrClassicalAuthForbidden`.
+> ML-DSA-65 per-validator attestations) and / or Pulse
+> (R-LWE threshold signature) to the same digest `D` — and thus
+> the same `Message` — that the classical BLS Beam attests to.
+> Under strict-PQ mode (`pq.ModeStrictPQ`) the envelope verifier
+> REFUSES any envelope lacking PQ evidence with the canonical
+> sentinel `pq.ErrClassicalAuthForbidden`.
 
 This is the **PQ-native posture claim**. A chain pinned strict-PQ
 cannot accept a classical-only cross-chain message even when the
@@ -68,24 +68,31 @@ any signature verification work.
 Warp's responsibility is the **envelope wire format** plus the
 **posture gate**. Specifically:
 
-1. **Envelope format stability.** EnvelopeV2 is byte-stable across
-   Go / Rust / TypeScript reference implementations. KAT vectors
-   in `scripts/kat/envelope_kat.json` are byte-exact and cross-
-   language conformance is the acceptance test.
+1. **Envelope format stability.** The `Envelope` ZAP canonical-TLV
+   encoding is byte-stable across Go / Rust / TypeScript reference
+   implementations. KAT vectors in `scripts/kat/envelope_kat.json`
+   are byte-exact and cross-language conformance is the acceptance
+   test.
 
-2. **Domain separation.** The Pulse lane is signed under the
-   context tag `"WARP-PULSAR-ENVELOPE-v1"` (FIPS 204 §5.2
-   context-string binding); the MLDSACertSet lane is signed under
-   `"lux-warp-cross-chain-v1"`. Both tags are distinct from any
-   Pulsar consensus prefix (`"QUASAR-PULSAR-BUNDLE-v1"`) — a
-   signature on one context cannot be replayed in the other.
+2. **Domain separation.** Each lane signs the SAME digest `D` under
+   its OWN per-lane tag: `BeamSigningBytes(D)` =
+   `"LUX-WARP-ZAP-BEAM-v1" ‖ D`, `PulseSigningBytes(D)` =
+   `"LUX-WARP-ZAP-PULSE-v1" ‖ D`, `MLDSASigningBytes(D)` =
+   `"LUX-WARP-ZAP-MLDSA-v1" ‖ D`. The three tags are mutually
+   distinct and distinct from any Pulsar consensus prefix
+   (`"QUASAR-PULSAR-BUNDLE-v1"`) — a signature in one lane cannot be
+   replayed in another. (At the scheme layer the registry also binds
+   the FIPS 204 §5.2 context string
+   `SignContextWarpV1 = "lux-warp-cross-chain-v1"` into each
+   per-validator ML-DSA-65 / SLH-DSA signature.)
 
-3. **Transcript binding.** Every PQ lane signs over the
-   transcript-binding inputs: `SourceChainID` (32 B) ||
-   `SourceNebulaRoot` (32 B) || `SourceKeyEraID` (8 B BE) ||
-   `SourceGeneration` (8 B BE) || `HashSuiteID` (length-prefixed) ||
-   `UnsignedMessage.Bytes()` (length-prefixed). Lane verification
-   inherits this binding via `pulsar.BuildSigningBytes`.
+3. **Transcript binding.** `D` is computed over the full `Message`
+   c14n — `NetworkID` || `SourceChainID` || `SourceNebulaRoot` ||
+   `SourceKeyEraID` || `SourceGeneration` || `HashSuiteID`
+   (length-prefixed) || `Payload` (length-prefixed). Folding the
+   lineage into the signed subject means every lane that signs
+   `DST ‖ D` inherits the full transcript binding — no separate
+   transcript-construction step is required.
 
 4. **Posture gate.** The `pq.Mode` value (one of `classical`,
    `hybrid`, `strict-pq`) gates whether the envelope is admitted.
@@ -93,9 +100,9 @@ Warp's responsibility is the **envelope wire format** plus the
    — five lines, one place, one error sentinel
    (`pq.ErrClassicalAuthForbidden`).
 
-5. **Replay protection.** `EnvelopeV2.ID() == Message.ID()` — the
-   v1 UnsignedMessage hash is the destination-chain dedup key.
-   The ID is stable across v1 ↔ v2 lifting.
+5. **Replay protection.** `Envelope.ID() == Message.ID() == D` — the
+   `Message` digest (recomputed from the struct, never sliced from
+   the wire) is the destination-chain dedup key.
 
 ## What is OUT of scope
 
@@ -181,10 +188,10 @@ byte-for-byte. This is the protocol's wire-stability commitment.
 ## Verification chain
 
 ```
-EnvelopeV2 wire bytes
-  ParseEnvelope / ParseEnvelopeV2  (RLP decoder; structural verify)
+Envelope wire bytes
+  ParseEnvelope  (ZAP decoder; structural verify)
   ↓
-EnvelopeV2 struct (Message + transcript + optional PQ lanes)
+Envelope struct (Message + optional PQ lanes)
   pq.ValidateMode(mode, env, verify)  (posture gate; one function)
   ↓
 { classical → BLS Beam verify } ∨
@@ -199,10 +206,10 @@ Each step is a single function in a single file:
 | Step | Function | File |
 |---|---|---|
 | Wire decode | `ParseEnvelope` | `envelope.go` |
-| Structural verify | `(*EnvelopeV2).Verify` | `envelope.go` |
+| Structural verify | `(*Envelope).Verify` | `envelope.go` |
 | Posture gate | `pq.ValidateMode` | `github.com/luxfi/pq/gate.go` |
 | Lane router | `LanesForMode` | `security_profile.go` |
-| BLS Beam verify | `VerifyMessage` / `VerifyV1` | `signature.go`, `envelope.go` |
+| BLS Beam verify | `VerifyEnvelope` | `envelope.go` |
 | ML-DSA cert-set verify | `MLDSACertSetVerifier.VerifyCertSet` | caller-supplied |
 | Pulsar Pulse verify | `pulsar.KernelVerifier.VerifyPulse` | `pulsar/pulsar.go` |
 
@@ -225,8 +232,8 @@ Each step is a single function in a single file:
 
 ## References
 
-- LP-021 — Warp 1.x classical messaging.
-- LP-021v2 — Warp 2.0 hybrid envelope (this spec).
+- LP-021 — Warp classical Beam-only messaging (legacy lineage).
+- LP-021v2 — Warp hybrid envelope (this spec).
 - LP-073 — Pulsar lattice threshold kernel.
 - LP-075 — BLS aggregate (Beam).
 - LP-105 — Lux Stack Lexicon (Beam, Pulse, Prism, Horizon).
