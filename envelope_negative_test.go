@@ -28,7 +28,7 @@ func negMessageFixture(t *testing.T) *Message {
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE},
 		SourceKeyEraID:   7,
 		SourceGeneration: 11,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("envelope-negative-test-payload"),
 	}
 }

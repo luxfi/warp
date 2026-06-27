@@ -49,7 +49,7 @@ import (
 // Then assert:
 //   - IsPQFinal(env) == false.
 //   - HorizonFinalErr(env) returns ErrNotHorizonFinal-equivalent.
-//   - VerifyV2 with RequirePulse=true returns an error mentioning the
+//   - VerifyV2 with RequireCorona=true returns an error mentioning the
 //     missing PQ lane.
 func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
 	env := envFixture(t, 7, 11)
@@ -59,7 +59,7 @@ func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
 	// no Pulse accompanies the cert set.
 	env.MLDSACertSet = bytes.Repeat([]byte{0xAB}, 192)
 	require.True(t, env.HasMLDSACertSet())
-	require.False(t, env.HasPulse())
+	require.False(t, env.HasCorona())
 
 	// Classification predicate.
 	if IsPQFinal(env) {
@@ -71,16 +71,16 @@ func TestGroth16WrapperAloneIsNotHorizonFinal(t *testing.T) {
 	if err == nil {
 		t.Fatal("HorizonFinalErr accepted Groth16-only envelope")
 	}
-	if !strings.Contains(err.Error(), "PulsarPulse") {
-		t.Fatalf("HorizonFinalErr message does not mention missing Pulse: %v", err)
+	if !strings.Contains(err.Error(), "CoronaRingtail") {
+		t.Fatalf("HorizonFinalErr message does not mention missing Corona lane: %v", err)
 	}
 
-	// VerifyV2 with RequirePulse=true must reject — Beam / Pulse /
+	// VerifyV2 with RequireCorona=true must reject — Beam / Pulse /
 	// CertSet are independent lanes; missing Pulse is fatal under
-	// RequirePulse.
+	// RequireCorona.
 	opts := warp.VerifyOptions{
 		SkipBeam:     true,
-		RequirePulse: true,
+		RequireCorona: true,
 	}
 	verifyErr := warp.VerifyWithOptions(env, opts)
 	require.Error(t, verifyErr)
@@ -97,7 +97,7 @@ func TestHorizonFromEnvelopeFlowsLanesButClassificationCatchesIt(t *testing.T) {
 
 	cert, err := HorizonFromEnvelope(env)
 	require.NoError(t, err)
-	require.Empty(t, cert.Pulse, "Pulse should be empty when envelope has no Pulse")
+	require.Empty(t, cert.CoronaRingtail, "Pulse should be empty when envelope has no Pulse")
 	require.NotEmpty(t, cert.MLDSACertSet, "ML-DSA cert set bytes should flow through")
 
 	// Classification still rejects.
@@ -135,9 +135,9 @@ func TestIsPQRootOfTrustClassification(t *testing.T) {
 		{"unknown", false},
 	}
 	for _, tc := range cases {
-		got := IsPQRootOfTrust(tc.system)
+		got := warp.IsPQRootOfTrust(tc.system)
 		if got != tc.pq {
-			t.Errorf("IsPQRootOfTrust(%q) = %v, want %v", tc.system, got, tc.pq)
+			t.Errorf("warp.IsPQRootOfTrust(%q) = %v, want %v", tc.system, got, tc.pq)
 		}
 	}
 }
@@ -148,7 +148,7 @@ func TestIsPQRootOfTrustClassification(t *testing.T) {
 // this test only pins the predicate).
 func TestPulseAndCertSetTogetherIsHorizonFinalShape(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.PulseSig = bytes.Repeat([]byte{0x42}, 64)
+	env.CoronaSig = bytes.Repeat([]byte{0x42}, 64)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xAB}, 192)
 
 	require.True(t, IsPQFinal(env))
@@ -214,13 +214,13 @@ func TestFinalityDefinitionsRemarkGroth16(t *testing.T) {
 func TestClassificationPredicateMatchesDocumentation(t *testing.T) {
 	// Documentation contract: Groth16 is classical, STARK / lattice is
 	// PQ. We assert both directions.
-	if IsPQRootOfTrust("groth16") {
+	if warp.IsPQRootOfTrust("groth16") {
 		t.Error("predicate disagrees with docs: Groth16 must NOT be PQ")
 	}
-	if !IsPQRootOfTrust("stark-rescue") {
+	if !warp.IsPQRootOfTrust("stark-rescue") {
 		t.Error("predicate disagrees with docs: STARK wrappers should be PQ")
 	}
-	if !IsPQRootOfTrust("lattice-zk") {
+	if !warp.IsPQRootOfTrust("lattice-zk") {
 		t.Error("predicate disagrees with docs: lattice-zk wrappers should be PQ")
 	}
 }

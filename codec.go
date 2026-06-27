@@ -54,7 +54,7 @@ var (
 const (
 	messageDST = "LUX-WARP-ZAP-CORE-v1"
 	beamDST    = "LUX-WARP-ZAP-BEAM-v1"
-	pulseDST   = "LUX-WARP-ZAP-PULSE-v1"
+	coronaDST  = "LUX-WARP-ZAP-CORONA-v1"
 	mldsaDST   = "LUX-WARP-ZAP-MLDSA-v1"
 )
 
@@ -77,9 +77,10 @@ func keccak256(parts ...[]byte) [32]byte {
 // (including PQ lineage) rather than only the unsigned message body.
 func BeamSigningBytes(d ids.ID) []byte { return append([]byte(beamDST), d[:]...) }
 
-// PulseSigningBytes returns the exact bytes the Pulsar Pulse lane signs
-// and verifies: pulseDST ‖ D.
-func PulseSigningBytes(d ids.ID) []byte { return append([]byte(pulseDST), d[:]...) }
+// CoronaSigningBytes returns the exact bytes the Corona Ringtail lattice
+// threshold lane signs and verifies: coronaDST ‖ D. (This lane was formerly
+// mislabeled "Pulse"; it is the corona kernel's Module-LWE signature.)
+func CoronaSigningBytes(d ids.ID) []byte { return append([]byte(coronaDST), d[:]...) }
 
 // MLDSASigningBytes returns the exact bytes the ML-DSA cert-set lane signs
 // and verifies: mldsaDST ‖ D.

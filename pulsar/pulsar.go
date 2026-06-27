@@ -1,33 +1,40 @@
 // Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// Package pulsar wires Warp 2.0 envelopes to the Pulsar lattice
-// threshold-signature kernel. It is the interface the warp root
-// package's PulseVerifier callback satisfies.
+// Package pulsar wires Quasar envelopes to the Corona Ringtail (Module-LWE)
+// lattice threshold-signature kernel, and hosts the Horizon multi-lane
+// certificate helpers. It is the interface the warp root package's
+// CoronaVerifier callback satisfies.
 //
-// Why a subpackage. The root warp package MUST NOT import the Pulsar
+// NAMING NOTE (the conflation this change kills): the lattice-threshold lane
+// wired here is CORONA (the corona kernel, Module-LWE / Ringtail), NOT Pulsar
+// (threshold ML-DSA). The package directory is still named "pulsar" for now;
+// the lane it verifies is Corona. Pulsar (threshold ML-DSA) is a separate,
+// reserved, fail-closed evidence kind in the root package (evidence.go).
+//
+// Why a subpackage. The root warp package MUST NOT import the corona
 // kernel directly: doing so would create an import cycle through the
-// threshold orchestration framework (warp →
-// threshold/protocols/lss/lss_pulsar → warp via signature plumbing).
-// Splitting the Pulse path into a subpackage lets the root warp
-// package depend only on the small PulseVerifier interface, while the
-// concrete kernel-driven verifier lives here.
+// threshold orchestration framework. Splitting the corona lane into a
+// subpackage lets the root warp package depend only on the small
+// CoronaVerifier interface, while the concrete kernel-driven verifier
+// lives here.
 //
 // Architecture:
 //
-//	warp                      (root pkg; no Pulsar import)
-//	  ├── Envelope        (the single envelope type)
-//	  ├── PulseVerifier       (interface)
-//	  └── VerifyWithOptions / VerifyPQLanes
+//	warp                      (root pkg; no corona-kernel import)
+//	  ├── Envelope            (the Quasar envelope type)
+//	  ├── CoronaVerifier      (interface: VerifyRingtailThreshold)
+//	  └── VerifyWithOptions / VerifyPQLanes / VerifyFinalityEvidence
 //
-//	warp/pulsar (this pkg; imports github.com/luxfi/pulsar)
-//	  ├── KernelVerifier      (PulseVerifier impl; Pulse over PulseSigningBytes(D))
+//	warp/pulsar (this pkg; imports github.com/luxfi/corona)
+//	  ├── RingtailVerifier    (CoronaVerifier impl; corona sig over CoronaSigningBytes(D))
 //	  └── HorizonCertificate  (LP-105 §"HorizonCertificate" helper)
 //
-// The KernelVerifier accepts a function that pulls a (GroupKey,
-// HashSuiteID) tuple from a (KeyEraID, Generation) pair — typically
-// supplied by the destination chain's source-chain key registry. The
-// kernel's Verify is then invoked over the canonical signing bytes.
+// The RingtailVerifier accepts a CoronaGroupKeyResolver that pulls a
+// (corona.GroupKey, suiteID) tuple from a (KeyEraID, Generation) pair —
+// typically supplied by the destination chain's source-chain corona key
+// registry. The corona kernel's Verify is then invoked over the canonical
+// signing bytes.
 //
 // LP-105 §"Warp evolution" is the normative spec; this package is the
 // production wiring.
@@ -38,9 +45,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/luxfi/ids"
 	"github.com/luxfi/warp"
 
-	"github.com/luxfi/corona/hash"
 	corona "github.com/luxfi/corona/threshold"
 
 	"github.com/luxfi/lattice/v7/ring"
@@ -48,35 +55,45 @@ import (
 	"github.com/luxfi/lattice/v7/utils/structs"
 )
 
-// Errors returned by the Warp Pulse path.
+// Errors returned by the Warp Corona Ringtail lane path.
 var (
-	// ErrPulseAbsent is returned when a verifier is asked to verify a
-	// Pulse that the envelope does not carry.
-	ErrPulseAbsent = errors.New("warp pulsar: envelope has no Pulse to verify")
+	// ErrCoronaAbsent is returned when a verifier is asked to verify a
+	// corona signature that the envelope does not carry.
+	ErrCoronaAbsent = errors.New("warp corona: envelope has no Corona signature to verify")
 
-	// ErrGroupKeyResolverFailed is returned when the GroupKeyResolver
-	// could not produce a key for the envelope's (KeyEraID, Generation).
-	ErrGroupKeyResolverFailed = errors.New("warp pulsar: group-key resolver failed")
+	// ErrCoronaGroupKeyResolverFailed is returned when the
+	// CoronaGroupKeyResolver could not produce a key for the envelope's
+	// (KeyEraID, Generation).
+	ErrCoronaGroupKeyResolverFailed = errors.New("warp corona: group-key resolver failed")
 
-	// ErrPulseVerifyFailed is returned when the Pulsar kernel rejects
-	// the threshold signature.
-	ErrPulseVerifyFailed = errors.New("warp pulsar: kernel rejected pulse")
+	// ErrCoronaVerifyFailed is returned when the corona kernel rejects the
+	// threshold signature.
+	ErrCoronaVerifyFailed = errors.New("warp corona: kernel rejected signature")
 
-	// ErrSuiteMismatch is returned when the envelope's HashSuiteID does
-	// not match the resolver-supplied HashSuite.
-	ErrSuiteMismatch = errors.New("warp pulsar: hash-suite mismatch")
+	// ErrCoronaSuiteMismatch is returned when the resolver-supplied suite is
+	// not the Corona Ringtail lane suite (warp.DefaultCoronaSuiteID). This
+	// is the CORONA lane suite check — decoupled from the Message's generic
+	// c14n hash tag.
+	ErrCoronaSuiteMismatch = errors.New("warp corona: resolver suite is not the Corona Ringtail suite")
 )
 
-// GroupKeyResolver maps a (sourceChainID, keyEraID, generation) tuple
-// to the Pulsar GroupKey + HashSuite identifier the source chain was
-// using when the envelope was signed. Destination chains implement
-// this against their source-chain key registry — a contract that
-// records the source's GroupKey lineage as it evolves through
-// Bootstrap, Reshare, and Reanchor events.
+// CoronaGroupKeyResolver maps a (sourceChainID, keyEraID, generation) tuple
+// to the Corona Ringtail GroupKey + suite identifier the source chain was
+// using when the envelope was signed. Destination chains implement this
+// against their source-chain CORONA key registry — a contract that records
+// the source's corona GroupKey lineage as it evolves through Bootstrap,
+// Reshare, and Reanchor events.
 //
-// Returning a zero-pointer GroupKey or empty suiteID is treated as
-// ErrGroupKeyResolverFailed.
-type GroupKeyResolver interface {
+// This is the CORONA threshold-lane resolver. It is a DISTINCT type from the
+// warp.PulsarKeyEraResolver (threshold ML-DSA, one group key): the two key-era
+// records are not interchangeable. The P3Q / cert-set lanes need no group-key
+// resolver at all — they resolve INDEPENDENT per-validator keys via
+// warp.SignerSetAuthority.
+//
+// Returning a zero-pointer GroupKey is treated as
+// ErrCoronaGroupKeyResolverFailed; an empty suiteID defaults to the Corona
+// Ringtail suite (warp.DefaultCoronaSuiteID).
+type CoronaGroupKeyResolver interface {
 	ResolveGroupKey(
 		sourceChainID [32]byte,
 		keyEraID uint64,
@@ -84,76 +101,89 @@ type GroupKeyResolver interface {
 	) (gk *corona.GroupKey, suiteID string, err error)
 }
 
-// KernelVerifier is the production PulseVerifier. It uses a
-// GroupKeyResolver to fetch the source-chain Pulsar GroupKey, builds
-// the canonical signing bytes via BuildSigningBytes, and verifies the
-// envelope's Pulse against the kernel's pulsar.Verify.
-type KernelVerifier struct {
-	Resolver GroupKeyResolver
+// RingtailVerifier is the production CoronaVerifier. It uses a
+// CoronaGroupKeyResolver to fetch the source-chain Corona GroupKey, builds
+// the canonical signing bytes via warp.CoronaSigningBytes, and verifies the
+// envelope's CoronaSig against the corona kernel's Verify.
+type RingtailVerifier struct {
+	Resolver CoronaGroupKeyResolver
 }
 
-// NewKernelVerifier returns a Pulse verifier backed by the given
+// NewRingtailVerifier returns a Corona Ringtail verifier backed by the given
 // resolver.
-func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
-	return &KernelVerifier{Resolver: r}
+func NewRingtailVerifier(r CoronaGroupKeyResolver) *RingtailVerifier {
+	return &RingtailVerifier{Resolver: r}
 }
 
-// VerifyPulse implements warp.PulseVerifier.
+// VerifyRingtailThreshold implements warp.CoronaVerifier (the Corona Ringtail
+// lattice-threshold lane). It is SUBJECT-AGNOSTIC: subject is the 32-byte
+// finality digest the corona signature is over — D for a warp cross-chain
+// envelope, M for a quasar consensus cert — and ev is the typed corona lane
+// payload (routing + serialized signature). This single verification core
+// serves both carriers; the carrier only decides which subject to pass.
 //
 // The verification chain:
 //
-//  1. Envelope must carry a non-empty Pulse.
-//  2. Resolve the source-chain GroupKey for (KeyEraID, Generation).
-//  3. Confirm the resolver-supplied suiteID matches the envelope's
-//     resolved HashSuiteID.
-//  4. Recompute D from the envelope's Message and build the Pulse
-//     signing bytes warp.PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1"‖D.
-//  5. Deserialize the envelope's PulseSig into a corona.Signature.
+//  1. The evidence must carry a non-empty corona signature.
+//  2. Resolve the Corona GroupKey for (ChainID, KeyEraID, Generation).
+//  3. Confirm the resolver-supplied suiteID IS the Corona Ringtail lane suite
+//     (warp.DefaultCoronaSuiteID). This is the CORONA lane suite check —
+//     DECOUPLED from the Message's generic c14n hash tag (HashSuiteID), which
+//     is pinned to "Pulsar-SHA3" for teleport/BridgeV2 D-lockstep and is NOT a
+//     lane selector. (Decoupling these is what kills the old spurious
+//     ErrSuiteMismatch where the corona resolver's suite was compared against
+//     the message's "Pulsar-SHA3" tag.)
+//  4. Build the corona signing bytes warp.CoronaSigningBytes(subject) =
+//     "LUX-WARP-ZAP-CORONA-v1"‖subject.
+//  5. Deserialize ev.Sig into a corona.Signature.
 //  6. Call corona.Verify(gk, signingBytes, sig).
 //
-// D folds in SourceNebulaRoot / SourceKeyEraID / SourceGeneration /
-// HashSuiteID / SourceChainID / NetworkID / Payload, so verifying the
-// Pulse over PulseSigningBytes(D) binds the Pulse to every one of them.
-func (v *KernelVerifier) VerifyPulse(env *warp.Envelope) error {
-	if env == nil || !env.HasPulse() {
-		return ErrPulseAbsent
+// For a warp envelope, subject = D folds in SourceNebulaRoot / SourceKeyEraID /
+// SourceGeneration / HashSuiteID / SourceChainID / NetworkID / Payload, so
+// verifying over CoronaSigningBytes(D) binds the signature to every one of them.
+func (v *RingtailVerifier) VerifyRingtailThreshold(subject []byte, ev warp.CoronaEvidence) error {
+	if len(ev.Sig) == 0 {
+		return ErrCoronaAbsent
 	}
 	if v == nil || v.Resolver == nil {
-		return fmt.Errorf("%w: nil resolver", ErrGroupKeyResolverFailed)
+		return fmt.Errorf("%w: nil resolver", ErrCoronaGroupKeyResolverFailed)
 	}
 
-	src := env.Message.SourceChainID
-
-	gk, suiteID, err := v.Resolver.ResolveGroupKey(src, env.Message.SourceKeyEraID, env.Message.SourceGeneration)
+	sid, err := ids.ToID(subject)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrGroupKeyResolverFailed, err)
+		return fmt.Errorf("%w: bad subject: %v", ErrCoronaVerifyFailed, err)
+	}
+
+	gk, suiteID, err := v.Resolver.ResolveGroupKey([32]byte(ev.ChainID), ev.KeyEraID, ev.Generation)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCoronaGroupKeyResolverFailed, err)
 	}
 	if gk == nil {
-		return fmt.Errorf("%w: nil GroupKey", ErrGroupKeyResolverFailed)
+		return fmt.Errorf("%w: nil GroupKey", ErrCoronaGroupKeyResolverFailed)
 	}
 	if suiteID == "" {
-		suiteID = hash.DefaultID
+		suiteID = string(warp.DefaultCoronaSuiteID)
 	}
-	if env.Message.HashSuiteOrDefault() != suiteID {
-		return fmt.Errorf("%w: envelope=%q resolver=%q",
-			ErrSuiteMismatch, env.Message.HashSuiteOrDefault(), suiteID)
+	if suiteID != string(warp.DefaultCoronaSuiteID) {
+		return fmt.Errorf("%w: resolver=%q want=%q",
+			ErrCoronaSuiteMismatch, suiteID, warp.DefaultCoronaSuiteID)
 	}
 
-	signing := warp.PulseSigningBytes(env.Message.ID())
+	signing := warp.CoronaSigningBytes(sid)
 
-	sig, err := DeserializePulse(env.PulseSig)
+	sig, err := DeserializeCoronaSig(ev.Sig)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrPulseVerifyFailed, err)
+		return fmt.Errorf("%w: %v", ErrCoronaVerifyFailed, err)
 	}
 
 	if !corona.Verify(gk, string(signing), sig) {
-		return ErrPulseVerifyFailed
+		return ErrCoronaVerifyFailed
 	}
 	return nil
 }
 
-// SerializePulse returns the byte stream the envelope's Pulse
-// field carries for a given pulsar threshold signature. The wire
+// SerializeCoronaSig returns the byte stream the envelope's CoronaSig
+// field carries for a given corona threshold signature. The wire
 // format wraps the kernel's canonical Vector/Matrix WriteTo stream
 // (LP-073 §"Wire Format") in three length-prefixed frames:
 //
@@ -169,9 +199,9 @@ func (v *KernelVerifier) VerifyPulse(env *warp.Envelope) error {
 // buffer.NewBuffer (the recommended lattigo path for slice-backed
 // reads). Total length grows by 12 bytes versus a raw concatenation
 // — negligible relative to the ~33 KB lattice signature.
-func SerializePulse(sig *corona.Signature) ([]byte, error) {
+func SerializeCoronaSig(sig *corona.Signature) ([]byte, error) {
 	if sig == nil {
-		return nil, errors.New("warp pulsar: nil pulse")
+		return nil, errors.New("warp corona: nil signature")
 	}
 
 	cBuf := buffer.NewBufferSize(sig.C.BinarySize())
@@ -197,8 +227,8 @@ func SerializePulse(sig *corona.Signature) ([]byte, error) {
 	return out, nil
 }
 
-// MaxPulseWireSize is the upper bound on a Warp 2.0 PulsarPulse byte
-// stream. A real Pulsar lattice threshold signature is ~33 KB
+// MaxCoronaSigWireSize is the upper bound on a Quasar Corona signature byte
+// stream. A real Corona lattice threshold signature is ~33 KB
 // (LP-073 §"Wire Format"); we accept up to 64 KB to leave headroom
 // for ring-parameter changes without admitting buffer-bomb inputs that
 // could OOM or stack-overflow the lattigo deserializer on attacker-
@@ -209,14 +239,14 @@ func SerializePulse(sig *corona.Signature) ([]byte, error) {
 // recurses by length field, so bounding the byte stream bounds the
 // recursion depth. 64 KB ÷ 8 bytes/uint64 = 8192 frames worst case;
 // well under Go's default 8 MB goroutine stack at 64 bytes per frame.
-const MaxPulseWireSize = 64 * 1024
+const MaxCoronaSigWireSize = 64 * 1024
 
-// MaxPulseFrameSize bounds each individual lane (C, Z, Delta) inside
+// MaxCoronaSigFrameSize bounds each individual lane (C, Z, Delta) inside
 // a serialized pulse. Real lanes are ≤ ~16 KB; we accept up to 32 KB.
-const MaxPulseFrameSize = 32 * 1024
+const MaxCoronaSigFrameSize = 32 * 1024
 
 // MaxLatticeUintSliceLen bounds the largest uint64 slice we permit in
-// a lattigo wire frame. A canonical Pulsar Poly has 256 coefficients
+// a lattigo wire frame. A canonical corona Poly has 256 coefficients
 // per level; a Vector/Matrix has at most M*N = 8*32 = 256 polys; so
 // every inner length-prefix should fit comfortably under this bound.
 // A frame whose declared inner length exceeds this is a structural
@@ -317,16 +347,16 @@ func validateVectorPolyFrame(frame []byte) error {
 	return nil
 }
 
-// DeserializePulse is the inverse of SerializePulse. It is hardened
+// DeserializeCoronaSig is the inverse of SerializeCoronaSig. It is hardened
 // against attacker-controlled length prefixes and lattigo
 // deserialization panics: every code path returns a clean error and
 // no panic crosses the boundary.
-func DeserializePulse(b []byte) (sig *corona.Signature, err error) {
+func DeserializeCoronaSig(b []byte) (sig *corona.Signature, err error) {
 	if len(b) == 0 {
-		return nil, errors.New("warp pulsar: empty pulse")
+		return nil, errors.New("warp pulsar: empty corona signature")
 	}
-	if len(b) > MaxPulseWireSize {
-		return nil, fmt.Errorf("warp pulsar: pulse exceeds max wire size %d > %d", len(b), MaxPulseWireSize)
+	if len(b) > MaxCoronaSigWireSize {
+		return nil, fmt.Errorf("warp pulsar: corona signature exceeds max wire size %d > %d", len(b), MaxCoronaSigWireSize)
 	}
 
 	// Convert any lattigo-deserialize panic into a clean error. The
@@ -344,8 +374,8 @@ func DeserializePulse(b []byte) (sig *corona.Signature, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("warp pulsar: decode C frame: %w", err)
 	}
-	if len(cBytes) > MaxPulseFrameSize {
-		return nil, fmt.Errorf("warp pulsar: C frame exceeds %d bytes", MaxPulseFrameSize)
+	if len(cBytes) > MaxCoronaSigFrameSize {
+		return nil, fmt.Errorf("warp pulsar: C frame exceeds %d bytes", MaxCoronaSigFrameSize)
 	}
 	if err := validatePolyFrame(cBytes); err != nil {
 		return nil, fmt.Errorf("warp pulsar: C frame: %w", err)
@@ -354,8 +384,8 @@ func DeserializePulse(b []byte) (sig *corona.Signature, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("warp pulsar: decode Z frame: %w", err)
 	}
-	if len(zBytes) > MaxPulseFrameSize {
-		return nil, fmt.Errorf("warp pulsar: Z frame exceeds %d bytes", MaxPulseFrameSize)
+	if len(zBytes) > MaxCoronaSigFrameSize {
+		return nil, fmt.Errorf("warp pulsar: Z frame exceeds %d bytes", MaxCoronaSigFrameSize)
 	}
 	if err := validateVectorPolyFrame(zBytes); err != nil {
 		return nil, fmt.Errorf("warp pulsar: Z frame: %w", err)
@@ -364,14 +394,14 @@ func DeserializePulse(b []byte) (sig *corona.Signature, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("warp pulsar: decode Delta frame: %w", err)
 	}
-	if len(dBytes) > MaxPulseFrameSize {
-		return nil, fmt.Errorf("warp pulsar: Delta frame exceeds %d bytes", MaxPulseFrameSize)
+	if len(dBytes) > MaxCoronaSigFrameSize {
+		return nil, fmt.Errorf("warp pulsar: Delta frame exceeds %d bytes", MaxCoronaSigFrameSize)
 	}
 	if err := validateVectorPolyFrame(dBytes); err != nil {
 		return nil, fmt.Errorf("warp pulsar: Delta frame: %w", err)
 	}
 	if len(rest) != 0 {
-		return nil, fmt.Errorf("warp pulsar: %d trailing bytes after pulse", len(rest))
+		return nil, fmt.Errorf("warp pulsar: %d trailing bytes after corona signature", len(rest))
 	}
 
 	sig = &corona.Signature{}
@@ -435,14 +465,15 @@ type HorizonCertificate struct {
 	// carry the ML-DSA lane.
 	MLDSACertSet []byte
 
-	// Pulse is the Pulsar threshold-signature bytes. Empty if the
-	// envelope did not carry the Pulse lane.
-	Pulse []byte
+	// CoronaRingtail is the Corona Ringtail lattice threshold-signature
+	// bytes. Empty if the envelope did not carry the corona lane.
+	// (Formerly the "Pulse" field — it is the corona lane, NOT Pulsar.)
+	CoronaRingtail []byte
 
 	// SourceNebulaRoot is the source chain's Nebula root anchor.
 	SourceNebulaRoot [32]byte
 
-	// SourceKeyEraID is the source-chain Pulsar lineage ID.
+	// SourceKeyEraID is the source-chain corona key-era ID.
 	SourceKeyEraID uint64
 
 	// SourceGeneration is the source-chain LSS generation.
@@ -467,7 +498,7 @@ func HorizonFromEnvelope(env *warp.Envelope) (*HorizonCertificate, error) {
 		SourceChainID:        env.Message.SourceChainID,
 		Beam:                 append([]byte(nil), env.Beam.Signature[:]...),
 		MLDSACertSet:         append([]byte(nil), env.MLDSACertSet...),
-		Pulse:                append([]byte(nil), env.PulseSig...),
+		CoronaRingtail:       append([]byte(nil), env.CoronaSig...),
 		SourceNebulaRoot:     env.Message.SourceNebulaRoot,
 		SourceKeyEraID:       env.Message.SourceKeyEraID,
 		SourceGeneration:     env.Message.SourceGeneration,
@@ -477,7 +508,7 @@ func HorizonFromEnvelope(env *warp.Envelope) (*HorizonCertificate, error) {
 }
 
 // HorizonMarshalPrefix is the canonical magic prefix for Horizon
-// certificate wire bytes. Distinct from any Warp envelope or Pulsar
+// certificate wire bytes. Distinct from any Warp envelope or corona
 // activation prefix.
 const HorizonMarshalPrefix = "QUASAR-HORIZON-CERT-v1"
 
@@ -492,7 +523,7 @@ const HorizonMarshalPrefix = "QUASAR-HORIZON-CERT-v1"
 //	hash_suite_id_len              4 bytes (big-endian) || bytes
 //	beam_len                       4 bytes (big-endian) || bytes
 //	mldsa_cert_set_len             4 bytes (big-endian) || bytes
-//	pulse_len                      4 bytes (big-endian) || bytes
+//	corona_sig_len                      4 bytes (big-endian) || bytes
 //	unsigned_message_bytes_len     4 bytes (big-endian) || bytes
 //
 // Encoding is total-order canonical: every byte is determined by the
@@ -503,7 +534,7 @@ func (h *HorizonCertificate) MarshalBinary() ([]byte, error) {
 	if h == nil {
 		return nil, errors.New("warp pulsar: nil HorizonCertificate")
 	}
-	out := make([]byte, 0, len(HorizonMarshalPrefix)+32+32+8+8+4+len(h.HashSuiteID)+4+len(h.Beam)+4+len(h.MLDSACertSet)+4+len(h.Pulse)+4+len(h.UnsignedMessageBytes))
+	out := make([]byte, 0, len(HorizonMarshalPrefix)+32+32+8+8+4+len(h.HashSuiteID)+4+len(h.Beam)+4+len(h.MLDSACertSet)+4+len(h.CoronaRingtail)+4+len(h.UnsignedMessageBytes))
 	out = append(out, []byte(HorizonMarshalPrefix)...)
 	out = append(out, h.SourceChainID[:]...)
 	out = append(out, h.SourceNebulaRoot[:]...)
@@ -517,7 +548,7 @@ func (h *HorizonCertificate) MarshalBinary() ([]byte, error) {
 	out = appendBELenPrefixed(out, []byte(h.HashSuiteID))
 	out = appendBELenPrefixed(out, h.Beam)
 	out = appendBELenPrefixed(out, h.MLDSACertSet)
-	out = appendBELenPrefixed(out, h.Pulse)
+	out = appendBELenPrefixed(out, h.CoronaRingtail)
 	out = appendBELenPrefixed(out, h.UnsignedMessageBytes)
 	return out, nil
 }
@@ -564,11 +595,11 @@ func (h *HorizonCertificate) UnmarshalBinary(b []byte) error {
 	}
 	h.MLDSACertSet = cert
 
-	pulse, rest, err := readBELenPrefixed(rest)
+	coronaSig, rest, err := readBELenPrefixed(rest)
 	if err != nil {
-		return fmt.Errorf("warp pulsar: horizon pulse: %w", err)
+		return fmt.Errorf("warp pulsar: horizon corona sig: %w", err)
 	}
-	h.Pulse = pulse
+	h.CoronaRingtail = coronaSig
 
 	umsg, rest, err := readBELenPrefixed(rest)
 	if err != nil {
@@ -592,7 +623,7 @@ func (h *HorizonCertificate) UnmarshalBinary(b []byte) error {
 //  2. UnsignedMessageBytes is present (it is the transcript subject
 //     every lane signs against).
 //  3. HashSuiteID is non-empty (defaulting handled elsewhere).
-//  4. Lineage fields are coherent: at least one of (Beam, Pulse,
+//  4. Lineage fields are coherent: at least one of (Beam, Corona,
 //     MLDSACertSet) is present — a HorizonCertificate with no lanes
 //     populated cannot establish anything, and is rejected.
 //  5. The wire bytes round-trip: marshalling the receiver yields a
@@ -600,11 +631,11 @@ func (h *HorizonCertificate) UnmarshalBinary(b []byte) error {
 //     catches caller-side mutation that produced a struct
 //     MarshalBinary cannot represent).
 //
-// PrismVerify does NOT verify the BLS, ML-DSA, or Pulsar signatures —
+// PrismVerify does NOT verify the BLS, ML-DSA, or Corona signatures —
 // those are independent reductions per
 // proofs/quasar/horizon-soundness.tex Theorem ref:horizon-soundness.
 // Callers feed the result of PrismVerify into the lane-specific
-// verifiers (VerifyV1 / KernelVerifier.VerifyPulse / ML-DSA cert-set
+// verifiers (VerifyEnvelope / RingtailVerifier.VerifyRingtailThreshold / ML-DSA cert-set
 // verifier) to complete the Horizon-final check.
 func (h *HorizonCertificate) PrismVerify() error {
 	if h == nil {
@@ -619,7 +650,7 @@ func (h *HorizonCertificate) PrismVerify() error {
 	if len(h.HashSuiteID) == 0 {
 		return errors.New("warp pulsar: horizon HashSuiteID empty")
 	}
-	if len(h.Beam) == 0 && len(h.Pulse) == 0 && len(h.MLDSACertSet) == 0 {
+	if len(h.Beam) == 0 && len(h.CoronaRingtail) == 0 && len(h.MLDSACertSet) == 0 {
 		return errors.New("warp pulsar: horizon has no lanes populated")
 	}
 	// Round-trip self-check: the struct must be losslessly serialisable.
@@ -640,7 +671,7 @@ func (h *HorizonCertificate) PrismVerify() error {
 	}
 	if !bytesEqual(rt.Beam, h.Beam) ||
 		!bytesEqual(rt.MLDSACertSet, h.MLDSACertSet) ||
-		!bytesEqual(rt.Pulse, h.Pulse) ||
+		!bytesEqual(rt.CoronaRingtail, h.CoronaRingtail) ||
 		!bytesEqual(rt.UnsignedMessageBytes, h.UnsignedMessageBytes) {
 		return errors.New("warp pulsar: horizon round-trip mismatch on lane bytes")
 	}

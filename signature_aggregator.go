@@ -202,7 +202,7 @@ func newAggregatedMessage(
 	copy(beam.Signature[:], bls.SignatureToBytes(aggregateSignature))
 
 	// Preserve the PQ lanes; only the Beam is re-aggregated.
-	return NewEnvelope(&env.Message, beam, env.PulseSig, env.MLDSACertSet)
+	return NewEnvelope(&env.Message, beam, env.CoronaSig, env.MLDSACertSet)
 }
 
 type signatureResponseHandler struct {

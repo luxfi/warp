@@ -39,7 +39,7 @@ func e2eFixture(t *testing.T, withPulse, withCert bool) *Envelope {
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
 		SourceKeyEraID:   7,
 		SourceGeneration: 11,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("warp-e2e"),
 	}
 

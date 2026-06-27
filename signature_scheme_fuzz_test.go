@@ -28,7 +28,7 @@ func makeSchemeFuzzSeed(t testing.TB, hasPulse, hasCert bool) []byte {
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
 		SourceKeyEraID:   7,
 		SourceGeneration: 11,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("scheme-fuzz"),
 	}
 	signers := NewBitSet()
@@ -74,7 +74,7 @@ func FuzzSignatureSchemeLegParser(f *testing.F) {
 
 		// Property B: predicate matches the PQ lanes. PQ evidence = the Pulse
 		// (Corona threshold, primary) OR the ML-DSA cert-set (fallback).
-		hasField := len(env.PulseSig) > 0 || len(env.MLDSACertSet) > 0
+		hasField := len(env.CoronaSig) > 0 || len(env.MLDSACertSet) > 0
 		hasPredicate := env.HasPQEvidence()
 		if hasField != hasPredicate {
 			t.Fatalf("HasPQEvidence drift: field=%t predicate=%t", hasField, hasPredicate)

@@ -8,10 +8,10 @@
 //
 // Properties under fuzzing:
 //
-//  1. SerializePulse(sig) ↔ DeserializePulse(bytes) round-trips on
+//  1. SerializeCoronaSig(sig) ↔ DeserializeCoronaSig(bytes) round-trips on
 //     valid signatures (kernel-generated).
 //
-//  2. DeserializePulse(arbitrary bytes) never panics; tampered inputs
+//  2. DeserializeCoronaSig(arbitrary bytes) never panics; tampered inputs
 //     produce a clean error.
 //
 //  3. Tampering any byte of a serialized pulse causes either a parse
@@ -29,7 +29,7 @@ import (
 	corona "github.com/luxfi/corona/threshold"
 )
 
-// FuzzPulseDeserialize runs DeserializePulse over arbitrary bytes and
+// FuzzPulseDeserialize runs DeserializeCoronaSig over arbitrary bytes and
 // confirms it never panics.
 func FuzzPulseDeserialize(f *testing.F) {
 	// Seed: a real pulse from a 3-of-2 ceremony.
@@ -45,12 +45,12 @@ func FuzzPulseDeserialize(f *testing.F) {
 	f.Add(append([]byte{0x10, 0x00, 0x00, 0x00}, bytes.Repeat([]byte{0xff}, 32)...))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
-		// Property: DeserializePulse never panics regardless of input.
-		_, _ = DeserializePulse(raw)
+		// Property: DeserializeCoronaSig never panics regardless of input.
+		_, _ = DeserializeCoronaSig(raw)
 	})
 }
 
-// FuzzPulseSerialize runs the full SerializePulse → DeserializePulse →
+// FuzzPulseSerialize runs the full SerializeCoronaSig → DeserializeCoronaSig →
 // corona.Verify round trip over valid pulses, then mutates one
 // byte at a time and confirms either a parse error or a Verify failure
 // — never a silent-success / panic outcome.
@@ -76,7 +76,7 @@ func FuzzPulseSerialize(f *testing.F) {
 		mut := append([]byte(nil), good...)
 		mut[i] ^= 0x01
 
-		sig, err := DeserializePulse(mut)
+		sig, err := DeserializeCoronaSig(mut)
 		if err != nil {
 			// Parse error is the expected outcome on most flips.
 			return
@@ -95,14 +95,14 @@ func FuzzPulseSerialize(f *testing.F) {
 // a fixed seed corpus deterministically for CI replay.
 func TestFuzzCorpus_PulseReplay(t *testing.T) {
 	good, message, gk := mustGoodPulse()
-	sig, err := DeserializePulse(good)
+	sig, err := DeserializeCoronaSig(good)
 	if err != nil {
 		t.Fatalf("seed: deserialize failed: %v", err)
 	}
 	if !corona.Verify(gk, message, sig) {
 		t.Fatalf("seed: verify failed")
 	}
-	wire, err := SerializePulse(sig)
+	wire, err := SerializeCoronaSig(sig)
 	if err != nil {
 		t.Fatalf("seed: re-serialize failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func mustGoodPulse() (wire []byte, msg string, gk *corona.GroupKey) {
 	if err != nil {
 		panic(err)
 	}
-	wire, err = SerializePulse(sig)
+	wire, err = SerializeCoronaSig(sig)
 	if err != nil {
 		panic(err)
 	}

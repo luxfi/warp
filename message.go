@@ -9,11 +9,23 @@ import (
 	"github.com/luxfi/ids"
 )
 
-// DefaultHashSuiteID is the canonical Pulsar hash profile. A Message's
-// HashSuiteID MUST be resolved to a concrete value before it is marshaled
-// or signed — there is NO sign-time defaulting inside the codec. This
-// constant is the resolution target callers use at construction time.
-const DefaultHashSuiteID = "Pulsar-SHA3"
+// MessageHashProfileTag is the GENERIC message-level hash-profile tag a
+// Message folds into D via its c14n HashSuiteID field. It is NOT a lane
+// verifier selector and NOT the Corona lane suite (that is
+// DefaultCoronaSuiteID, resolved independently — see evidence.go). Decoupling
+// these two is what kills the historical "Pulsar aliases Corona" bug.
+//
+// Its VALUE ("Pulsar-SHA3") is PINNED for teleport/BridgeV2 on-chain
+// D-lockstep: teleport.ComputeMessageHash builds a Message with this tag and
+// BridgeV2.sol recomputes the SAME c14n preimage and keccak256 (see
+// teleport/payload.go §4.2). Changing this string changes D for every
+// default-tag Message and is therefore a COORDINATED HARD-FORK with the
+// on-chain contract — never a refactor.
+//
+// A Message's HashSuiteID MUST be resolved to a concrete value before it is
+// marshaled or signed — there is NO sign-time defaulting inside the codec.
+// This constant is the resolution target callers use at construction time.
+const MessageHashProfileTag = "Pulsar-SHA3"
 
 // Message is the single signed subject of a Warp message. It folds the
 // former UnsignedMessage (NetworkID, SourceChainID, Payload) together with
@@ -46,14 +58,14 @@ type Message struct {
 }
 
 // NewMessage builds a Message for a locally-originated message:
-// zero PQ lineage and HashSuiteID resolved to DefaultHashSuiteID. Callers
-// that bind a specific Pulsar lineage construct the struct directly with
+// zero PQ lineage and HashSuiteID resolved to MessageHashProfileTag. Callers
+// that bind a specific corona lineage construct the struct directly with
 // the resolved fields.
 func NewMessage(networkID uint32, sourceChainID ids.ID, payload []byte) (*Message, error) {
 	c := &Message{
 		NetworkID:     networkID,
 		SourceChainID: sourceChainID,
-		HashSuiteID:   DefaultHashSuiteID,
+		HashSuiteID:   MessageHashProfileTag,
 		Payload:       payload,
 	}
 	if err := c.Verify(); err != nil {
@@ -63,12 +75,13 @@ func NewMessage(networkID uint32, sourceChainID ids.ID, payload []byte) (*Messag
 }
 
 // HashSuiteOrDefault returns the resolved HashSuiteID, falling back to
-// DefaultHashSuiteID for the zero value. This is a READ helper for
+// MessageHashProfileTag for the zero value. This is a READ helper for
 // downstream policy checks; it does NOT influence marshaling — Bytes()
-// always encodes the field verbatim.
+// always encodes the field verbatim. It returns the message-level c14n
+// tag, NOT a lane suite.
 func (c *Message) HashSuiteOrDefault() string {
 	if c == nil || c.HashSuiteID == "" {
-		return DefaultHashSuiteID
+		return MessageHashProfileTag
 	}
 	return c.HashSuiteID
 }

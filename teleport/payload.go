@@ -41,7 +41,7 @@
 //	  ‖ bytes32(0)                           // SourceNebulaRoot — zero for teleport
 //	  ‖ uint64_be(0)                         // SourceKeyEraID   — zero for teleport
 //	  ‖ uint64_be(0)                         // SourceGeneration — zero for teleport
-//	  ‖ uint32_be(11) ‖ "Pulsar-SHA3"        // HashSuiteID (DefaultHashSuiteID)
+//	  ‖ uint32_be(11) ‖ "Pulsar-SHA3"        // HashSuiteID (MessageHashProfileTag, pinned)
 //	  ‖ uint32_be(90) ‖ teleportPayload[90]  // Payload
 //	D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ core_c14n)
 //

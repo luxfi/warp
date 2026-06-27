@@ -84,7 +84,7 @@ func makeFuzzSeed(eraID, generation uint64, withPulse, withCertSet bool) []byte 
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
 		SourceKeyEraID:   eraID,
 		SourceGeneration: generation,
-		HashSuiteID:      DefaultHashSuiteID,
+		HashSuiteID:      MessageHashProfileTag,
 		Payload:          []byte("envelope-fuzz-payload"),
 	}
 	signers := NewBitSet()
