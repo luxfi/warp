@@ -257,7 +257,7 @@ func (b *AtomicBridge) lockAssets(ctx context.Context, record *SwapRecord) error
 		return fmt.Errorf("failed to create addressed call: %w", err)
 	}
 
-	unsignedMsg, err := warp.NewCore(
+	unsignedMsg, err := warp.NewMessage(
 		b.networkID,
 		b.sourceChainID,
 		addressedCall.Bytes(),
@@ -281,7 +281,7 @@ func (b *AtomicBridge) lockAssets(ctx context.Context, record *SwapRecord) error
 // ProcessLockMessage processes an incoming lock message on dest chain
 func (b *AtomicBridge) ProcessLockMessage(ctx context.Context, msg *warp.Envelope) error {
 	// Parse the payload
-	addressedCall, err := payload.ParseAddressedCall(msg.Core.Payload)
+	addressedCall, err := payload.ParseAddressedCall(msg.Message.Payload)
 	if err != nil {
 		return fmt.Errorf("invalid addressed call: %w", err)
 	}
@@ -296,7 +296,7 @@ func (b *AtomicBridge) ProcessLockMessage(ctx context.Context, msg *warp.Envelop
 	}
 
 	// Verify the message source
-	if msg.Core.SourceChainID != swapPayload.SourceChain {
+	if msg.Message.SourceChainID != swapPayload.SourceChain {
 		return errors.New("source chain mismatch")
 	}
 
@@ -400,7 +400,7 @@ func (b *AtomicBridge) executeSwap(ctx context.Context, record *SwapRecord) erro
 		return err
 	}
 
-	unsignedMsg, err := warp.NewCore(
+	unsignedMsg, err := warp.NewMessage(
 		b.networkID,
 		b.destChainID,
 		addressedCall.Bytes(),
@@ -474,7 +474,7 @@ func (b *AtomicBridge) SettleSwap(ctx context.Context, swapID [32]byte, preimage
 		return err
 	}
 
-	unsignedMsg, err := warp.NewCore(
+	unsignedMsg, err := warp.NewMessage(
 		b.networkID,
 		b.destChainID,
 		addressedCall.Bytes(),
@@ -545,7 +545,7 @@ func (b *AtomicBridge) CancelSwap(ctx context.Context, swapID [32]byte) error {
 		return err
 	}
 
-	unsignedMsg, err := warp.NewCore(
+	unsignedMsg, err := warp.NewMessage(
 		b.networkID,
 		b.destChainID,
 		addressedCall.Bytes(),

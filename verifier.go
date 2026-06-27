@@ -9,7 +9,7 @@ import (
 
 // Verifier verifies warp messages before signing
 type Verifier interface {
-	// Verify verifies a Core with justification before this node
+	// Verify verifies a Message with justification before this node
 	// signs it. Returns nil on success, or an error if verification fails.
-	Verify(ctx context.Context, core *Core, justification []byte) error
+	Verify(ctx context.Context, message *Message, justification []byte) error
 }

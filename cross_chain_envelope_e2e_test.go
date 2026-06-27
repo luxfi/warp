@@ -29,11 +29,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// e2eFixture builds a canonical Envelope: a Core with payload
+// e2eFixture builds a canonical Envelope: a Message with payload
 // "warp-e2e" plus deterministic Beam, and optional Pulse / MLDSACertSet.
 func e2eFixture(t *testing.T, withPulse, withCert bool) *Envelope {
 	t.Helper()
-	core := &Core{
+	message := &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -59,7 +59,7 @@ func e2eFixture(t *testing.T, withPulse, withCert bool) *Envelope {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
 
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sigBytes), pulse, cert)
 	require.NoError(t, err)
 	return env
 }

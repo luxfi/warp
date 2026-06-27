@@ -18,10 +18,10 @@ var (
 )
 
 // Signer signs warp messages. It signs the Beam domain
-// (BeamSigningBytes(core.ID())), never the bare core bytes or an opaque
+// (BeamSigningBytes(message.ID())), never the bare message bytes or an opaque
 // caller-supplied digest.
 type Signer interface {
-	Sign(core *Core) ([]byte, error)
+	Sign(message *Message) ([]byte, error)
 }
 
 // NewSigner creates a new warp message signer using a bls.Signer interface
@@ -39,15 +39,15 @@ type signer struct {
 	chainID   ids.ID
 }
 
-func (s *signer) Sign(core *Core) ([]byte, error) {
-	if core.SourceChainID != s.chainID {
+func (s *signer) Sign(message *Message) ([]byte, error) {
+	if message.SourceChainID != s.chainID {
 		return nil, ErrWrongSourceChainID
 	}
-	if core.NetworkID != s.networkID {
+	if message.NetworkID != s.networkID {
 		return nil, ErrWrongNetworkID
 	}
 
-	sig, err := s.sk.Sign(BeamSigningBytes(core.ID()))
+	sig, err := s.sk.Sign(BeamSigningBytes(message.ID()))
 	if err != nil {
 		return nil, err
 	}

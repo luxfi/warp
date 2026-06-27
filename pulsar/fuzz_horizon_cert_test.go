@@ -170,7 +170,7 @@ func horizonSeed(env *warp.Envelope) []byte {
 }
 
 func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64, pulse, cert []byte) *warp.Envelope {
-	core := &warp.Core{
+	message := &warp.Message{
 		NetworkID:        1,
 		SourceChainID:    chainID,
 		SourceKeyEraID:   eraID,
@@ -182,7 +182,7 @@ func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64,
 	signers.Add(0)
 	var sig [bls.SignatureLen]byte
 	copy(sig[:], bytes.Repeat([]byte{sigByte}, bls.SignatureLen))
-	env, err := warp.NewEnvelope(core, warp.NewBitSetSignature(signers, sig), pulse, cert)
+	env, err := warp.NewEnvelope(message, warp.NewBitSetSignature(signers, sig), pulse, cert)
 	if err != nil {
 		panic(err)
 	}
@@ -195,7 +195,7 @@ func mustHorizonSeedFull() []byte {
 		ids.ID{0xDE, 0xAD, 0xBE, 0xEF}, []byte("horizon-fuzz-seed"), 0xAB, 7, 11,
 		bytes.Repeat([]byte{0x42}, 64), bytes.Repeat([]byte{0xC3}, 192),
 	)
-	env.Core.SourceNebulaRoot = [32]byte{0xC0, 0xDE}
+	env.Message.SourceNebulaRoot = [32]byte{0xC0, 0xDE}
 	return horizonSeed(env)
 }
 

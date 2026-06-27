@@ -32,9 +32,9 @@ var (
 
 // Envelope is a complete signed Warp message:
 //
-//		wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Core ‖ Beam ‖ PulseSig ‖ MLDSACertSet
+//		wire: magic("LWZP"||0x01) ‖ kind(0x02) ‖ Message ‖ Beam ‖ PulseSig ‖ MLDSACertSet
 //
-//	  - Core         the signed subject (Core); folds PQ lineage.
+//	  - Message         the signed subject (Message); folds PQ lineage.
 //	  - Beam         the BLS aggregate over BeamSigningBytes(D).
 //	  - PulseSig     optional Pulsar threshold signature bytes (u32(0) frame
 //	                 when absent), verified over PulseSigningBytes(D).
@@ -44,19 +44,19 @@ var (
 // All four lanes are always present on the wire; absence of a PQ lane is
 // the empty u32(0) frame, not an omitted field.
 type Envelope struct {
-	Core         Core
+	Message      Message
 	Beam         BitSetSignature
 	PulseSig     []byte
 	MLDSACertSet []byte
 }
 
 // NewEnvelope assembles and structurally validates an envelope.
-func NewEnvelope(core *Core, beam BitSetSignature, pulse, mldsaCertSet []byte) (*Envelope, error) {
-	if core == nil {
-		return nil, fmt.Errorf("%w: nil core", ErrInvalidMessage)
+func NewEnvelope(message *Message, beam BitSetSignature, pulse, mldsaCertSet []byte) (*Envelope, error) {
+	if message == nil {
+		return nil, fmt.Errorf("%w: nil message", ErrInvalidMessage)
 	}
 	e := &Envelope{
-		Core:         *core,
+		Message:      *message,
 		Beam:         beam,
 		PulseSig:     pulse,
 		MLDSACertSet: mldsaCertSet,
@@ -67,13 +67,13 @@ func NewEnvelope(core *Core, beam BitSetSignature, pulse, mldsaCertSet []byte) (
 	return e, nil
 }
 
-// Verify checks structural invariants: the core must be well-formed and
+// Verify checks structural invariants: the message must be well-formed and
 // the total PQ-lane bytes must stay under MaxEnvelopeSize.
 func (e *Envelope) Verify() error {
 	if e == nil {
 		return ErrInvalidMessage
 	}
-	if err := e.Core.Verify(); err != nil {
+	if err := e.Message.Verify(); err != nil {
 		return err
 	}
 	if len(e.PulseSig)+len(e.MLDSACertSet) > MaxEnvelopeSize {
@@ -90,11 +90,11 @@ func (e *Envelope) Bytes() ([]byte, error) {
 	if err := e.Verify(); err != nil {
 		return nil, err
 	}
-	core := e.Core.marshalZAP()
-	out := make([]byte, 0, len(wireMagic)+1+len(core)+4+len(e.Beam.Signers)+SignatureLen+4+len(e.PulseSig)+4+len(e.MLDSACertSet))
+	message := e.Message.marshalZAP()
+	out := make([]byte, 0, len(wireMagic)+1+len(message)+4+len(e.Beam.Signers)+SignatureLen+4+len(e.PulseSig)+4+len(e.MLDSACertSet))
 	out = append(out, wireMagic[:]...)
 	out = appendU8(out, kindEnvelope)
-	out = append(out, core...)
+	out = append(out, message...)
 	out = e.Beam.marshalInto(out)
 	out = appendVar(out, e.PulseSig)
 	out = appendVar(out, e.MLDSACertSet)
@@ -106,7 +106,7 @@ func (e *Envelope) Bytes() ([]byte, error) {
 
 // ParseEnvelope decodes an envelope from its canonical wire bytes. It
 // rejects: a bad/absent magic, the wrong kind byte, a non-canonical
-// Signers bitset, a malformed core, and any trailing bytes.
+// Signers bitset, a malformed message, and any trailing bytes.
 func ParseEnvelope(b []byte) (*Envelope, error) {
 	if len(b) == 0 {
 		return nil, ErrEnvelopeEmpty
@@ -128,8 +128,8 @@ func ParseEnvelope(b []byte) (*Envelope, error) {
 	}
 
 	e := &Envelope{}
-	if e.Core, err = parseCore(r); err != nil {
-		return nil, fmt.Errorf("failed to parse signed core: %w", err)
+	if e.Message, err = parseMessage(r); err != nil {
+		return nil, fmt.Errorf("failed to parse signed message: %w", err)
 	}
 	if e.Beam, err = parseBeam(r); err != nil {
 		return nil, fmt.Errorf("failed to parse beam: %w", err)
@@ -149,21 +149,21 @@ func ParseEnvelope(b []byte) (*Envelope, error) {
 	return e, nil
 }
 
-// ID returns D, the Warp message ID (recomputed from Core, not sliced
+// ID returns D, the Warp message ID (recomputed from Message, not sliced
 // from the wire). v1/v2 distinctions are gone: there is one ID per
 // message and it is the replay key.
-func (e *Envelope) ID() ids.ID { return e.Core.ID() }
+func (e *Envelope) ID() ids.ID { return e.Message.ID() }
 
 // GetSourceChainID returns the source chain ID.
-func (e *Envelope) GetSourceChainID() ids.ID { return e.Core.SourceChainID }
+func (e *Envelope) GetSourceChainID() ids.ID { return e.Message.SourceChainID }
 
 // SourceChainIDHash returns the source chain ID as a common.Hash.
 func (e *Envelope) SourceChainIDHash() common.Hash {
-	return common.BytesToHash(e.Core.SourceChainID[:])
+	return common.BytesToHash(e.Message.SourceChainID[:])
 }
 
 // HashSuite returns the envelope's resolved hash suite.
-func (e *Envelope) HashSuite() string { return e.Core.HashSuiteOrDefault() }
+func (e *Envelope) HashSuite() string { return e.Message.HashSuiteOrDefault() }
 
 // HasPulse reports whether the envelope carries a Pulsar pulse.
 func (e *Envelope) HasPulse() bool { return e != nil && len(e.PulseSig) > 0 }
@@ -199,11 +199,11 @@ func VerifyEnvelope(
 	if err := e.Verify(); err != nil {
 		return err
 	}
-	if e.Core.NetworkID != networkID {
-		return fmt.Errorf("%w: expected network ID %d, got %d", ErrInvalidMessage, networkID, e.Core.NetworkID)
+	if e.Message.NetworkID != networkID {
+		return fmt.Errorf("%w: expected network ID %d, got %d", ErrInvalidMessage, networkID, e.Message.NetworkID)
 	}
 
-	vdrSet, totalWeight, err := GetCanonicalValidatorSet(validatorState, e.Core.SourceChainID)
+	vdrSet, totalWeight, err := GetCanonicalValidatorSet(validatorState, e.Message.SourceChainID)
 	if err != nil {
 		return fmt.Errorf("failed to get validator set: %w", err)
 	}
@@ -215,12 +215,12 @@ func VerifyEnvelope(
 	if err := VerifyWeight(signedWeight, totalWeight, quorumNum, quorumDen); err != nil {
 		return err
 	}
-	return e.Beam.verify(e.Core.ID(), vdrSet)
+	return e.Beam.verify(e.Message.ID(), vdrSet)
 }
 
 // PulseVerifier verifies an envelope's Pulsar Pulse lane. The
 // implementation lives in warp/pulsar (so this package does not import
-// the threshold kernel). It MUST recompute D from env.Core and verify the
+// the threshold kernel). It MUST recompute D from env.Message and verify the
 // Pulse over PulseSigningBytes(D), binding all of SourceChainID,
 // SourceNebulaRoot, SourceKeyEraID, SourceGeneration, HashSuiteID via D.
 type PulseVerifier interface {

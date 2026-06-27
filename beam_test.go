@@ -64,10 +64,10 @@ func makeValidators(t *testing.T, n int) ([]*Validator, []*bls.SecretKey, Valida
 // Beam domain, VerifyEnvelope accepts.
 func TestBeamEndToEndVerify(t *testing.T) {
 	vdrs, sks, vs := makeValidators(t, 4)
-	core, err := NewCore(1, ids.ID{0xA1}, []byte("beam-e2e"))
+	message, err := NewMessage(1, ids.ID{0xA1}, []byte("beam-e2e"))
 	require.NoError(t, err)
 
-	env, err := SignMessage(core, []*bls.SecretKey{sks[0], sks[2]}, vdrs)
+	env, err := SignMessage(message, []*bls.SecretKey{sks[0], sks[2]}, vdrs)
 	require.NoError(t, err)
 
 	// 2-of-4 validators signed (weight 200/400); quorum 1/2 is met.
@@ -82,17 +82,17 @@ func TestBeamEndToEndVerify(t *testing.T) {
 }
 
 // TestBeamRejectsLegacyDomainSignature is the second replay barrier: a
-// Beam forged by signing the BARE core bytes (the pre-fork domain) does
+// Beam forged by signing the BARE message bytes (the pre-fork domain) does
 // NOT verify under the new BEAM_MSG = beamDST‖D domain, even though it is
 // wrapped in a well-formed ZAP envelope. The first barrier (legacy RLP
 // rejected at the magic) is in envelope_test.go.
 func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 	vdrs, sks, vs := makeValidators(t, 4)
-	core, err := NewCore(1, ids.ID{0xB2}, []byte("legacy-domain"))
+	message, err := NewMessage(1, ids.ID{0xB2}, []byte("legacy-domain"))
 	require.NoError(t, err)
 
 	// Forge over the OLD domain (the bare unsigned-message bytes).
-	legacyMsg := core.Bytes()
+	legacyMsg := message.Bytes()
 	s0, err := sks[0].Sign(legacyMsg)
 	require.NoError(t, err)
 	s2, err := sks[2].Sign(legacyMsg)
@@ -105,7 +105,7 @@ func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 	signers.Add(2)
 	var sigb [bls.SignatureLen]byte
 	copy(sigb[:], bls.SignatureToBytes(agg))
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sigb), nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, vdrs)
 
@@ -113,13 +113,13 @@ func TestBeamRejectsLegacyDomainSignature(t *testing.T) {
 }
 
 // TestBeamRejectsForeignDigest proves the Beam binds the exact D: a
-// signature over BeamSigningBytes(D') for a DIFFERENT core fails when
-// wrapped around this core.
+// signature over BeamSigningBytes(D') for a DIFFERENT message fails when
+// wrapped around this message.
 func TestBeamRejectsForeignDigest(t *testing.T) {
 	_, sks, vs := makeValidators(t, 4)
-	core, err := NewCore(1, ids.ID{0xC3}, []byte("real"))
+	message, err := NewMessage(1, ids.ID{0xC3}, []byte("real"))
 	require.NoError(t, err)
-	other, err := NewCore(1, ids.ID{0xC3}, []byte("other"))
+	other, err := NewMessage(1, ids.ID{0xC3}, []byte("other"))
 	require.NoError(t, err)
 
 	bm := BeamSigningBytes(other.ID())
@@ -135,7 +135,7 @@ func TestBeamRejectsForeignDigest(t *testing.T) {
 	signers.Add(1)
 	var sigb [bls.SignatureLen]byte
 	copy(sigb[:], bls.SignatureToBytes(agg))
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigb), nil, nil)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sigb), nil, nil)
 	require.NoError(t, err)
 
 	require.ErrorIs(t, VerifyEnvelope(env, 1, vs, 1, 2), ErrInvalidSignature)

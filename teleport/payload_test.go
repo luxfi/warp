@@ -69,8 +69,8 @@ func TestAmountIsFull32Bytes(t *testing.T) {
 	}
 }
 
-// TestEnvelopeIDMatchesComputeMessageHash pins D == warp.Core.ID()
-// for a core whose payload is the 90-byte teleport block. Validators sign
+// TestEnvelopeIDMatchesComputeMessageHash pins D == warp.Message.ID()
+// for a message whose payload is the 90-byte teleport block. Validators sign
 // one D and the contract verifies the same D — one canonical preimage.
 func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
 	pl := &TeleportPayload{
@@ -96,12 +96,12 @@ func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
 		t.Fatalf("ComputeMessageHash: %v", err)
 	}
 
-	// The canonical preimage is exactly the Core NewCore builds.
-	core, err := warp.NewCore(networkID, sourceChainID, payload)
+	// The canonical preimage is exactly the Message NewMessage builds.
+	message, err := warp.NewMessage(networkID, sourceChainID, payload)
 	if err != nil {
-		t.Fatalf("NewCore: %v", err)
+		t.Fatalf("NewMessage: %v", err)
 	}
-	got := core.ID()
+	got := message.ID()
 	if !bytes.Equal(want[:], got[:]) {
 		t.Fatalf("D mismatch:\n want = %x\n  got = %x", want[:], got[:])
 	}

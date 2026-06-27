@@ -78,7 +78,7 @@ func TestFuzzCorpus_EnvelopeReplay(t *testing.T) {
 // makeFuzzSeed builds a valid envelope wire stream with the given lineage
 // and optional PQ lanes.
 func makeFuzzSeed(eraID, generation uint64, withPulse, withCertSet bool) []byte {
-	core := &Core{
+	message := &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
@@ -101,7 +101,7 @@ func makeFuzzSeed(eraID, generation uint64, withPulse, withCertSet bool) []byte 
 	if withCertSet {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sig), pulse, cert)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sig), pulse, cert)
 	if err != nil {
 		panic(err)
 	}

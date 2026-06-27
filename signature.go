@@ -23,7 +23,7 @@ import (
 //	Signature  [96] raw BLS aggregate
 //
 // The Beam signs BeamSigningBytes(D) = "LUX-WARP-ZAP-BEAM-v1" ‖ D, so it
-// authenticates the entire Core (including PQ lineage), not just the
+// authenticates the entire Message (including PQ lineage), not just the
 // message body.
 type BitSetSignature struct {
 	Signers   Bits
@@ -150,16 +150,16 @@ func Sign(msg []byte, sk *bls.SecretKey) (*bls.Signature, error) {
 	return sk.Sign(msg)
 }
 
-// SignMessage signs a Core over the Beam domain with a set of
+// SignMessage signs a Message over the Beam domain with a set of
 // signers and assembles the Envelope. Each signer signs
-// BeamSigningBytes(core.ID()); the aggregate is verifiable against the
+// BeamSigningBytes(message.ID()); the aggregate is verifiable against the
 // same bytes.
-func SignMessage(core *Core, signers []*bls.SecretKey, validators []*Validator) (*Envelope, error) {
+func SignMessage(message *Message, signers []*bls.SecretKey, validators []*Validator) (*Envelope, error) {
 	if len(signers) == 0 {
 		return nil, errors.New("no signers provided")
 	}
 
-	beamMsg := BeamSigningBytes(core.ID())
+	beamMsg := BeamSigningBytes(message.ID())
 
 	signerBits := NewBitSet()
 	signatures := make([]*bls.Signature, 0, len(signers))
@@ -192,5 +192,5 @@ func SignMessage(core *Core, signers []*bls.SecretKey, validators []*Validator) 
 
 	beam := BitSetSignature{Signers: signerBits}
 	copy(beam.Signature[:], bls.SignatureToBytes(aggSig))
-	return NewEnvelope(core, beam, nil, nil)
+	return NewEnvelope(message, beam, nil, nil)
 }

@@ -2,13 +2,13 @@
 // See the file LICENSE for licensing terms.
 
 // Package teleport defines the canonical wire payload carried inside a
-// Warp Core for the Teleport bridge.
+// Warp Message for the Teleport bridge.
 //
 // The Teleport bridge packs all destination-side intent (version, token,
 // amount, recipient, vault/burn-and-mint flag, nonce, dest chain) into a
 // single FIXED 90-byte block. That block becomes the [Payload] field of
-// a [warp.Core]; the message ID — D — is the keccak256 digest of
-// the canonical Core (see [warp.Core.ID]).
+// a [warp.Message]; the message ID — D — is the keccak256 digest of
+// the canonical Message (see [warp.Message.ID]).
 //
 // Fixed teleport payload layout (90 bytes, big-endian, no length prefixes):
 //
@@ -32,10 +32,10 @@
 // HARD-FORK LOCKSTEP: ComputeMessageHash returns D, the SAME digest the
 // on-chain BridgeV2 MUST recompute (see lux/teleport, BridgeV2.sol). The
 // Solidity side is a SEPARATE coordinated deploy; it MUST rebuild the
-// canonical Core preimage and keccak256 it identically per §4.2:
+// canonical Message preimage and keccak256 it identically per §4.2:
 //
 //	core_c14n =
-//	    0x01                                 // zapKindCore
+//	    0x01                                 // zapKindMessage
 //	  ‖ uint32_be(networkID)
 //	  ‖ sourceChainID                        // 32 bytes
 //	  ‖ bytes32(0)                           // SourceNebulaRoot — zero for teleport
@@ -47,10 +47,10 @@
 //
 // The previous sha256(rlp(...)) preimage and the abi.encode 7-tuple are
 // BOTH gone; there is exactly one preimage and one keccak256 digest on
-// both sides. A teleport Core therefore uses zero PQ lineage and
+// both sides. A teleport Message therefore uses zero PQ lineage and
 // the default hash suite — the off-chain relayer that signs the envelope
-// MUST construct the Core with these same fields (it is the same
-// core ComputeMessageHash builds), so validators sign the same D the
+// MUST construct the Message with these same fields (it is the same
+// message ComputeMessageHash builds), so validators sign the same D the
 // contract verifies.
 package teleport
 
@@ -95,7 +95,7 @@ var (
 )
 
 // TeleportPayload is the canonical Teleport binding carried in the payload
-// field of a Warp Core. Encoded as the fixed 90-byte block above.
+// field of a Warp Message. Encoded as the fixed 90-byte block above.
 type TeleportPayload struct {
 	// Version is the Teleport binding version. MUST equal
 	// TeleportBindingVersion; older values are rejected.
@@ -149,7 +149,7 @@ func (p *TeleportPayload) Verify() error {
 }
 
 // MarshalBinary returns the fixed 90-byte canonical encoding of the
-// payload. This is the byte sequence that goes into Core.Payload.
+// payload. This is the byte sequence that goes into Message.Payload.
 func (p *TeleportPayload) MarshalBinary() ([]byte, error) {
 	if err := p.Verify(); err != nil {
 		return nil, err
@@ -207,9 +207,9 @@ func (p *TeleportPayload) UnmarshalBinary(b []byte) error {
 
 // ComputeMessageHash returns D, the canonical Teleport message hash that
 // validators sign and BridgeV2 verifies. It is byte-equal to
-// warp.Core.ID() for a core whose Payload is this payload's 90-byte
+// warp.Message.ID() for a message whose Payload is this payload's 90-byte
 // block, NetworkID/SourceChainID are these arguments, PQ lineage is zero,
-// and HashSuiteID is the default — i.e. exactly what NewCore builds.
+// and HashSuiteID is the default — i.e. exactly what NewMessage builds.
 func ComputeMessageHash(networkID uint32, sourceChainID ids.ID, payload *TeleportPayload) ([32]byte, error) {
 	if payload == nil {
 		return [32]byte{}, ErrInvalidPayload
@@ -224,9 +224,9 @@ func ComputeMessageHash(networkID uint32, sourceChainID ids.ID, payload *Telepor
 // ComputeMessageHashFromPayload returns D given an already-encoded 90-byte
 // payload. Use this on the signing path when the payload bytes are in hand.
 func ComputeMessageHashFromPayload(networkID uint32, sourceChainID ids.ID, payload []byte) ([32]byte, error) {
-	core, err := warp.NewCore(networkID, sourceChainID, payload)
+	message, err := warp.NewMessage(networkID, sourceChainID, payload)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return [32]byte(core.ID()), nil
+	return [32]byte(message.ID()), nil
 }

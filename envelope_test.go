@@ -16,7 +16,7 @@ import (
 // envelopeFixture builds a fully-populated Envelope for envelope tests.
 func envelopeFixture(t *testing.T) *Envelope {
 	t.Helper()
-	core := &Core{
+	message := &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -34,7 +34,7 @@ func envelopeFixture(t *testing.T) *Envelope {
 	var sigBytes [bls.SignatureLen]byte
 	copy(sigBytes[:], bytes.Repeat([]byte{0xAB}, bls.SignatureLen))
 
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), nil, nil)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sigBytes), nil, nil)
 	require.NoError(t, err)
 	return env
 }
@@ -55,10 +55,10 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 
 	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
-	require.Equal(t, env.Core.SourceKeyEraID, parsed.Core.SourceKeyEraID)
-	require.Equal(t, env.Core.SourceGeneration, parsed.Core.SourceGeneration)
-	require.Equal(t, env.Core.SourceNebulaRoot, parsed.Core.SourceNebulaRoot)
-	require.Equal(t, env.Core.HashSuiteID, parsed.Core.HashSuiteID)
+	require.Equal(t, env.Message.SourceKeyEraID, parsed.Message.SourceKeyEraID)
+	require.Equal(t, env.Message.SourceGeneration, parsed.Message.SourceGeneration)
+	require.Equal(t, env.Message.SourceNebulaRoot, parsed.Message.SourceNebulaRoot)
+	require.Equal(t, env.Message.HashSuiteID, parsed.Message.HashSuiteID)
 	require.Equal(t, env.PulseSig, parsed.PulseSig)
 	require.Equal(t, env.MLDSACertSet, parsed.MLDSACertSet)
 	require.True(t, env.Beam.Equal(parsed.Beam))
@@ -119,11 +119,11 @@ func TestParseEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Hand-craft an envelope wire with a trailing-zero Signers bitset.
-	core := env.Core.marshalZAP()
+	message := env.Message.marshalZAP()
 	var out []byte
 	out = append(out, wireMagic[:]...)
 	out = appendU8(out, kindEnvelope)
-	out = append(out, core...)
+	out = append(out, message...)
 	out = appendVar(out, []byte{0x01, 0x00}) // NON-canonical: trailing zero byte
 	out = appendFixed(out, env.Beam.Signature[:])
 	out = appendVar(out, nil)
@@ -136,10 +136,10 @@ func TestParseEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
 
 func TestEnvelopeIDStable(t *testing.T) {
 	env := envelopeFixture(t)
-	require.Equal(t, env.Core.ID(), env.ID())
+	require.Equal(t, env.Message.ID(), env.ID())
 	// ID changes when a folded lineage field changes (Beam now binds it).
 	mutated := *env
-	mutated.Core.SourceKeyEraID = 999
+	mutated.Message.SourceKeyEraID = 999
 	require.NotEqual(t, env.ID(), mutated.ID())
 }
 
@@ -201,7 +201,7 @@ func TestVerifyWithOptionsRequiresCertSetWhenAbsent(t *testing.T) {
 
 func TestVerifyWithOptionsHashSuiteMismatch(t *testing.T) {
 	env := envelopeFixture(t)
-	env.Core.HashSuiteID = "Pulsar-SHA3-experimental"
+	env.Message.HashSuiteID = "Pulsar-SHA3-experimental"
 	err := VerifyWithOptions(env, VerifyOptions{SkipBeam: true, HashSuiteID: DefaultHashSuiteID})
 	require.ErrorIs(t, err, ErrEnvelopeBadSuiteID)
 }
@@ -212,7 +212,7 @@ func TestVerifyWithOptionsInvokesPulseVerifier(t *testing.T) {
 
 	verifier := &stubPulseVerifier{
 		check: func(e *Envelope) error {
-			if e.Core.SourceKeyEraID != 7 {
+			if e.Message.SourceKeyEraID != 7 {
 				return errors.New("unexpected key era")
 			}
 			return nil

@@ -3,21 +3,21 @@
 //
 // envelope_kat_oracle — emits byte-equal KAT vectors for the Warp ZAP
 // envelope. Drives warp.Envelope through its canonical ZAP
-// serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ Core ‖ Beam ‖
+// serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ Message ‖ Beam ‖
 // PulseSig ‖ MLDSACertSet).
 //
 // Wire format (per entry):
 //
 //	name                       short label
-//	network_id                 Core.NetworkID
-//	source_chain_id_hex        Core.SourceChainID
-//	payload_hex                Core.Payload
+//	network_id                 Message.NetworkID
+//	source_chain_id_hex        Message.SourceChainID
+//	payload_hex                Message.Payload
 //	signers_indices            Beam (BitSetSignature) signer indices
 //	signature_byte             Pattern byte filling the 96-byte BLS sig
-//	source_nebula_root_hex     Core.SourceNebulaRoot ([32]byte)
-//	source_key_era_id          Core.SourceKeyEraID
-//	source_generation          Core.SourceGeneration
-//	hash_suite_id              Core.HashSuiteID ("" or "Pulsar-SHA3")
+//	source_nebula_root_hex     Message.SourceNebulaRoot ([32]byte)
+//	source_key_era_id          Message.SourceKeyEraID
+//	source_generation          Message.SourceGeneration
+//	hash_suite_id              Message.HashSuiteID ("" or "Pulsar-SHA3")
 //	pulsar_pulse_byte          Pattern byte filling pulse bytes (0 = absent)
 //	pulsar_pulse_len           Pulse byte length
 //	mldsa_cert_set_byte        Pattern byte filling cert set bytes (0 = absent)
@@ -95,7 +95,7 @@ type fixture struct {
 }
 
 func build(f fixture) Entry {
-	core := warp.Core{
+	message := warp.Message{
 		NetworkID:        f.networkID,
 		SourceChainID:    f.sourceChainID,
 		SourceNebulaRoot: f.sourceNebulaRoot,
@@ -104,7 +104,7 @@ func build(f fixture) Entry {
 		HashSuiteID:      f.hashSuiteID,
 		Payload:          f.payload,
 	}
-	if err := core.Verify(); err != nil {
+	if err := message.Verify(); err != nil {
 		fail(err)
 	}
 
@@ -125,7 +125,7 @@ func build(f fixture) Entry {
 		cert = bytes.Repeat([]byte{f.mldsaCertSetByte}, f.mldsaCertSetLen)
 	}
 
-	env, err := warp.NewEnvelope(&core, beam, pulse, cert)
+	env, err := warp.NewEnvelope(&message, beam, pulse, cert)
 	if err != nil {
 		fail(err)
 	}

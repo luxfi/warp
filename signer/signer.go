@@ -14,8 +14,8 @@ import (
 
 // Signer is an interface for signing warp messages
 type Signer interface {
-	// Sign signs a Core over the Beam domain (BeamSigningBytes(D)).
-	Sign(core *warp.Core) (*bls.Signature, error)
+	// Sign signs a Message over the Beam domain (BeamSigningBytes(D)).
+	Sign(message *warp.Message) (*bls.Signature, error)
 
 	// GetPublicKey returns the public key
 	GetPublicKey() *bls.PublicKey
@@ -36,8 +36,8 @@ func NewLocalSigner(sk *bls.SecretKey) *LocalSigner {
 }
 
 // Sign signs a message over the Beam domain.
-func (s *LocalSigner) Sign(core *warp.Core) (*bls.Signature, error) {
-	return warp.Sign(warp.BeamSigningBytes(core.ID()), s.sk)
+func (s *LocalSigner) Sign(message *warp.Message) (*bls.Signature, error) {
+	return warp.Sign(warp.BeamSigningBytes(message.ID()), s.sk)
 }
 
 // GetPublicKey returns the public key
@@ -48,7 +48,7 @@ func (s *LocalSigner) GetPublicKey() *bls.PublicKey {
 // Backend is an interface for signing backends
 type Backend interface {
 	// Sign signs a message with multiple signers
-	Sign(ctx context.Context, core *warp.Core, signerIndices []int) (*warp.Envelope, error)
+	Sign(ctx context.Context, message *warp.Message, signerIndices []int) (*warp.Envelope, error)
 
 	// GetValidators returns the current validator set
 	GetValidators(ctx context.Context) ([]*warp.Validator, error)
@@ -86,7 +86,7 @@ func (b *SignerBackend) AddSigner(index int, signer Signer) error {
 
 // Sign signs a message with multiple signers
 func (b *SignerBackend) Sign(
-	ctx context.Context, core *warp.Core, signerIndices []int,
+	ctx context.Context, message *warp.Message, signerIndices []int,
 ) (*warp.Envelope, error) {
 	if len(signerIndices) == 0 {
 		return nil, errors.New("no signers specified")
@@ -110,7 +110,7 @@ func (b *SignerBackend) Sign(
 	}
 
 	// Sign message
-	return warp.SignMessage(core, signers, b.validators)
+	return warp.SignMessage(message, signers, b.validators)
 }
 
 // GetValidators returns the current validator set
@@ -153,8 +153,8 @@ func NewRemoteSigner(client SignerClient) (*RemoteSigner, error) {
 }
 
 // Sign signs a message over the Beam domain via the remote signer.
-func (s *RemoteSigner) Sign(core *warp.Core) (*bls.Signature, error) {
-	sigBytes, err := s.client.Sign(context.Background(), warp.BeamSigningBytes(core.ID()))
+func (s *RemoteSigner) Sign(message *warp.Message) (*bls.Signature, error) {
+	sigBytes, err := s.client.Sign(context.Background(), warp.BeamSigningBytes(message.ID()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign remotely: %w", err)
 	}
