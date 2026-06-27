@@ -22,7 +22,7 @@ import (
 
 func makeSchemeFuzzSeed(t testing.TB, hasPulse, hasCert bool) []byte {
 	t.Helper()
-	core := &Core{
+	message := &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -45,7 +45,7 @@ func makeSchemeFuzzSeed(t testing.TB, hasPulse, hasCert bool) []byte {
 	if hasCert {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
-	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
+	env, err := NewEnvelope(message, NewBitSetSignature(signers, sigBytes), pulse, cert)
 	if err != nil {
 		t.Fatalf("new envelope: %v", err)
 	}

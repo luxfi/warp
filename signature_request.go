@@ -127,23 +127,23 @@ func (h *CachedSignatureHandler) Request(ctx context.Context, nodeID ids.NodeID,
 		return nil, err
 	}
 
-	// The request carries the canonical Core bytes; recompute D
-	// locally from the parsed core. We never sign an opaque caller-
+	// The request carries the canonical Message bytes; recompute D
+	// locally from the parsed message. We never sign an opaque caller-
 	// supplied digest (no blind-sign oracle).
-	core, err := ParseCore(req.Message)
+	message, err := ParseMessage(req.Message)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check cache
-	messageID := core.ID()
+	messageID := message.ID()
 	if signatureBytes, ok := h.cache.Get(messageID); ok {
 		return MarshalSignatureResponse(signatureBytes)
 	}
 
 	// Verify if backend is a Verifier
 	if verifier, ok := h.backend.(Verifier); ok {
-		if appErr := verifier.Verify(ctx, core, req.Justification); appErr != nil {
+		if appErr := verifier.Verify(ctx, message, req.Justification); appErr != nil {
 			return nil, appErr
 		}
 	}
@@ -152,7 +152,7 @@ func (h *CachedSignatureHandler) Request(ctx context.Context, nodeID ids.NodeID,
 	if h.signer == nil {
 		return nil, fmt.Errorf("signer is nil")
 	}
-	signatureBytes, err := h.signer.Sign(core)
+	signatureBytes, err := h.signer.Sign(message)
 	if err != nil {
 		return nil, err
 	}

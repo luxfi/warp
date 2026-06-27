@@ -60,7 +60,7 @@ func runPulsarCeremony(t *testing.T, n, threshold int, message string) (*corona.
 // envFixture builds a Envelope with the given Pulsar lineage.
 func envFixture(t *testing.T, eraID, generation uint64) *warp.Envelope {
 	t.Helper()
-	core := &warp.Core{
+	message := &warp.Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xC1, 0xC2, 0xC3, 0xC4},
 		SourceKeyEraID:   eraID,
@@ -73,7 +73,7 @@ func envFixture(t *testing.T, eraID, generation uint64) *warp.Envelope {
 	signers.Add(2)
 	var sigBytes [bls.SignatureLen]byte
 	copy(sigBytes[:], bytes.Repeat([]byte{0xAB}, bls.SignatureLen))
-	env, err := warp.NewEnvelope(core, warp.NewBitSetSignature(signers, sigBytes), nil, nil)
+	env, err := warp.NewEnvelope(message, warp.NewBitSetSignature(signers, sigBytes), nil, nil)
 	require.NoError(t, err)
 	return env
 }
@@ -100,7 +100,7 @@ func TestSerializeDeserializePulseRoundTrip(t *testing.T) {
 
 func TestKernelVerifierAcceptsValidPulse(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -113,7 +113,7 @@ func TestKernelVerifierAcceptsValidPulse(t *testing.T) {
 
 func TestKernelVerifierRejectsTamperedEnvelopeFields(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -123,7 +123,7 @@ func TestKernelVerifierRejectsTamperedEnvelopeFields(t *testing.T) {
 	// Tamper with KeyEraID after signing — D changes, so the Pulse over
 	// the original D no longer verifies. (The Beam now also binds this
 	// field via D, closing the old Beam-unauthenticated-lineage gap.)
-	env.Core.SourceKeyEraID = 999
+	env.Message.SourceKeyEraID = 999
 
 	v := NewKernelVerifier(&stubResolver{gk: gk, suiteID: warp.DefaultHashSuiteID})
 	require.ErrorIs(t, v.VerifyPulse(env), ErrPulseVerifyFailed)
@@ -162,48 +162,48 @@ func TestKernelVerifierRejectsSuiteMismatch(t *testing.T) {
 // because D folds them all.
 func TestPulseSigningBytesBindsAllTranscriptFields(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.SourceNebulaRoot = [32]byte{0x01, 0x02}
-	base := warp.PulseSigningBytes(env.Core.ID())
+	env.Message.SourceNebulaRoot = [32]byte{0x01, 0x02}
+	base := warp.PulseSigningBytes(env.Message.ID())
 
-	mutate := func(f func(c *warp.Core)) []byte {
-		c := env.Core
+	mutate := func(f func(c *warp.Message)) []byte {
+		c := env.Message
 		f(&c)
 		return warp.PulseSigningBytes(c.ID())
 	}
-	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceKeyEraID = 8 }))
-	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceGeneration = 12 }))
-	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.SourceNebulaRoot = [32]byte{0x99} }))
-	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.HashSuiteID = "Pulsar-SHA3-other" }))
-	require.NotEqual(t, base, mutate(func(c *warp.Core) { c.Payload = append([]byte("X"), c.Payload...) }))
+	require.NotEqual(t, base, mutate(func(c *warp.Message) { c.SourceKeyEraID = 8 }))
+	require.NotEqual(t, base, mutate(func(c *warp.Message) { c.SourceGeneration = 12 }))
+	require.NotEqual(t, base, mutate(func(c *warp.Message) { c.SourceNebulaRoot = [32]byte{0x99} }))
+	require.NotEqual(t, base, mutate(func(c *warp.Message) { c.HashSuiteID = "Pulsar-SHA3-other" }))
+	require.NotEqual(t, base, mutate(func(c *warp.Message) { c.Payload = append([]byte("X"), c.Payload...) }))
 }
 
 // TestPulseSigningBytesPrefix proves the Pulse subject carries the
 // PULSE domain-separation tag.
 func TestPulseSigningBytesPrefix(t *testing.T) {
 	env := envFixture(t, 1, 1)
-	out := warp.PulseSigningBytes(env.Core.ID())
+	out := warp.PulseSigningBytes(env.Message.ID())
 	require.True(t, bytes.HasPrefix(out, []byte("LUX-WARP-ZAP-PULSE-v1")))
-	d := env.Core.ID()
+	d := env.Message.ID()
 	require.True(t, bytes.HasSuffix(out, d[:]))
 }
 
 func TestHorizonFromEnvelopePopulatesAllLanes(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.SourceNebulaRoot = [32]byte{0x42}
+	env.Message.SourceNebulaRoot = [32]byte{0x42}
 	env.PulseSig = bytes.Repeat([]byte{0xCC}, 16)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xDD}, 192)
 
 	h, err := HorizonFromEnvelope(env)
 	require.NoError(t, err)
-	require.Equal(t, env.Core.SourceChainID[:], h.SourceChainID[:])
+	require.Equal(t, env.Message.SourceChainID[:], h.SourceChainID[:])
 	require.Equal(t, env.Beam.Signature[:], h.Beam)
 	require.Equal(t, env.PulseSig, h.Pulse)
 	require.Equal(t, env.MLDSACertSet, h.MLDSACertSet)
-	require.Equal(t, env.Core.SourceNebulaRoot, h.SourceNebulaRoot)
-	require.Equal(t, env.Core.SourceKeyEraID, h.SourceKeyEraID)
-	require.Equal(t, env.Core.SourceGeneration, h.SourceGeneration)
-	require.Equal(t, env.Core.HashSuiteOrDefault(), h.HashSuiteID)
-	require.Equal(t, env.Core.Bytes(), h.UnsignedMessageBytes)
+	require.Equal(t, env.Message.SourceNebulaRoot, h.SourceNebulaRoot)
+	require.Equal(t, env.Message.SourceKeyEraID, h.SourceKeyEraID)
+	require.Equal(t, env.Message.SourceGeneration, h.SourceGeneration)
+	require.Equal(t, env.Message.HashSuiteOrDefault(), h.HashSuiteID)
+	require.Equal(t, env.Message.Bytes(), h.UnsignedMessageBytes)
 }
 
 func TestHorizonFromEnvelopeRejectsNil(t *testing.T) {

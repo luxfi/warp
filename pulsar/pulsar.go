@@ -106,7 +106,7 @@ func NewKernelVerifier(r GroupKeyResolver) *KernelVerifier {
 //  2. Resolve the source-chain GroupKey for (KeyEraID, Generation).
 //  3. Confirm the resolver-supplied suiteID matches the envelope's
 //     resolved HashSuiteID.
-//  4. Recompute D from the envelope's Core and build the Pulse
+//  4. Recompute D from the envelope's Message and build the Pulse
 //     signing bytes warp.PulseSigningBytes(D) = "LUX-WARP-ZAP-PULSE-v1"‖D.
 //  5. Deserialize the envelope's PulseSig into a corona.Signature.
 //  6. Call corona.Verify(gk, signingBytes, sig).
@@ -122,9 +122,9 @@ func (v *KernelVerifier) VerifyPulse(env *warp.Envelope) error {
 		return fmt.Errorf("%w: nil resolver", ErrGroupKeyResolverFailed)
 	}
 
-	src := env.Core.SourceChainID
+	src := env.Message.SourceChainID
 
-	gk, suiteID, err := v.Resolver.ResolveGroupKey(src, env.Core.SourceKeyEraID, env.Core.SourceGeneration)
+	gk, suiteID, err := v.Resolver.ResolveGroupKey(src, env.Message.SourceKeyEraID, env.Message.SourceGeneration)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrGroupKeyResolverFailed, err)
 	}
@@ -134,12 +134,12 @@ func (v *KernelVerifier) VerifyPulse(env *warp.Envelope) error {
 	if suiteID == "" {
 		suiteID = hash.DefaultID
 	}
-	if env.Core.HashSuiteOrDefault() != suiteID {
+	if env.Message.HashSuiteOrDefault() != suiteID {
 		return fmt.Errorf("%w: envelope=%q resolver=%q",
-			ErrSuiteMismatch, env.Core.HashSuiteOrDefault(), suiteID)
+			ErrSuiteMismatch, env.Message.HashSuiteOrDefault(), suiteID)
 	}
 
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, err := DeserializePulse(env.PulseSig)
 	if err != nil {
@@ -464,15 +464,15 @@ func HorizonFromEnvelope(env *warp.Envelope) (*HorizonCertificate, error) {
 		return nil, errors.New("warp pulsar: nil envelope")
 	}
 	return &HorizonCertificate{
-		SourceChainID:        env.Core.SourceChainID,
+		SourceChainID:        env.Message.SourceChainID,
 		Beam:                 append([]byte(nil), env.Beam.Signature[:]...),
 		MLDSACertSet:         append([]byte(nil), env.MLDSACertSet...),
 		Pulse:                append([]byte(nil), env.PulseSig...),
-		SourceNebulaRoot:     env.Core.SourceNebulaRoot,
-		SourceKeyEraID:       env.Core.SourceKeyEraID,
-		SourceGeneration:     env.Core.SourceGeneration,
-		HashSuiteID:          env.Core.HashSuiteOrDefault(),
-		UnsignedMessageBytes: env.Core.Bytes(),
+		SourceNebulaRoot:     env.Message.SourceNebulaRoot,
+		SourceKeyEraID:       env.Message.SourceKeyEraID,
+		SourceGeneration:     env.Message.SourceGeneration,
+		HashSuiteID:          env.Message.HashSuiteOrDefault(),
+		UnsignedMessageBytes: env.Message.Bytes(),
 	}, nil
 }
 

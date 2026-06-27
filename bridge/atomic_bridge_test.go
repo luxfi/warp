@@ -27,20 +27,20 @@ func generateTestID() ids.ID {
 
 // mockBackend implements backend.Backend for testing
 type mockBackend struct {
-	messages []*warp.Core
+	messages []*warp.Message
 	mu       sync.Mutex
 }
 
 func newMockBackend() *mockBackend {
 	return &mockBackend{
-		messages: make([]*warp.Core, 0),
+		messages: make([]*warp.Message, 0),
 	}
 }
 
-func (m *mockBackend) AddMessage(core *warp.Core) error {
+func (m *mockBackend) AddMessage(message *warp.Message) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, core)
+	m.messages = append(m.messages, message)
 	return nil
 }
 
@@ -51,7 +51,7 @@ func (m *mockBackend) GetMessage(index uint32) (*warp.Envelope, error) {
 		return nil, nil
 	}
 	return &warp.Envelope{
-		Core: *m.messages[index],
+		Message: *m.messages[index],
 	}, nil
 }
 

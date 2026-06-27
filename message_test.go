@@ -11,57 +11,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCore(t *testing.T) {
+func TestMessage(t *testing.T) {
 	networkID := uint32(1)
 	sourceChainID := ids.ID{31: 1}
 	payload := []byte("test payload")
 
-	core, err := NewCore(networkID, sourceChainID, payload)
+	message, err := NewMessage(networkID, sourceChainID, payload)
 	require.NoError(t, err)
-	require.NotNil(t, core)
+	require.NotNil(t, message)
 
-	require.Equal(t, networkID, core.NetworkID)
-	require.Equal(t, sourceChainID, core.SourceChainID)
-	require.Equal(t, payload, core.Payload)
-	// NewCore resolves the default suite; lineage is zero.
-	require.Equal(t, DefaultHashSuiteID, core.HashSuiteID)
-	require.Equal(t, [32]byte{}, core.SourceNebulaRoot)
+	require.Equal(t, networkID, message.NetworkID)
+	require.Equal(t, sourceChainID, message.SourceChainID)
+	require.Equal(t, payload, message.Payload)
+	// NewMessage resolves the default suite; lineage is zero.
+	require.Equal(t, DefaultHashSuiteID, message.HashSuiteID)
+	require.Equal(t, [32]byte{}, message.SourceNebulaRoot)
 
 	// Canonical c14n round-trips.
-	b := core.Bytes()
+	b := message.Bytes()
 	require.NotEmpty(t, b)
-	require.Equal(t, zapKindCore, b[0])
+	require.Equal(t, zapKindMessage, b[0])
 
-	id := core.ID()
+	id := message.ID()
 	require.NotEqual(t, ids.Empty, id)
 
-	parsed, err := ParseCore(b)
+	parsed, err := ParseMessage(b)
 	require.NoError(t, err)
-	require.Equal(t, core.NetworkID, parsed.NetworkID)
-	require.Equal(t, core.SourceChainID, parsed.SourceChainID)
-	require.Equal(t, core.Payload, parsed.Payload)
-	require.Equal(t, core.HashSuiteID, parsed.HashSuiteID)
+	require.Equal(t, message.NetworkID, parsed.NetworkID)
+	require.Equal(t, message.SourceChainID, parsed.SourceChainID)
+	require.Equal(t, message.Payload, parsed.Payload)
+	require.Equal(t, message.HashSuiteID, parsed.HashSuiteID)
 	// D recomputed from the decoded struct equals the original.
 	require.Equal(t, id, parsed.ID())
 }
 
-// TestCoreIDIsLegacyKeccak pins D to legacy-keccak over the
+// TestMessageIDIsLegacyKeccak pins D to legacy-keccak over the
 // domain-tagged c14n preimage — NOT sha256, NOT NIST SHA3.
-func TestCoreIDIsLegacyKeccak(t *testing.T) {
-	core := &Core{
+func TestMessageIDIsLegacyKeccak(t *testing.T) {
+	message := &Message{
 		NetworkID:     1,
 		SourceChainID: ids.ID{0xA1},
 		HashSuiteID:   DefaultHashSuiteID,
 		Payload:       []byte("keccak-check"),
 	}
-	want := keccak256([]byte(coreDST), core.Bytes())
-	require.Equal(t, ids.ID(want), core.ID())
+	want := keccak256([]byte(messageDST), message.Bytes())
+	require.Equal(t, ids.ID(want), message.ID())
 }
 
-// TestCoreIDChangesWithEveryField proves D depends on every field
+// TestMessageIDChangesWithEveryField proves D depends on every field
 // — including the folded PQ lineage that the Beam now authenticates.
-func TestCoreIDChangesWithEveryField(t *testing.T) {
-	base := &Core{
+func TestMessageIDChangesWithEveryField(t *testing.T) {
+	base := &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
@@ -72,50 +72,50 @@ func TestCoreIDChangesWithEveryField(t *testing.T) {
 	}
 	baseID := base.ID()
 
-	mutate := func(f func(c *Core)) ids.ID {
+	mutate := func(f func(c *Message)) ids.ID {
 		c := *base
 		f(&c)
 		return c.ID()
 	}
 
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.NetworkID = 2 }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceChainID = ids.ID{0xFF} }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceNebulaRoot = [32]byte{0x99} }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceKeyEraID = 8 }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.SourceGeneration = 12 }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.HashSuiteID = "Pulsar-BLAKE3" }))
-	require.NotEqual(t, baseID, mutate(func(c *Core) { c.Payload = []byte("base2") }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.NetworkID = 2 }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.SourceChainID = ids.ID{0xFF} }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.SourceNebulaRoot = [32]byte{0x99} }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.SourceKeyEraID = 8 }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.SourceGeneration = 12 }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.HashSuiteID = "Pulsar-BLAKE3" }))
+	require.NotEqual(t, baseID, mutate(func(c *Message) { c.Payload = []byte("base2") }))
 }
 
-// TestCoreNoSignTimeDefaulting proves the codec encodes HashSuiteID
-// verbatim: an empty-suite core and a "Pulsar-SHA3" core produce DIFFERENT
+// TestMessageNoSignTimeDefaulting proves the codec encodes HashSuiteID
+// verbatim: an empty-suite message and a "Pulsar-SHA3" message produce DIFFERENT
 // c14n bytes and DIFFERENT D. There is no defaulting inside the marshaler.
-func TestCoreNoSignTimeDefaulting(t *testing.T) {
-	empty := &Core{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
-	resolved := &Core{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
+func TestMessageNoSignTimeDefaulting(t *testing.T) {
+	empty := &Message{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: "", Payload: []byte("x")}
+	resolved := &Message{NetworkID: 1, SourceChainID: ids.ID{0xA1}, HashSuiteID: DefaultHashSuiteID, Payload: []byte("x")}
 	require.NotEqual(t, empty.Bytes(), resolved.Bytes())
 	require.NotEqual(t, empty.ID(), resolved.ID())
 	// HashSuiteOrDefault is a READ helper only — it does not change bytes.
 	require.Equal(t, DefaultHashSuiteID, empty.HashSuiteOrDefault())
 }
 
-// TestParseCoreRejectsTrailing proves decode rejects trailing bytes.
-func TestParseCoreRejectsTrailing(t *testing.T) {
-	core, err := NewCore(1, ids.ID{0xA1}, []byte("p"))
+// TestParseMessageRejectsTrailing proves decode rejects trailing bytes.
+func TestParseMessageRejectsTrailing(t *testing.T) {
+	message, err := NewMessage(1, ids.ID{0xA1}, []byte("p"))
 	require.NoError(t, err)
-	b := core.Bytes()
-	_, err = ParseCore(append(b, 0x00))
+	b := message.Bytes()
+	_, err = ParseMessage(append(b, 0x00))
 	require.ErrorIs(t, err, errZapTrailing)
 }
 
-// TestParseCoreRejectsBadKind proves the zap kind discriminator is
+// TestParseMessageRejectsBadKind proves the zap kind discriminator is
 // enforced.
-func TestParseCoreRejectsBadKind(t *testing.T) {
-	core, err := NewCore(1, ids.ID{0xA1}, []byte("p"))
+func TestParseMessageRejectsBadKind(t *testing.T) {
+	message, err := NewMessage(1, ids.ID{0xA1}, []byte("p"))
 	require.NoError(t, err)
-	b := core.Bytes()
-	b[0] = 0x02 // not zapKindCore
-	_, err = ParseCore(b)
+	b := message.Bytes()
+	b[0] = 0x02 // not zapKindMessage
+	_, err = ParseMessage(b)
 	require.ErrorIs(t, err, ErrInvalidMessage)
 }
 
@@ -149,9 +149,9 @@ func TestVerifyWeight(t *testing.T) {
 // all over the same D, so a signature in one lane cannot be replayed into
 // another (distinct domain prefixes).
 func TestLaneSigningBytesDistinct(t *testing.T) {
-	core, err := NewCore(1, ids.ID{0xA1}, []byte("lanes"))
+	message, err := NewMessage(1, ids.ID{0xA1}, []byte("lanes"))
 	require.NoError(t, err)
-	d := core.ID()
+	d := message.ID()
 
 	beam := BeamSigningBytes(d)
 	pulse := PulseSigningBytes(d)

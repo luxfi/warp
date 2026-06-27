@@ -64,7 +64,7 @@ func (s *SignatureAggregator) AggregateSignatures(
 	_ error,
 ) {
 	request := &SignatureRequest{
-		Message:       env.Core.Bytes(),
+		Message:       env.Message.Bytes(),
 		Justification: justification,
 	}
 
@@ -115,7 +115,7 @@ func (s *SignatureAggregator) AggregateSignatures(
 	results := make(chan aggregatorResult)
 	handler := signatureResponseHandler{
 		env:                 env,
-		beamMsg:             BeamSigningBytes(env.Core.ID()),
+		beamMsg:             BeamSigningBytes(env.Message.ID()),
 		nodeIDsToValidators: nodeIDsToValidator,
 		results:             results,
 	}
@@ -202,7 +202,7 @@ func newAggregatedMessage(
 	copy(beam.Signature[:], bls.SignatureToBytes(aggregateSignature))
 
 	// Preserve the PQ lanes; only the Beam is re-aggregated.
-	return NewEnvelope(&env.Core, beam, env.PulseSig, env.MLDSACertSet)
+	return NewEnvelope(&env.Message, beam, env.PulseSig, env.MLDSACertSet)
 }
 
 type signatureResponseHandler struct {

@@ -1,14 +1,14 @@
 // Copyright (C) 2019-2026, Lux Industries Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// envelope_negative_test.go — transcript-binding tests over the Core
+// envelope_negative_test.go — transcript-binding tests over the Message
 // fields the digest D commits to. Under the ZAP fork the signed subject is
-// D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(Core)); folding the
-// PQ lineage into the core means every lane (BLS Beam included) binds it.
-// For each transcript field we mutate the core and assert:
+// D = keccak256("LUX-WARP-ZAP-CORE-v1" ‖ zap_c14n(Message)); folding the
+// PQ lineage into the message means every lane (BLS Beam included) binds it.
+// For each transcript field we mutate the message and assert:
 //
 //	1. D changes.
-//	2. An honest verifier (D-equality model) rejects the mutated core.
+//	2. An honest verifier (D-equality model) rejects the mutated message.
 //	3. No two single-field mutations collide on D (orthogonality).
 
 package warp
@@ -20,9 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func negCoreFixture(t *testing.T) *Core {
+func negMessageFixture(t *testing.T) *Message {
 	t.Helper()
-	return &Core{
+	return &Message{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE},
@@ -34,13 +34,13 @@ func negCoreFixture(t *testing.T) *Core {
 }
 
 // honestVerifier models a real lane verifier under an unchanged key: it
-// accepts iff the candidate core's D equals the baseline's.
-func honestVerifier(baseline *Core) func(c *Core) bool {
+// accepts iff the candidate message's D equals the baseline's.
+func honestVerifier(baseline *Message) func(c *Message) bool {
 	d := baseline.ID()
-	return func(c *Core) bool { return c.ID() == d }
+	return func(c *Message) bool { return c.ID() == d }
 }
 
-func negMutateField(t *testing.T, base *Core, field string) *Core {
+func negMutateField(t *testing.T, base *Message, field string) *Message {
 	t.Helper()
 	c := *base
 	switch field {
@@ -59,7 +59,7 @@ func negMutateField(t *testing.T, base *Core, field string) *Core {
 	case "payload":
 		c.Payload = append([]byte("X"), base.Payload...)
 	default:
-		t.Fatalf("unknown core field: %q", field)
+		t.Fatalf("unknown message field: %q", field)
 	}
 	return &c
 }
@@ -74,10 +74,10 @@ var negFields = []string{
 	"payload",
 }
 
-// TestCoreTranscriptMutationsRejected mutates each field and asserts D
+// TestMessageTranscriptMutationsRejected mutates each field and asserts D
 // changes and the honest verifier rejects.
-func TestCoreTranscriptMutationsRejected(t *testing.T) {
-	base := negCoreFixture(t)
+func TestMessageTranscriptMutationsRejected(t *testing.T) {
+	base := negMessageFixture(t)
 	baseID := base.ID()
 	verify := honestVerifier(base)
 	require.True(t, verify(base), "baseline must verify")
@@ -91,10 +91,10 @@ func TestCoreTranscriptMutationsRejected(t *testing.T) {
 	}
 }
 
-// TestCoreTranscriptMutationsDistinct is the orthogonality check: no two
+// TestMessageTranscriptMutationsDistinct is the orthogonality check: no two
 // single-field mutations collide on D.
-func TestCoreTranscriptMutationsDistinct(t *testing.T) {
-	base := negCoreFixture(t)
+func TestMessageTranscriptMutationsDistinct(t *testing.T) {
+	base := negMessageFixture(t)
 	seen := make(map[ids.ID]string, len(negFields))
 	for _, f := range negFields {
 		id := negMutateField(t, base, f).ID()
@@ -106,10 +106,10 @@ func TestCoreTranscriptMutationsDistinct(t *testing.T) {
 }
 
 // TestHashSuiteExplicitVsEmptyBindDistinctly proves an explicit non-default
-// suite produces a different D from the resolved-default core — the suite
+// suite produces a different D from the resolved-default message — the suite
 // is bound verbatim, no sign-time defaulting.
 func TestHashSuiteExplicitVsEmptyBindDistinctly(t *testing.T) {
-	base := negCoreFixture(t)
+	base := negMessageFixture(t)
 	cp := *base
 	cp.HashSuiteID = "Pulsar-BLAKE3"
 	require.NotEqual(t, base.ID(), cp.ID())

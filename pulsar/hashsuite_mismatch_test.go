@@ -20,8 +20,8 @@ import (
 
 func TestVerifyAcceptsMatchingPulsarSHA3(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.HashSuiteID = warp.DefaultHashSuiteID
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	env.Message.HashSuiteID = warp.DefaultHashSuiteID
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -40,8 +40,8 @@ func TestVerifyAcceptsMatchingPulsarSHA3(t *testing.T) {
 
 func TestVerifyRejectsExpectedSuiteMismatch(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.HashSuiteID = warp.DefaultHashSuiteID
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	env.Message.HashSuiteID = warp.DefaultHashSuiteID
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -60,8 +60,8 @@ func TestVerifyRejectsExpectedSuiteMismatch(t *testing.T) {
 
 func TestVerifyRejectsMutatedHashSuiteIDPostSign(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.HashSuiteID = warp.DefaultHashSuiteID
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	env.Message.HashSuiteID = warp.DefaultHashSuiteID
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -75,7 +75,7 @@ func TestVerifyRejectsMutatedHashSuiteIDPostSign(t *testing.T) {
 	parsed, err := warp.ParseEnvelope(wire)
 	require.NoError(t, err)
 
-	parsed.Core.HashSuiteID = "Pulsar-BLAKE3"
+	parsed.Message.HashSuiteID = "Pulsar-BLAKE3"
 	mutatedWire, err := parsed.Bytes()
 	require.NoError(t, err)
 	mutated, err := warp.ParseEnvelope(mutatedWire)
@@ -98,8 +98,8 @@ func TestVerifyRejectsMutatedHashSuiteIDPostSign(t *testing.T) {
 
 func TestKernelVerifierRejectsHashSuiteFieldMutation(t *testing.T) {
 	env := envFixture(t, 7, 11)
-	env.Core.HashSuiteID = warp.DefaultHashSuiteID
-	signing := warp.PulseSigningBytes(env.Core.ID())
+	env.Message.HashSuiteID = warp.DefaultHashSuiteID
+	signing := warp.PulseSigningBytes(env.Message.ID())
 
 	sig, gk := runPulsarCeremony(t, 3, 2, string(signing))
 	pulse, err := SerializePulse(sig)
@@ -107,7 +107,7 @@ func TestKernelVerifierRejectsHashSuiteFieldMutation(t *testing.T) {
 	env.PulseSig = pulse
 
 	// Mutate HashSuiteID after signing; Pulse stays unchanged.
-	env.Core.HashSuiteID = "Pulsar-BLAKE3"
+	env.Message.HashSuiteID = "Pulsar-BLAKE3"
 
 	verifier := NewKernelVerifier(&stubResolver{gk: gk, suiteID: "Pulsar-BLAKE3"})
 	require.ErrorIs(t, verifier.VerifyPulse(env), ErrPulseVerifyFailed)

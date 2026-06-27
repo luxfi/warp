@@ -15,25 +15,25 @@ import (
 // TLV mechanism in zap.go. There is exactly ONE codec (ZAP) and exactly
 // ONE signing digest (D). No RLP, no codec version, no type registry.
 
-// Kind discriminators. zapKindCore is the first byte of a Core
+// Kind discriminators. zapKindMessage is the first byte of a Message
 // c14n stream; kindEnvelope is the envelope kind byte that follows the
-// wire magic. They are distinct so a Core can never be mistaken for
+// wire magic. They are distinct so a Message can never be mistaken for
 // a full envelope and vice-versa.
 const (
-	zapKindCore  byte = 0x01
-	kindEnvelope byte = 0x02
+	zapKindMessage byte = 0x01
+	kindEnvelope   byte = 0x02
 )
 
-// Size limits. MaxMessageSize bounds a Core's canonical encoding;
-// MaxEnvelopeSize bounds the full envelope (core + Beam + the two PQ
+// Size limits. MaxMessageSize bounds a Message's canonical encoding;
+// MaxEnvelopeSize bounds the full envelope (message + Beam + the two PQ
 // lanes). Both are hard ceilings checked at the decode boundary.
 const (
-	// MaxMessageSize is the maximum canonical Core size.
+	// MaxMessageSize is the maximum canonical Message size.
 	MaxMessageSize = 256 * KiB
 
 	// MaxEnvelopeSize is the maximum Envelope wire size. Bounded at
 	// 4×MaxMessageSize to leave room for the Pulse (~33 KB) and the
-	// ML-DSA cert set alongside the core and Beam.
+	// ML-DSA cert set alongside the message and Beam.
 	MaxEnvelopeSize = 4 * MaxMessageSize
 )
 
@@ -45,17 +45,17 @@ var (
 	ErrInsufficientWeight = errors.New("insufficient weight")
 )
 
-// Domain-separation tags. D = keccak256(coreDST ‖ zap_c14n(Core))
+// Domain-separation tags. D = keccak256(messageDST ‖ zap_c14n(Message))
 // is the single signed digest (the "Prism" transcript): message ID,
 // replay key, and on-chain messageHash all at once. Each lane signs the
 // SAME D under its OWN tag, so a signature in one lane can never be
 // replayed into another (BLS objects vs lattice objects are already
 // non-interchangeable; the distinct tags close the door regardless).
 const (
-	coreDST  = "LUX-WARP-ZAP-CORE-v1"
-	beamDST  = "LUX-WARP-ZAP-BEAM-v1"
-	pulseDST = "LUX-WARP-ZAP-PULSE-v1"
-	mldsaDST = "LUX-WARP-ZAP-MLDSA-v1"
+	messageDST = "LUX-WARP-ZAP-CORE-v1"
+	beamDST    = "LUX-WARP-ZAP-BEAM-v1"
+	pulseDST   = "LUX-WARP-ZAP-PULSE-v1"
+	mldsaDST   = "LUX-WARP-ZAP-MLDSA-v1"
 )
 
 // keccak256 is Ethereum's keccak256 — golang.org/x/crypto/sha3
@@ -73,7 +73,7 @@ func keccak256(parts ...[]byte) [32]byte {
 }
 
 // BeamSigningBytes returns the exact bytes the BLS Beam lane signs and
-// verifies: beamDST ‖ D. The Beam now authenticates the full Core
+// verifies: beamDST ‖ D. The Beam now authenticates the full Message
 // (including PQ lineage) rather than only the unsigned message body.
 func BeamSigningBytes(d ids.ID) []byte { return append([]byte(beamDST), d[:]...) }
 

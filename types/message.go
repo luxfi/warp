@@ -1,6 +1,6 @@
 // Copyright (C) 2025, Lux Industries, Inc.
 
-// Package types defines the core interfaces for the Warp message format.
+// Package types defines the message interfaces for the Warp message format.
 // Warp is a standardized message format for cross-chain messaging (XCM).
 // These interfaces are designed to be implementation-agnostic and can
 // be satisfied by different concrete types.
@@ -17,7 +17,7 @@ type ID [32]byte
 // Address represents a blockchain address (size may vary by chain type)
 type Address []byte
 
-// Message is the core interface for cross-chain messages
+// Message is the message interface for cross-chain messages
 type Message interface {
 	// ID returns the unique identifier for this message
 	ID() ID
