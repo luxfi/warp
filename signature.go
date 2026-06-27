@@ -12,7 +12,7 @@ import (
 	"github.com/luxfi/ids"
 )
 
-// BitSetSignature is the Beam lane of a WarpEnvelope: a BLS aggregate
+// BitSetSignature is the Beam lane of a Envelope: a BLS aggregate
 // signature plus the bitset of validators (by canonical index) whose
 // public keys aggregate to it. There is exactly one signature shape in
 // Warp, so this is a concrete type, not a polymorphic interface.
@@ -23,7 +23,7 @@ import (
 //	Signature  [96] raw BLS aggregate
 //
 // The Beam signs BeamSigningBytes(D) = "LUX-WARP-ZAP-BEAM-v1" ‖ D, so it
-// authenticates the entire SignedCore (including PQ lineage), not just the
+// authenticates the entire Core (including PQ lineage), not just the
 // message body.
 type BitSetSignature struct {
 	Signers   Bits
@@ -150,11 +150,11 @@ func Sign(msg []byte, sk *bls.SecretKey) (*bls.Signature, error) {
 	return sk.Sign(msg)
 }
 
-// SignMessage signs a SignedCore over the Beam domain with a set of
-// signers and assembles the WarpEnvelope. Each signer signs
+// SignMessage signs a Core over the Beam domain with a set of
+// signers and assembles the Envelope. Each signer signs
 // BeamSigningBytes(core.ID()); the aggregate is verifiable against the
 // same bytes.
-func SignMessage(core *SignedCore, signers []*bls.SecretKey, validators []*Validator) (*WarpEnvelope, error) {
+func SignMessage(core *Core, signers []*bls.SecretKey, validators []*Validator) (*Envelope, error) {
 	if len(signers) == 0 {
 		return nil, errors.New("no signers provided")
 	}
@@ -192,5 +192,5 @@ func SignMessage(core *SignedCore, signers []*bls.SecretKey, validators []*Valid
 
 	beam := BitSetSignature{Signers: signerBits}
 	copy(beam.Signature[:], bls.SignatureToBytes(aggSig))
-	return NewWarpEnvelope(core, beam, nil, nil)
+	return NewEnvelope(core, beam, nil, nil)
 }

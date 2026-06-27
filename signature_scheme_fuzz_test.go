@@ -4,7 +4,7 @@
 // signature_scheme_fuzz_test.go fuzzes the ZAP envelope decoder against
 // the PQ-native posture. Properties:
 //
-//	A. ParseWarpEnvelope MUST NOT panic on any byte string.
+//	A. ParseEnvelope MUST NOT panic on any byte string.
 //	B. HasPQEvidence ⇔ len(MLDSACertSet) > 0.
 //	C. HasPQEvidence == false ⇒ strict-PQ gate returns ErrClassicalAuthForbidden.
 //	D. HasPQEvidence == true  ⇒ strict-PQ gate accepts (presence dispatch).
@@ -22,7 +22,7 @@ import (
 
 func makeSchemeFuzzSeed(t testing.TB, hasPulse, hasCert bool) []byte {
 	t.Helper()
-	core := &SignedCore{
+	core := &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -45,7 +45,7 @@ func makeSchemeFuzzSeed(t testing.TB, hasPulse, hasCert bool) []byte {
 	if hasCert {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), pulse, cert)
 	if err != nil {
 		t.Fatalf("new envelope: %v", err)
 	}
@@ -62,12 +62,12 @@ func FuzzSignatureSchemeLegParser(f *testing.F) {
 	f.Add(makeSchemeFuzzSeed(f, false, true))
 	f.Add(makeSchemeFuzzSeed(f, true, true))
 	f.Add([]byte{})
-	f.Add(append(wireMagic[:], kindWarpEnvelope))
+	f.Add(append(wireMagic[:], kindEnvelope))
 	f.Add([]byte{0x05})
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		// Property A: never panics.
-		env, err := ParseWarpEnvelope(raw)
+		env, err := ParseEnvelope(raw)
 		if err != nil {
 			return
 		}
@@ -127,10 +127,10 @@ func FuzzCorruptedMLDSACertSet(f *testing.F) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					t.Fatalf("ParseWarpEnvelope panicked: %v", r)
+					t.Fatalf("ParseEnvelope panicked: %v", r)
 				}
 			}()
-			env, err := ParseWarpEnvelope(corrupted)
+			env, err := ParseEnvelope(corrupted)
 			if err == nil {
 				_ = env.Verify()
 			}

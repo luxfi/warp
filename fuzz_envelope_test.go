@@ -5,7 +5,7 @@
 //
 // Properties under fuzzing:
 //
-//  1. ParseWarpEnvelope on arbitrary bytes never panics — malformed input
+//  1. ParseEnvelope on arbitrary bytes never panics — malformed input
 //     produces a clean error, never a runtime panic.
 //  2. A successfully parsed envelope passes Verify and re-encodes
 //     byte-equally (canonical round-trip).
@@ -21,18 +21,18 @@ import (
 	"github.com/luxfi/ids"
 )
 
-func FuzzWarpEnvelope(f *testing.F) {
+func FuzzEnvelope(f *testing.F) {
 	f.Add(makeFuzzSeed(7, 11, true, true))
 	f.Add(makeFuzzSeed(0, 0, false, false))
 	f.Add([]byte{})
 	f.Add(wireMagic[:])
-	f.Add(append(wireMagic[:], kindWarpEnvelope))
+	f.Add(append(wireMagic[:], kindEnvelope))
 	f.Add([]byte{0x05, 0x00, 0x00})
 	f.Add(append(wireMagic[:], 0xFF))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		// Property 1: never panics.
-		env, err := ParseWarpEnvelope(raw)
+		env, err := ParseEnvelope(raw)
 		if err != nil {
 			return
 		}
@@ -49,7 +49,7 @@ func FuzzWarpEnvelope(f *testing.F) {
 		if !bytes.Equal(raw, out) {
 			t.Fatalf("canonical round-trip not byte-equal:\n  in =%x\n  out=%x", raw, out)
 		}
-		env2, err := ParseWarpEnvelope(out)
+		env2, err := ParseEnvelope(out)
 		if err != nil {
 			t.Fatalf("re-parse failed: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestFuzzCorpus_EnvelopeReplay(t *testing.T) {
 		makeFuzzSeed(7, 11, true, true),
 		makeFuzzSeed(0, 0, false, false),
 	} {
-		env, err := ParseWarpEnvelope(s)
+		env, err := ParseEnvelope(s)
 		if err != nil {
 			t.Fatalf("seed %d: parse failed: %v", i, err)
 		}
@@ -78,7 +78,7 @@ func TestFuzzCorpus_EnvelopeReplay(t *testing.T) {
 // makeFuzzSeed builds a valid envelope wire stream with the given lineage
 // and optional PQ lanes.
 func makeFuzzSeed(eraID, generation uint64, withPulse, withCertSet bool) []byte {
-	core := &SignedCore{
+	core := &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD},
@@ -101,7 +101,7 @@ func makeFuzzSeed(eraID, generation uint64, withPulse, withCertSet bool) []byte 
 	if withCertSet {
 		cert = bytes.Repeat([]byte{0xC3}, 192)
 	}
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sig), pulse, cert)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sig), pulse, cert)
 	if err != nil {
 		panic(err)
 	}

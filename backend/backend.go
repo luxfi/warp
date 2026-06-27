@@ -19,10 +19,10 @@ import (
 // Backend is the interface for warp message handling
 type Backend interface {
 	// AddMessage adds a message to be sent
-	AddMessage(core *warp.SignedCore) error
+	AddMessage(core *warp.Core) error
 
 	// GetMessage retrieves a verified message by index
-	GetMessage(index uint32) (*warp.WarpEnvelope, error)
+	GetMessage(index uint32) (*warp.Envelope, error)
 
 	// GetValidatorState returns the validator state
 	GetValidatorState() warp.ValidatorState
@@ -31,7 +31,7 @@ type Backend interface {
 // MemoryBackend is an in-memory implementation of the warp backend
 type MemoryBackend struct {
 	mu             sync.RWMutex
-	messages       []*warp.WarpEnvelope
+	messages       []*warp.Envelope
 	validatorState warp.ValidatorState
 	signer         signer.Signer
 }
@@ -39,14 +39,14 @@ type MemoryBackend struct {
 // NewMemoryBackend creates a new memory backend
 func NewMemoryBackend(validatorState warp.ValidatorState, s signer.Signer) *MemoryBackend {
 	return &MemoryBackend{
-		messages:       make([]*warp.WarpEnvelope, 0),
+		messages:       make([]*warp.Envelope, 0),
 		validatorState: validatorState,
 		signer:         s,
 	}
 }
 
 // AddMessage adds a message to be sent
-func (b *MemoryBackend) AddMessage(core *warp.SignedCore) error {
+func (b *MemoryBackend) AddMessage(core *warp.Core) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -86,7 +86,7 @@ func (b *MemoryBackend) AddMessage(core *warp.SignedCore) error {
 
 	beam := warp.NewBitSetSignature(bitSet, sigBytes)
 
-	msg, err := warp.NewWarpEnvelope(core, beam, nil, nil)
+	msg, err := warp.NewEnvelope(core, beam, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
@@ -96,7 +96,7 @@ func (b *MemoryBackend) AddMessage(core *warp.SignedCore) error {
 }
 
 // GetMessage retrieves a verified message by index
-func (b *MemoryBackend) GetMessage(index uint32) (*warp.WarpEnvelope, error) {
+func (b *MemoryBackend) GetMessage(index uint32) (*warp.Envelope, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -143,8 +143,8 @@ func (m *MockValidatorState) GetCurrentHeight() (uint64, error) {
 // ChainBackend is a backend that integrates with blockchain state
 type ChainBackend struct {
 	mu             sync.RWMutex
-	pendingMsgs    []*warp.SignedCore
-	verifiedMsgs   map[uint32]*warp.WarpEnvelope
+	pendingMsgs    []*warp.Core
+	verifiedMsgs   map[uint32]*warp.Envelope
 	validatorState warp.ValidatorState
 	chainID        common.Hash
 }
@@ -152,15 +152,15 @@ type ChainBackend struct {
 // NewChainBackend creates a new chain backend
 func NewChainBackend(validatorState warp.ValidatorState, chainID common.Hash) *ChainBackend {
 	return &ChainBackend{
-		pendingMsgs:    make([]*warp.SignedCore, 0),
-		verifiedMsgs:   make(map[uint32]*warp.WarpEnvelope),
+		pendingMsgs:    make([]*warp.Core, 0),
+		verifiedMsgs:   make(map[uint32]*warp.Envelope),
 		validatorState: validatorState,
 		chainID:        chainID,
 	}
 }
 
 // AddMessage adds a message to be sent
-func (b *ChainBackend) AddMessage(core *warp.SignedCore) error {
+func (b *ChainBackend) AddMessage(core *warp.Core) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -169,7 +169,7 @@ func (b *ChainBackend) AddMessage(core *warp.SignedCore) error {
 }
 
 // GetMessage retrieves a verified message by index
-func (b *ChainBackend) GetMessage(index uint32) (*warp.WarpEnvelope, error) {
+func (b *ChainBackend) GetMessage(index uint32) (*warp.Envelope, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -187,7 +187,7 @@ func (b *ChainBackend) GetValidatorState() warp.ValidatorState {
 }
 
 // AddVerifiedMessage adds a pre-verified message
-func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.WarpEnvelope) error {
+func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.Envelope) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -196,11 +196,11 @@ func (b *ChainBackend) AddVerifiedMessage(index uint32, msg *warp.WarpEnvelope) 
 }
 
 // GetPendingMessages returns all pending unsigned messages
-func (b *ChainBackend) GetPendingMessages() []*warp.SignedCore {
+func (b *ChainBackend) GetPendingMessages() []*warp.Core {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	msgs := make([]*warp.SignedCore, len(b.pendingMsgs))
+	msgs := make([]*warp.Core, len(b.pendingMsgs))
 	copy(msgs, b.pendingMsgs)
 	return msgs
 }

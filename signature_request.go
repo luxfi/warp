@@ -127,10 +127,10 @@ func (h *CachedSignatureHandler) Request(ctx context.Context, nodeID ids.NodeID,
 		return nil, err
 	}
 
-	// The request carries the canonical SignedCore bytes; recompute D
+	// The request carries the canonical Core bytes; recompute D
 	// locally from the parsed core. We never sign an opaque caller-
 	// supplied digest (no blind-sign oracle).
-	core, err := ParseSignedCore(req.Message)
+	core, err := ParseCore(req.Message)
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ var (
 // (BeamSigningBytes(core.ID())), never the bare core bytes or an opaque
 // caller-supplied digest.
 type Signer interface {
-	Sign(core *SignedCore) ([]byte, error)
+	Sign(core *Core) ([]byte, error)
 }
 
 // NewSigner creates a new warp message signer using a bls.Signer interface
@@ -39,7 +39,7 @@ type signer struct {
 	chainID   ids.ID
 }
 
-func (s *signer) Sign(core *SignedCore) ([]byte, error) {
+func (s *signer) Sign(core *Core) ([]byte, error) {
 	if core.SourceChainID != s.chainID {
 		return nil, ErrWrongSourceChainID
 	}

@@ -10,17 +10,17 @@ import (
 	"github.com/luxfi/pq"
 )
 
-// TestWarpEnvelope_HasPQEvidence pins the contract: HasPQEvidence
+// TestEnvelope_HasPQEvidence pins the contract: HasPQEvidence
 // returns true iff the envelope carries an MLDSACertSet. That's
 // the single predicate pq.ValidateMode dispatches on.
-func TestWarpEnvelope_HasPQEvidence(t *testing.T) {
-	without := &WarpEnvelope{}
-	with := &WarpEnvelope{MLDSACertSet: []byte{0xde, 0xad}}
+func TestEnvelope_HasPQEvidence(t *testing.T) {
+	without := &Envelope{}
+	with := &Envelope{MLDSACertSet: []byte{0xde, 0xad}}
 	if without.HasPQEvidence() {
-		t.Error("WarpEnvelope without MLDSACertSet reported HasPQEvidence=true")
+		t.Error("Envelope without MLDSACertSet reported HasPQEvidence=true")
 	}
 	if !with.HasPQEvidence() {
-		t.Error("WarpEnvelope with MLDSACertSet reported HasPQEvidence=false")
+		t.Error("Envelope with MLDSACertSet reported HasPQEvidence=false")
 	}
 }
 
@@ -28,9 +28,9 @@ func TestWarpEnvelope_HasPQEvidence(t *testing.T) {
 // integration: strict-PQ + envelope-without-MLDSACertSet routed
 // through pq.ValidateMode returns ErrClassicalAuthForbidden.
 // This is the runtime invariant Warp depends on — the gate
-// lives in lux/pq, the predicate lives on WarpEnvelope.
+// lives in lux/pq, the predicate lives on Envelope.
 func TestValidateMode_StrictPQ_RefusesMissingCert(t *testing.T) {
-	env := &WarpEnvelope{}
+	env := &Envelope{}
 	err := pq.ValidateMode(pq.ModeStrictPQ, env, nil)
 	if !errors.Is(err, pq.ErrClassicalAuthForbidden) {
 		t.Errorf("StrictPQ accepted classical envelope: %v", err)
@@ -39,7 +39,7 @@ func TestValidateMode_StrictPQ_RefusesMissingCert(t *testing.T) {
 
 // TestValidateMode_StrictPQ_AcceptsPQEnvelope pins the happy path.
 func TestValidateMode_StrictPQ_AcceptsPQEnvelope(t *testing.T) {
-	env := &WarpEnvelope{MLDSACertSet: []byte{0xde, 0xad}}
+	env := &Envelope{MLDSACertSet: []byte{0xde, 0xad}}
 	if err := pq.ValidateMode(pq.ModeStrictPQ, env, nil); err != nil {
 		t.Errorf("StrictPQ refused PQ envelope: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestValidateMode_StrictPQ_AcceptsPQEnvelope(t *testing.T) {
 // TestValidateMode_Hybrid_AcceptsBoth pins the migration middle:
 // hybrid accepts envelopes with or without MLDSACertSet.
 func TestValidateMode_Hybrid_AcceptsBoth(t *testing.T) {
-	for _, env := range []*WarpEnvelope{{}, {MLDSACertSet: []byte{0xde, 0xad}}} {
+	for _, env := range []*Envelope{{}, {MLDSACertSet: []byte{0xde, 0xad}}} {
 		if err := pq.ValidateMode(pq.ModeHybrid, env, nil); err != nil {
 			t.Errorf("Hybrid refused envelope: %v", err)
 		}

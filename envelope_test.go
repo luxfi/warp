@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// envelopeFixture builds a fully-populated WarpEnvelope for envelope tests.
-func envelopeFixture(t *testing.T) *WarpEnvelope {
+// envelopeFixture builds a fully-populated Envelope for envelope tests.
+func envelopeFixture(t *testing.T) *Envelope {
 	t.Helper()
-	core := &SignedCore{
+	core := &Core{
 		NetworkID:        1,
 		SourceChainID:    ids.ID{0xA1, 0xA2, 0xA3, 0xA4},
 		SourceNebulaRoot: [32]byte{0xDE, 0xAD, 0xBE, 0xEF},
@@ -34,12 +34,12 @@ func envelopeFixture(t *testing.T) *WarpEnvelope {
 	var sigBytes [bls.SignatureLen]byte
 	copy(sigBytes[:], bytes.Repeat([]byte{0xAB}, bls.SignatureLen))
 
-	env, err := NewWarpEnvelope(core, NewBitSetSignature(signers, sigBytes), nil, nil)
+	env, err := NewEnvelope(core, NewBitSetSignature(signers, sigBytes), nil, nil)
 	require.NoError(t, err)
 	return env
 }
 
-func TestWarpEnvelopeRoundTrip(t *testing.T) {
+func TestEnvelopeRoundTrip(t *testing.T) {
 	env := envelopeFixture(t)
 	env.PulseSig = bytes.Repeat([]byte{0x42}, 64)
 	env.MLDSACertSet = bytes.Repeat([]byte{0xC3}, 192)
@@ -51,9 +51,9 @@ func TestWarpEnvelopeRoundTrip(t *testing.T) {
 	wire, err := env.Bytes()
 	require.NoError(t, err)
 	require.True(t, bytes.HasPrefix(wire, wireMagic[:]), "wire must start with magic")
-	require.Equal(t, kindWarpEnvelope, wire[len(wireMagic)])
+	require.Equal(t, kindEnvelope, wire[len(wireMagic)])
 
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	require.Equal(t, env.Core.SourceKeyEraID, parsed.Core.SourceKeyEraID)
 	require.Equal(t, env.Core.SourceGeneration, parsed.Core.SourceGeneration)
@@ -71,7 +71,7 @@ func TestWarpEnvelopeRoundTrip(t *testing.T) {
 	require.Equal(t, wire, re)
 }
 
-func TestWarpEnvelopeEmptyOptionalLanes(t *testing.T) {
+func TestEnvelopeEmptyOptionalLanes(t *testing.T) {
 	env := envelopeFixture(t)
 	require.NoError(t, env.Verify())
 	require.False(t, env.HasPulse())
@@ -80,40 +80,40 @@ func TestWarpEnvelopeEmptyOptionalLanes(t *testing.T) {
 	wire, err := env.Bytes()
 	require.NoError(t, err)
 
-	parsed, err := ParseWarpEnvelope(wire)
+	parsed, err := ParseEnvelope(wire)
 	require.NoError(t, err)
 	require.Empty(t, parsed.PulseSig)
 	require.Empty(t, parsed.MLDSACertSet)
 	require.True(t, env.Beam.Equal(parsed.Beam))
 }
 
-func TestParseWarpEnvelopeRejectsEmpty(t *testing.T) {
-	_, err := ParseWarpEnvelope(nil)
+func TestParseEnvelopeRejectsEmpty(t *testing.T) {
+	_, err := ParseEnvelope(nil)
 	require.ErrorIs(t, err, ErrEnvelopeEmpty)
 }
 
-// TestParseWarpEnvelopeRejectsLegacyRLP is the two-barrier replay check at
+// TestParseEnvelopeRejectsLegacyRLP is the two-barrier replay check at
 // the magic level: an old RLP-shaped Beam (lead byte 0xc0..0xff) and the
 // legacy 0x02 envelope byte are both rejected before any field is read.
-func TestParseWarpEnvelopeRejectsLegacyRLP(t *testing.T) {
+func TestParseEnvelopeRejectsLegacyRLP(t *testing.T) {
 	for _, lead := range []byte{0xc0, 0xf8, 0xff, 0x02} {
 		body := append([]byte{lead}, bytes.Repeat([]byte{0x00}, 64)...)
-		_, err := ParseWarpEnvelope(body)
+		_, err := ParseEnvelope(body)
 		require.ErrorIs(t, err, errZapBadMagic, "lead 0x%02x must be rejected at magic", lead)
 	}
 }
 
-func TestParseWarpEnvelopeRejectsTrailingBytes(t *testing.T) {
+func TestParseEnvelopeRejectsTrailingBytes(t *testing.T) {
 	env := envelopeFixture(t)
 	wire, err := env.Bytes()
 	require.NoError(t, err)
-	_, err = ParseWarpEnvelope(append(wire, 0xff))
+	_, err = ParseEnvelope(append(wire, 0xff))
 	require.ErrorIs(t, err, errZapTrailing)
 }
 
-// TestParseWarpEnvelopeRejectsNonCanonicalBitset proves a Signers bitset
+// TestParseEnvelopeRejectsNonCanonicalBitset proves a Signers bitset
 // with a trailing zero byte is rejected on decode (canonical-form rule 6).
-func TestParseWarpEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
+func TestParseEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
 	env := envelopeFixture(t)
 	wire, err := env.Bytes()
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestParseWarpEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
 	core := env.Core.marshalZAP()
 	var out []byte
 	out = append(out, wireMagic[:]...)
-	out = appendU8(out, kindWarpEnvelope)
+	out = appendU8(out, kindEnvelope)
 	out = append(out, core...)
 	out = appendVar(out, []byte{0x01, 0x00}) // NON-canonical: trailing zero byte
 	out = appendFixed(out, env.Beam.Signature[:])
@@ -130,11 +130,11 @@ func TestParseWarpEnvelopeRejectsNonCanonicalBitset(t *testing.T) {
 	out = appendVar(out, nil)
 
 	require.NotEqual(t, wire, out)
-	_, err = ParseWarpEnvelope(out)
+	_, err = ParseEnvelope(out)
 	require.ErrorIs(t, err, errZapBitsNonCanon)
 }
 
-func TestWarpEnvelopeIDStable(t *testing.T) {
+func TestEnvelopeIDStable(t *testing.T) {
 	env := envelopeFixture(t)
 	require.Equal(t, env.Core.ID(), env.ID())
 	// ID changes when a folded lineage field changes (Beam now binds it).
@@ -143,11 +143,11 @@ func TestWarpEnvelopeIDStable(t *testing.T) {
 	require.NotEqual(t, env.ID(), mutated.ID())
 }
 
-func TestWarpEnvelopeEqualNilSafe(t *testing.T) {
+func TestEnvelopeEqualNilSafe(t *testing.T) {
 	env := envelopeFixture(t)
 	require.False(t, env.Equal(nil))
-	require.False(t, (*WarpEnvelope)(nil).Equal(env))
-	require.True(t, (*WarpEnvelope)(nil).Equal(nil))
+	require.False(t, (*Envelope)(nil).Equal(env))
+	require.True(t, (*Envelope)(nil).Equal(nil))
 }
 
 // ---------------------------------------------------------------------
@@ -157,10 +157,10 @@ func TestWarpEnvelopeEqualNilSafe(t *testing.T) {
 type stubPulseVerifier struct {
 	called bool
 	err    error
-	check  func(env *WarpEnvelope) error
+	check  func(env *Envelope) error
 }
 
-func (s *stubPulseVerifier) VerifyPulse(env *WarpEnvelope) error {
+func (s *stubPulseVerifier) VerifyPulse(env *Envelope) error {
 	s.called = true
 	if s.check != nil {
 		return s.check(env)
@@ -173,7 +173,7 @@ type stubCertSetVerifier struct {
 	err    error
 }
 
-func (s *stubCertSetVerifier) VerifyCertSet(env *WarpEnvelope) error {
+func (s *stubCertSetVerifier) VerifyCertSet(env *Envelope) error {
 	s.called = true
 	return s.err
 }
@@ -211,7 +211,7 @@ func TestVerifyWithOptionsInvokesPulseVerifier(t *testing.T) {
 	env.PulseSig = bytes.Repeat([]byte{0x99}, 32)
 
 	verifier := &stubPulseVerifier{
-		check: func(e *WarpEnvelope) error {
+		check: func(e *Envelope) error {
 			if e.Core.SourceKeyEraID != 7 {
 				return errors.New("unexpected key era")
 			}

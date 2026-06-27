@@ -4,7 +4,7 @@
 // ZAP signature / envelope decoder fuzz harnesses.
 //
 // FuzzBeamCodec       — Beam (Signers bitset + [96] sig) decode never panics.
-// FuzzWarpEnvelopeRaw  — ParseWarpEnvelope never panics; legacy RLP / 0x02
+// FuzzEnvelopeRaw  — ParseEnvelope never panics; legacy RLP / 0x02
 //                        lead bytes are rejected at the magic.
 
 package warp
@@ -55,9 +55,9 @@ func FuzzBeamCodec(f *testing.F) {
 	})
 }
 
-// FuzzWarpEnvelopeRaw fuzzes ParseWarpEnvelope. Property: never panics,
+// FuzzEnvelopeRaw fuzzes ParseEnvelope. Property: never panics,
 // and legacy RLP / 0x02 lead bytes never parse as a valid envelope.
-func FuzzWarpEnvelopeRaw(f *testing.F) {
+func FuzzEnvelopeRaw(f *testing.F) {
 	addSmallSeeds(f)
 	f.Add(makeFuzzSeed(1, 1, true, true))
 
@@ -65,18 +65,18 @@ func FuzzWarpEnvelopeRaw(f *testing.F) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					t.Fatalf("ParseWarpEnvelope panicked: %v", r)
+					t.Fatalf("ParseEnvelope panicked: %v", r)
 				}
 			}()
-			_, _ = ParseWarpEnvelope(raw)
+			_, _ = ParseEnvelope(raw)
 		}()
 
 		// Legacy-format safety: any byte stream whose first byte is an
 		// RLP list lead (0xc0..0xff) or the legacy 0x02 envelope byte
 		// MUST NOT parse as a valid ZAP envelope.
 		if len(raw) > 0 && (raw[0] >= 0xc0 || raw[0] == 0x02) {
-			if _, err := ParseWarpEnvelope(raw); err == nil {
-				t.Fatalf("ParseWarpEnvelope accepted legacy-lead bytes: %x", raw[:1])
+			if _, err := ParseEnvelope(raw); err == nil {
+				t.Fatalf("ParseEnvelope accepted legacy-lead bytes: %x", raw[:1])
 			}
 		}
 	})
@@ -90,12 +90,12 @@ func TestFuzzCorpus_SignatureReplay(t *testing.T) {
 	}
 	// A 0x02-prefixed random body must be rejected.
 	hostile := append([]byte{0x02}, bytes.Repeat([]byte{0xab}, 64)...)
-	if _, err := ParseWarpEnvelope(hostile); err == nil {
-		t.Fatalf("ParseWarpEnvelope accepted 0x02-prefixed bytes")
+	if _, err := ParseEnvelope(hostile); err == nil {
+		t.Fatalf("ParseEnvelope accepted 0x02-prefixed bytes")
 	}
 	// An RLP list-prefixed body must be rejected.
 	rlpish := append([]byte{0xf8, 0x40}, bytes.Repeat([]byte{0xcd}, 64)...)
-	if _, err := ParseWarpEnvelope(rlpish); err == nil {
-		t.Fatalf("ParseWarpEnvelope accepted RLP-shaped bytes")
+	if _, err := ParseEnvelope(rlpish); err == nil {
+		t.Fatalf("ParseEnvelope accepted RLP-shaped bytes")
 	}
 }

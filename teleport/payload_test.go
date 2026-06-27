@@ -69,7 +69,7 @@ func TestAmountIsFull32Bytes(t *testing.T) {
 	}
 }
 
-// TestEnvelopeIDMatchesComputeMessageHash pins D == warp.SignedCore.ID()
+// TestEnvelopeIDMatchesComputeMessageHash pins D == warp.Core.ID()
 // for a core whose payload is the 90-byte teleport block. Validators sign
 // one D and the contract verifies the same D — one canonical preimage.
 func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
@@ -96,10 +96,10 @@ func TestEnvelopeIDMatchesComputeMessageHash(t *testing.T) {
 		t.Fatalf("ComputeMessageHash: %v", err)
 	}
 
-	// The canonical preimage is exactly the SignedCore NewSignedCore builds.
-	core, err := warp.NewSignedCore(networkID, sourceChainID, payload)
+	// The canonical preimage is exactly the Core NewCore builds.
+	core, err := warp.NewCore(networkID, sourceChainID, payload)
 	if err != nil {
-		t.Fatalf("NewSignedCore: %v", err)
+		t.Fatalf("NewCore: %v", err)
 	}
 	got := core.ID()
 	if !bytes.Equal(want[:], got[:]) {

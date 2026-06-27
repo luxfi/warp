@@ -156,8 +156,8 @@ func TestFuzzCorpus_HorizonReplay(t *testing.T) {
 	}
 }
 
-// horizonSeed builds a HorizonCertificate wire seed from a WarpEnvelope.
-func horizonSeed(env *warp.WarpEnvelope) []byte {
+// horizonSeed builds a HorizonCertificate wire seed from a Envelope.
+func horizonSeed(env *warp.Envelope) []byte {
 	h, err := HorizonFromEnvelope(env)
 	if err != nil {
 		panic(err)
@@ -169,8 +169,8 @@ func horizonSeed(env *warp.WarpEnvelope) []byte {
 	return out
 }
 
-func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64, pulse, cert []byte) *warp.WarpEnvelope {
-	core := &warp.SignedCore{
+func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64, pulse, cert []byte) *warp.Envelope {
+	core := &warp.Core{
 		NetworkID:        1,
 		SourceChainID:    chainID,
 		SourceKeyEraID:   eraID,
@@ -182,7 +182,7 @@ func horizonEnv(chainID ids.ID, payload []byte, sigByte byte, eraID, gen uint64,
 	signers.Add(0)
 	var sig [bls.SignatureLen]byte
 	copy(sig[:], bytes.Repeat([]byte{sigByte}, bls.SignatureLen))
-	env, err := warp.NewWarpEnvelope(core, warp.NewBitSetSignature(signers, sig), pulse, cert)
+	env, err := warp.NewEnvelope(core, warp.NewBitSetSignature(signers, sig), pulse, cert)
 	if err != nil {
 		panic(err)
 	}

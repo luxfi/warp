@@ -2,29 +2,29 @@
 // SPDX-License-Identifier: BSD-3-Clause-Eco
 //
 // envelope_kat_oracle — emits byte-equal KAT vectors for the Warp ZAP
-// envelope. Drives warp.WarpEnvelope through its canonical ZAP
-// serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ SignedCore ‖ Beam ‖
+// envelope. Drives warp.Envelope through its canonical ZAP
+// serialization (magic "LWZP"||0x01 ‖ kind 0x02 ‖ Core ‖ Beam ‖
 // PulseSig ‖ MLDSACertSet).
 //
 // Wire format (per entry):
 //
 //	name                       short label
-//	network_id                 SignedCore.NetworkID
-//	source_chain_id_hex        SignedCore.SourceChainID
-//	payload_hex                SignedCore.Payload
+//	network_id                 Core.NetworkID
+//	source_chain_id_hex        Core.SourceChainID
+//	payload_hex                Core.Payload
 //	signers_indices            Beam (BitSetSignature) signer indices
 //	signature_byte             Pattern byte filling the 96-byte BLS sig
-//	source_nebula_root_hex     SignedCore.SourceNebulaRoot ([32]byte)
-//	source_key_era_id          SignedCore.SourceKeyEraID
-//	source_generation          SignedCore.SourceGeneration
-//	hash_suite_id              SignedCore.HashSuiteID ("" or "Pulsar-SHA3")
+//	source_nebula_root_hex     Core.SourceNebulaRoot ([32]byte)
+//	source_key_era_id          Core.SourceKeyEraID
+//	source_generation          Core.SourceGeneration
+//	hash_suite_id              Core.HashSuiteID ("" or "Pulsar-SHA3")
 //	pulsar_pulse_byte          Pattern byte filling pulse bytes (0 = absent)
 //	pulsar_pulse_len           Pulse byte length
 //	mldsa_cert_set_byte        Pattern byte filling cert set bytes (0 = absent)
 //	mldsa_cert_set_len         Cert set byte length
 //	envelope_wire_hex          Full ZAP wire bytes (magic ‖ kind ‖ body)
 //	envelope_wire_sha256       sha256 of envelope_wire_hex (port fingerprint)
-//	envelope_id_hex            WarpEnvelope.ID() = D (legacy-keccak)
+//	envelope_id_hex            Envelope.ID() = D (legacy-keccak)
 //
 // Determinism contract: every entry is byte-identical across hosts /
 // builds / OSes. Cross-language ports consume (network_id,
@@ -78,24 +78,24 @@ type Output struct {
 }
 
 type fixture struct {
-	name                string
-	networkID           uint32
-	sourceChainID       ids.ID
-	payload             []byte
-	signers             []int
-	signatureByte       byte
-	sourceNebulaRoot    [32]byte
-	sourceKeyEraID      uint64
-	sourceGeneration    uint64
-	hashSuiteID         string
-	pulsarPulseByte     byte
-	pulsarPulseLen      int
-	mldsaCertSetByte    byte
-	mldsaCertSetLen     int
+	name             string
+	networkID        uint32
+	sourceChainID    ids.ID
+	payload          []byte
+	signers          []int
+	signatureByte    byte
+	sourceNebulaRoot [32]byte
+	sourceKeyEraID   uint64
+	sourceGeneration uint64
+	hashSuiteID      string
+	pulsarPulseByte  byte
+	pulsarPulseLen   int
+	mldsaCertSetByte byte
+	mldsaCertSetLen  int
 }
 
 func build(f fixture) Entry {
-	core := warp.SignedCore{
+	core := warp.Core{
 		NetworkID:        f.networkID,
 		SourceChainID:    f.sourceChainID,
 		SourceNebulaRoot: f.sourceNebulaRoot,
@@ -125,7 +125,7 @@ func build(f fixture) Entry {
 		cert = bytes.Repeat([]byte{f.mldsaCertSetByte}, f.mldsaCertSetLen)
 	}
 
-	env, err := warp.NewWarpEnvelope(&core, beam, pulse, cert)
+	env, err := warp.NewEnvelope(&core, beam, pulse, cert)
 	if err != nil {
 		fail(err)
 	}
@@ -169,68 +169,68 @@ func main() {
 	}
 	out.Entries = []Entry{
 		build(fixture{
-			name:                "default-pulse-cert",
-			networkID:           1,
-			sourceChainID:       chainA,
-			payload:             []byte("envelope-test-payload"),
-			signers:             []int{0, 2, 4},
-			signatureByte:       0xAB,
-			sourceNebulaRoot:    nebulaA,
-			sourceKeyEraID:      7,
-			sourceGeneration:    11,
-			hashSuiteID:         warp.DefaultHashSuiteID,
-			pulsarPulseByte:     0x42,
-			pulsarPulseLen:      64,
-			mldsaCertSetByte:    0xC3,
-			mldsaCertSetLen:     192,
+			name:             "default-pulse-cert",
+			networkID:        1,
+			sourceChainID:    chainA,
+			payload:          []byte("envelope-test-payload"),
+			signers:          []int{0, 2, 4},
+			signatureByte:    0xAB,
+			sourceNebulaRoot: nebulaA,
+			sourceKeyEraID:   7,
+			sourceGeneration: 11,
+			hashSuiteID:      warp.DefaultHashSuiteID,
+			pulsarPulseByte:  0x42,
+			pulsarPulseLen:   64,
+			mldsaCertSetByte: 0xC3,
+			mldsaCertSetLen:  192,
 		}),
 		build(fixture{
-			name:                "no-pulse-no-cert",
-			networkID:           1,
-			sourceChainID:       chainA,
-			payload:             []byte("envelope-test-payload"),
-			signers:             []int{0, 2, 4},
-			signatureByte:       0xAB,
-			sourceNebulaRoot:    nebulaZero,
-			sourceKeyEraID:      0,
-			sourceGeneration:    0,
-			hashSuiteID:         "",
-			pulsarPulseByte:     0,
-			pulsarPulseLen:      0,
-			mldsaCertSetByte:    0,
-			mldsaCertSetLen:     0,
+			name:             "no-pulse-no-cert",
+			networkID:        1,
+			sourceChainID:    chainA,
+			payload:          []byte("envelope-test-payload"),
+			signers:          []int{0, 2, 4},
+			signatureByte:    0xAB,
+			sourceNebulaRoot: nebulaZero,
+			sourceKeyEraID:   0,
+			sourceGeneration: 0,
+			hashSuiteID:      "",
+			pulsarPulseByte:  0,
+			pulsarPulseLen:   0,
+			mldsaCertSetByte: 0,
+			mldsaCertSetLen:  0,
 		}),
 		build(fixture{
-			name:                "pulse-only",
-			networkID:           2,
-			sourceChainID:       chainB,
-			payload:             []byte("pulse-only-payload"),
-			signers:             []int{1, 3, 5, 7},
-			signatureByte:       0x77,
-			sourceNebulaRoot:    nebulaA,
-			sourceKeyEraID:      99,
-			sourceGeneration:    1,
-			hashSuiteID:         warp.DefaultHashSuiteID,
-			pulsarPulseByte:     0x33,
-			pulsarPulseLen:      96,
-			mldsaCertSetByte:    0,
-			mldsaCertSetLen:     0,
+			name:             "pulse-only",
+			networkID:        2,
+			sourceChainID:    chainB,
+			payload:          []byte("pulse-only-payload"),
+			signers:          []int{1, 3, 5, 7},
+			signatureByte:    0x77,
+			sourceNebulaRoot: nebulaA,
+			sourceKeyEraID:   99,
+			sourceGeneration: 1,
+			hashSuiteID:      warp.DefaultHashSuiteID,
+			pulsarPulseByte:  0x33,
+			pulsarPulseLen:   96,
+			mldsaCertSetByte: 0,
+			mldsaCertSetLen:  0,
 		}),
 		build(fixture{
-			name:                "cert-only",
-			networkID:           1,
-			sourceChainID:       chainA,
-			payload:             []byte{},
-			signers:             []int{0},
-			signatureByte:       0x11,
-			sourceNebulaRoot:    nebulaZero,
-			sourceKeyEraID:      0,
-			sourceGeneration:    0,
-			hashSuiteID:         warp.DefaultHashSuiteID,
-			pulsarPulseByte:     0,
-			pulsarPulseLen:      0,
-			mldsaCertSetByte:    0xEE,
-			mldsaCertSetLen:     128,
+			name:             "cert-only",
+			networkID:        1,
+			sourceChainID:    chainA,
+			payload:          []byte{},
+			signers:          []int{0},
+			signatureByte:    0x11,
+			sourceNebulaRoot: nebulaZero,
+			sourceKeyEraID:   0,
+			sourceGeneration: 0,
+			hashSuiteID:      warp.DefaultHashSuiteID,
+			pulsarPulseByte:  0,
+			pulsarPulseLen:   0,
+			mldsaCertSetByte: 0xEE,
+			mldsaCertSetLen:  128,
 		}),
 	}
 

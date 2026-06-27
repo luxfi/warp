@@ -36,14 +36,14 @@ import (
 
 // strictPQEnv builds an envelope WITHOUT MLDSACertSet — the
 // canonical "classical-only" envelope the strict-PQ gate refuses.
-func strictPQEnvClassicalOnly(t *testing.T) *WarpEnvelope {
+func strictPQEnvClassicalOnly(t *testing.T) *Envelope {
 	t.Helper()
 	return e2eFixture(t, false, false)
 }
 
 // strictPQEnvWithPQ builds an envelope WITH MLDSACertSet — the
 // canonical "PQ-evidenced" envelope that verifies under every mode.
-func strictPQEnvWithPQ(t *testing.T) *WarpEnvelope {
+func strictPQEnvWithPQ(t *testing.T) *Envelope {
 	t.Helper()
 	return e2eFixture(t, true, true)
 }
@@ -109,10 +109,10 @@ func TestStrictPQ_OptInRegistryStillRefusedAtModeGate(t *testing.T) {
 // outcome for each pairing on the same envelope set.
 func TestStrictPQ_RecommendedPairings(t *testing.T) {
 	type pairing struct {
-		mode    pq.Mode
-		legacy  bool
+		mode     pq.Mode
+		legacy   bool
 		envHasPQ bool
-		want    error // pq.ErrClassicalAuthForbidden, or nil
+		want     error // pq.ErrClassicalAuthForbidden, or nil
 	}
 	cases := []pairing{
 		// Canonical Liquid strict-PQ default.
