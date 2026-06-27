@@ -33,12 +33,12 @@ type v3RecP3Q struct {
 	accept bool
 }
 
-func (r *v3RecP3Q) VerifyP3QRollup(subject []byte, _ P3QRoot, _ SignerSetAuthority) error {
+func (r *v3RecP3Q) VerifyP3QRollup(subject []byte, root P3QRoot, _ SignerSetAuthority) (string, error) {
 	r.got = append([]byte(nil), subject...)
 	if r.accept {
-		return nil
+		return root.ProvingSystem, nil
 	}
-	return ErrBadSignature
+	return "", ErrBadSignature
 }
 
 type v3StubPulsarEra struct{}
@@ -62,7 +62,7 @@ func (v3StubCoronaEra) ResolveCoronaKeyEra(ids.ID, uint64, uint64) (CoronaKeyEra
 func TestPulsarVerifierHasNoThresholdImports(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
 	if err != nil {
-		t.Skipf("go list unavailable in this environment: %v\n%s", err, out)
+		t.Fatalf("go list failed (the no-threshold-imports guard MUST run, not skip): %v\n%s", err, out)
 	}
 	forbidden := []string{
 		"corona", "talus", "pulsard", "coronad",
@@ -163,5 +163,22 @@ func TestCoronaAndPulsarKeyErasAreDistinctTypes(t *testing.T) {
 	}
 	if _, ok := any(cr).(SignerSetAuthority); ok {
 		t.Fatal("a CoronaKeyEraResolver must not also satisfy SignerSetAuthority")
+	}
+}
+
+// TestP3QProvingSystemMismatchRejected proves the strict-PQ gate cannot be
+// fooled by a relabeled proof: a P3Q root claims a PQ system ("stark-rescue")
+// but the verifier reports it actually proved "groth16" — the dispatcher binds
+// claimed==proven and rejects with ErrP3QProvingSystemMismatch (R1).
+func TestP3QProvingSystemMismatchRejected(t *testing.T) {
+	ev := FinalityEvidence{
+		Kind:  EvidenceP3QMLDSARollup,
+		Suite: SuiteP3QMLDSARollup,
+		P3Q:   &P3QRoot{ProvingSystem: "stark-rescue", SuiteID: SuiteP3QMLDSARollup},
+	}
+	lanes := LaneVerifierSet{P3Q: &fakeP3QVerifier{proven: "groth16"}}
+	err := verifyFinalityEvidence(ev, make([]byte, 32), lanes)
+	if !errors.Is(err, ErrP3QProvingSystemMismatch) {
+		t.Fatalf("a P3Q whose verified system differs from the claimed one must be rejected, got %v", err)
 	}
 }

@@ -24,7 +24,7 @@
 //	warp                      (root pkg; no corona-kernel import)
 //	  ├── Envelope            (the Quasar envelope type)
 //	  ├── CoronaVerifier      (interface: VerifyRingtailThreshold)
-//	  └── VerifyWithOptions / VerifyPQLanes / VerifyFinalityEvidence
+//	  └── VerifyWithOptions / VerifyPQLanes / verifyFinalityEvidence
 //
 //	warp/pulsar (this pkg; imports github.com/luxfi/corona)
 //	  ├── RingtailVerifier    (CoronaVerifier impl; corona sig over CoronaSigningBytes(D))

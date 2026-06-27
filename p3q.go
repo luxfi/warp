@@ -43,6 +43,13 @@ var (
 	// ErrSignerSetUnresolved is returned when a P3Q verifier could not resolve
 	// the signer set / weights it must check the rollup threshold against.
 	ErrSignerSetUnresolved = errors.New("warp: signer-set authority failed")
+
+	// ErrP3QProvingSystemMismatch is returned when a P3Q verifier reports it
+	// proved a DIFFERENT proof system than the evidence's claimed ProvingSystem.
+	// It binds the self-declared system (which the strict-PQ gate keys on) to the
+	// authenticated proof, so a classical root relabeled as post-quantum fails
+	// closed.
+	ErrP3QProvingSystemMismatch = errors.New("warp: P3Q proving system does not match the verified proof")
 )
 
 // P3QRoot is the typed P3Q rollup lane payload: the succinct root + proof, the
@@ -154,6 +161,6 @@ type unavailableP3QVerifier struct{}
 // 0x012205 FRI rollup) from above warp; this is the safe default until they do.
 func UnavailableP3QVerifier() P3QRollupVerifier { return unavailableP3QVerifier{} }
 
-func (unavailableP3QVerifier) VerifyP3QRollup([]byte, P3QRoot, SignerSetAuthority) error {
-	return ErrP3QVerifierUnavailable
+func (unavailableP3QVerifier) VerifyP3QRollup([]byte, P3QRoot, SignerSetAuthority) (string, error) {
+	return "", ErrP3QVerifierUnavailable
 }
