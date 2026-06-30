@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/luxfi/constants v1.5.8
-	github.com/luxfi/corona v0.10.2
+	github.com/luxfi/corona v0.10.3
 	github.com/luxfi/crypto v1.19.17
 	github.com/luxfi/geth v1.16.98
 	github.com/luxfi/ids v1.2.15
