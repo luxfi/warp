@@ -112,7 +112,7 @@ Create `~/.warp/config.yaml`:
 
 ```yaml
 rpc:
-  url: http://localhost:9650/v1/bc/C/rpc
+  url: http://localhost:9650/v1/chain/C/rpc
   timeout: 30s
 
 signing:
