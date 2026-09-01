@@ -187,7 +187,6 @@ the envelope with `warp.NewEnvelope(msg, beam, pulseBytes, certSetBytes)`.
   `SPECIFICATION.md`, vocabulary in LP-105 §"Warp evolution").
 * LP-073 — Pulsar lattice threshold kernel.
 * LP-075 — BLS aggregate (Beam).
-* LP-105 — Lux Stack Lexicon (Beam, Pulse, Prism, Horizon, etc.).
 
 ## Module path
 
