@@ -7,7 +7,7 @@ require (
 	github.com/luxfi/constants v1.6.2
 	github.com/luxfi/corona v0.10.4
 	github.com/luxfi/crypto v1.20.2
-	github.com/luxfi/geth v1.20.1
+	github.com/luxfi/geth v1.20.2
 	github.com/luxfi/ids v1.3.2
 	github.com/luxfi/lattice/v7 v7.1.4
 	github.com/luxfi/log v1.4.3
@@ -33,12 +33,12 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/luxfi/accel v1.2.4 // indirect
 	github.com/luxfi/cache v1.3.1 // indirect
-	github.com/luxfi/consensus v1.36.2 // indirect
-	github.com/luxfi/container v0.2.1 // indirect
+	github.com/luxfi/consensus v1.36.81 // indirect
+	github.com/luxfi/container v0.2.2 // indirect
 	github.com/luxfi/math/big v0.1.0 // indirect
 	github.com/luxfi/mdns v0.1.1 // indirect
 	github.com/luxfi/metric v1.8.1 // indirect
-	github.com/luxfi/mlwe v0.2.1 // indirect
+	github.com/luxfi/mlwe v0.3.0 // indirect
 	github.com/luxfi/mock v0.1.1 // indirect
 	github.com/luxfi/sampler v1.1.0 // indirect
 	github.com/luxfi/validators v1.3.1 // indirect
