@@ -20,14 +20,8 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
+        cache: false
         go-version: ${{ env.GO_VERSION }}
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
     - name: Install golangci-lint v2
       run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
     - name: Run linter
@@ -45,14 +39,8 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
+        cache: false
         go-version: ${{ matrix.go-version }}
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
     - name: Run tests
       run: go test -v -race ./...
   build:
@@ -66,14 +54,8 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
+        cache: false
         go-version: ${{ env.GO_VERSION }}
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
     - name: Build library
       run: make build
     - name: Build CLI
@@ -93,6 +75,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
+        cache: false
         go-version: ${{ env.GO_VERSION }}
     - name: Run Gosec Security Scanner
       run: make security
@@ -129,14 +112,8 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
+        cache: false
         go-version: ${{ env.GO_VERSION }}
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
     - name: Build binary
       env:
         GOOS: ${{ matrix.goos }}
